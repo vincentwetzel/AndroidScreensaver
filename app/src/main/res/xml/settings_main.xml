@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Sources Category -->
+    <PreferenceCategory
+        app:title="Sources"
+        app:iconSpaceReserved="false">
+
+        <Preference
+            app:key="source_google_drive"
+            app:title="@string/source_google_drive"
+            app:summary="Configure Google Drive folders"
+            app:icon="@drawable/ic_source_google_drive" />
+
+        <Preference
+            app:key="source_gallery"
+            app:title="@string/source_gallery"
+            app:summary="@string/coming_soon"
+            app:enabled="false"
+            app:icon="@drawable/ic_source_gallery" />
+
+        <Preference
+            app:key="source_dropbox"
+            app:title="@string/source_dropbox"
+            app:summary="@string/coming_soon"
+            app:enabled="false"
+            app:icon="@drawable/ic_source_dropbox" />
+
+        <Preference
+            app:key="source_google_photos"
+            app:title="@string/source_google_photos"
+            app:summary="@string/coming_soon"
+            app:enabled="false"
+            app:icon="@drawable/ic_source_google_photos" />
+
+        <Preference
+            app:key="source_onedrive"
+            app:title="@string/source_onedrive"
+            app:summary="@string/coming_soon"
+            app:enabled="false"
+            app:icon="@drawable/ic_source_onedrive" />
+
+        <Preference
+            app:key="source_local_network"
+            app:title="@string/source_local_network"
+            app:summary="@string/coming_soon"
+            app:enabled="false"
+            app:icon="@drawable/ic_source_network" />
+
+    </PreferenceCategory>
+
+    <!-- Media & Content Category -->
+    <PreferenceCategory
+        app:title="Media &amp; Content"
+        app:iconSpaceReserved="false">
+
+        <ListPreference
+            app:key="media_order"
+            app:title="Media Order"
+            app:summary="Shuffle/Random"
+            app:defaultValue="shuffle"
+            app:entries="@array/media_order_entries"
+            app:entryValues="@array/media_order_values"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            app:key="content_filter"
+            app:title="Content Filter"
+            app:summary="Images AND Videos"
+            app:defaultValue="both"
+            app:entries="@array/content_filter_entries"
+            app:entryValues="@array/content_filter_values"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="match_orientation"
+            app:title="Match Device Orientation Only"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- Slideshow Category -->
+    <PreferenceCategory
+        app:title="Slideshow"
+        app:iconSpaceReserved="false">
+
+        <ListPreference
+            app:key="display_time"
+            app:title="Display Time"
+            app:summary="5 seconds"
+            app:defaultValue="5"
+            app:entries="@array/display_time_entries"
+            app:entryValues="@array/display_time_values"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            app:key="video_playback"
+            app:title="Video Playback Settings"
+            app:summary="Muted"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- Display & Transitions Category -->
+    <PreferenceCategory
+        app:title="Display &amp; Transitions"
+        app:iconSpaceReserved="false">
+
+        <ListPreference
+            app:key="display_effect"
+            app:title="Display Effect"
+            app:summary="Crop to Fit"
+            app:defaultValue="crop_to_fit"
+            app:entries="@array/display_effect_entries"
+            app:entryValues="@array/display_effect_values"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            app:key="transition_effect"
+            app:title="Transition Effect"
+            app:summary="Fade"
+            app:defaultValue="fade"
+            app:entries="@array/transition_effect_entries"
+            app:entryValues="@array/transition_effect_values"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            app:key="transition_duration"
+            app:title="Transition Duration"
+            app:summary="1 second"
+            app:defaultValue="1000"
+            app:entries="@array/transition_duration_entries"
+            app:entryValues="@array/transition_duration_values"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- Decorations Category -->
+    <PreferenceCategory
+        app:title="Decorations"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreferenceCompat
+            app:key="decoration_date"
+            app:title="Date"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="decoration_clock"
+            app:title="Clock"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="decoration_weather"
+            app:title="Weather"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            app:key="decoration_customize"
+            app:title="Customize Decorations"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- Photo Info Category -->
+    <PreferenceCategory
+        app:title="Photo Information"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreferenceCompat
+            app:key="photo_info_enabled"
+            app:title="Show Photo Information"
+            app:defaultValue="false"
+            app:summary="Display metadata overlay during slideshow"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            app:key="photo_info_customize"
+            app:title="Customize Photo Information"
+            app:summary="Configure fields, appearance, and behavior"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- Schedule & Timer Category -->
+    <PreferenceCategory
+        app:title="Schedule &amp; Timer"
+        app:iconSpaceReserved="false">
+
+        <Preference
+            app:key="autostart"
+            app:title="Autostart Schedule"
+            app:summary="Disabled"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            app:key="autostop"
+            app:title="Autostop Schedule"
+            app:summary="Disabled"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="start_by_timer"
+            app:title="Start by Timer"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- Display & Power Category -->
+    <PreferenceCategory
+        app:title="Display &amp; Power"
+        app:iconSpaceReserved="false">
+
+        <ListPreference
+            app:key="screen_rotation"
+            app:title="Screen Rotation"
+            app:summary="Use System Settings"
+            app:defaultValue="system"
+            app:entries="@array/screen_rotation_entries"
+            app:entryValues="@array/screen_rotation_values"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="keep_screen_on"
+            app:title="Keep Screen On"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- Sync & Network Category -->
+    <PreferenceCategory
+        app:title="Sync &amp; Network"
+        app:iconSpaceReserved="false">
+
+        <ListPreference
+            app:key="sync_interval"
+            app:title="Sync Interval"
+            app:summary="Auto"
+            app:defaultValue="auto"
+            app:entries="@array/sync_interval_entries"
+            app:entryValues="@array/sync_interval_values"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="wifi_only"
+            app:title="Wi-Fi Only"
+            app:defaultValue="true"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            app:key="network_timeout"
+            app:title="Timeout Duration"
+            app:summary="30 seconds"
+            app:defaultValue="30"
+            app:entries="@array/timeout_entries"
+            app:entryValues="@array/timeout_values"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- Appearance Category -->
+    <PreferenceCategory
+        app:title="Appearance"
+        app:iconSpaceReserved="false">
+
+        <Preference
+            app:key="background_color"
+            app:title="Background Color"
+            app:summary="Black"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            app:key="cache_limit"
+            app:title="Cache Limit"
+            app:summary="500 MB"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            app:key="clear_cache"
+            app:title="Clear Cache"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- Advanced Category -->
+    <PreferenceCategory
+        app:title="Advanced"
+        app:iconSpaceReserved="false">
+
+        <Preference
+            app:key="power_management"
+            app:title="Power Management"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            app:key="exit_trigger"
+            app:title="Exit Screensaver On"
+            app:summary="Touch"
+            app:defaultValue="touch"
+            app:entries="@array/exit_trigger_entries"
+            app:entryValues="@array/exit_trigger_values"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            app:key="about"
+            app:title="About"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- Footer - Version Info -->
+    <PreferenceCategory
+        app:iconSpaceReserved="false">
+
+        <Preference
+            app:key="version"
+            app:title="Version 1.0.0 (build 1)"
+            app:summary="Tap 7 times for debug mode"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

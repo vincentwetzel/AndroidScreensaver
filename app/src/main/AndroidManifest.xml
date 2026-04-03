@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Permissions -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" 
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    
+    <!-- Location for weather -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    
+    <!-- Foreground service for screensaver -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    
+    <!-- Notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    
+    <!-- TV-specific features (optional) -->
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+    <application
+        android:name=".ScreensaverApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AndroidScreensaver"
+        tools:targetApi="31">
+        
+        <!-- Main Activity -->
+        <activity
+            android:name=".ui.main.MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AndroidScreensaver">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            
+            <!-- TV Leanback launcher -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+        
+        <!-- DreamService (Screensaver) -->
+        <service
+            android:name=".dream.PhotoScreensaverService"
+            android:exported="true"
+            android:label="@string/screensaver_name"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            
+            <!-- Dream settings activity -->
+            <meta-data
+                android:name="android.service.dream"
+                android:resource="@xml/dream_settings" />
+        </service>
+        
+        <!-- Dream Settings Activity -->
+        <activity
+            android:name=".ui.settings.SettingsActivity"
+            android:exported="false"
+            android:label="@string/screensaver_settings"
+            android:theme="@style/Theme.AndroidScreensaver.Settings" />
+        
+        <!-- Source Authentication Activity -->
+        <activity
+            android:name=".ui.sources.GoogleDriveAuthActivity"
+            android:exported="false"
+            android:label="@string/source_auth" />
+        
+        <!-- Photo Browser Activity -->
+        <activity
+            android:name=".ui.sources.FolderBrowserActivity"
+            android:exported="false"
+            android:label="@string/browse_photos"
+            android:theme="@style/Theme.AndroidScreensaver.Settings" />
+        
+        <!-- Schedule Settings Activity -->
+        <activity
+            android:name=".ui.settings.ScheduleSettingsActivity"
+            android:exported="false"
+            android:label="Schedule Settings"
+            android:theme="@style/Theme.AndroidScreensaver.Settings" />
+
+        <!-- Photo Information Settings Activity -->
+        <activity
+            android:name=".ui.settings.PhotoInfoSettingsActivity"
+            android:exported="false"
+            android:label="Photo Information"
+            android:theme="@style/Theme.AndroidScreensaver.Settings" />
+
+        <!-- Video Playback Settings Activity -->
+        <activity
+            android:name=".ui.settings.VideoPlaybackSettingsActivity"
+            android:exported="false"
+            android:label="Video Playback Settings"
+            android:theme="@style/Theme.AndroidScreensaver.Settings" />
+
+        <!-- About Activity -->
+        <activity
+            android:name=".ui.about.AboutActivity"
+            android:exported="false"
+            android:label="@string/about"
+            android:theme="@style/Theme.AndroidScreensaver.Settings" />
+
+        <!-- Debug Settings Activity -->
+        <activity
+            android:name=".ui.settings.DebugSettingsActivity"
+            android:exported="false"
+            android:label="Debug Settings"
+            android:theme="@style/Theme.AndroidScreensaver.Settings" />
+
+        <!-- Callback for OAuth2 flows -->
+        <activity
+            android:name=".ui.sources.OAuthCallbackActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <!-- Dropbox callback -->
+                <data android:scheme="db-${DROPBOX_APP_KEY}" />
+            </intent-filter>
+        </activity>
+        
+    </application>
+
+</manifest>

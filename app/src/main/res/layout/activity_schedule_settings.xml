@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Schedule Type Tabs -->
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/tab_schedule_type"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp">
+
+            <com.google.android.material.tabs.TabItem
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Autostart" />
+
+            <com.google.android.material.tabs.TabItem
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Autostop" />
+
+        </com.google.android.material.tabs.TabLayout>
+
+        <!-- Enable Schedule Toggle -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardElevation="2dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="16dp"
+                android:gravity="center_vertical">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Enable Schedule"
+                        android:textAppearance="?attr/textAppearanceTitleMedium" />
+
+                    <TextView
+                        android:id="@+id/tv_schedule_description"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Automatically start screensaver at scheduled time"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                </LinearLayout>
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switch_enabled"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Time Picker -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Time"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:layout_marginBottom="8dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_time"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="8:00 PM"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Days of Week -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Days of Week"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Quick Presets -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_weekdays"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Weekdays"
+                android:layout_marginEnd="4dp"
+                style="@style/Widget.Material3.Button.TonalButton" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_weekends"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Weekends"
+                android:layout_marginHorizontal="4dp"
+                style="@style/Widget.Material3.Button.TonalButton" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_everyday"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Every Day"
+                android:layout_marginStart="4dp"
+                style="@style/Widget.Material3.Button.TonalButton" />
+
+        </LinearLayout>
+
+        <!-- Day Checkboxes -->
+        <GridLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:columnCount="7"
+            android:rowCount="1"
+            android:layout_marginBottom="16dp">
+
+            <CheckBox android:id="@+id/cb_mon" android:text="M" android:layout_columnWeight="1" />
+            <CheckBox android:id="@+id/cb_tue" android:text="T" android:layout_columnWeight="1" />
+            <CheckBox android:id="@+id/cb_wed" android:text="W" android:layout_columnWeight="1" />
+            <CheckBox android:id="@+id/cb_thu" android:text="T" android:layout_columnWeight="1" />
+            <CheckBox android:id="@+id/cb_fri" android:text="F" android:layout_columnWeight="1" />
+            <CheckBox android:id="@+id/cb_sat" android:text="S" android:layout_columnWeight="1" />
+            <CheckBox android:id="@+id/cb_sun" android:text="S" android:layout_columnWeight="1" />
+
+        </GridLayout>
+
+        <!-- Repeat Toggle -->
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switch_repeat"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Repeat weekly"
+            android:checked="true"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Only When Charging (Autostart only) -->
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switch_charging"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Only when charging"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Save Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_save"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/save"
+            android:layout_marginTop="24dp" />
+
+    </LinearLayout>
+
+</androidx.core.widget.NestedScrollView>

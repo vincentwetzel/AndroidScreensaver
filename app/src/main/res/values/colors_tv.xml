@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- TV-specific colors for better visibility from distance -->
+    <color name="background_tv">#1A1A2E</color>
+    <color name="text_primary_tv">#FFFFFF</color>
+    <color name="text_secondary_tv">#B0B0B0</color>
+    <color name="card_background_tv">#16213E</color>
+    <color name="accent_tv">#0F3460</color>
+</resources>

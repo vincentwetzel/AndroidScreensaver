@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Android Screensaver</string>
+    <string name="screensaver_name">Photo Screensaver</string>
+    <string name="screensaver_settings">Screensaver Settings</string>
+    <string name="source_auth">Authenticate Source</string>
+    <string name="browse_photos">Browse Photos</string>
+    
+    <!-- Main Menu -->
+    <string name="select_sources">Select Sources</string>
+    <string name="settings">Settings</string>
+    <string name="preview">Preview</string>
+    <string name="preview_screensaver">Preview Screensaver</string>
+    <string name="coming_soon">Coming Soon</string>
+    
+    <!-- Sources -->
+    <string name="source_gallery">Gallery</string>
+    <string name="source_dropbox">Dropbox</string>
+    <string name="source_google_drive">Google Drive</string>
+    <string name="source_google_photos">Google Photos</string>
+    <string name="source_onedrive">OneDrive</string>
+    <string name="source_local_network">Local Network</string>
+    
+    <!-- Authentication -->
+    <string name="authenticate">Authenticate</string>
+    <string name="authenticated">Authenticated</string>
+    <string name="not_authenticated">Not Connected</string>
+    <string name="login_with_source">Login with %s</string>
+    <string name="logout">Logout</string>
+    <string name="google_drive_auth_description">Sign in to access your Google Drive photos for the screensaver</string>
+    <string name="sign_in_with_google">Sign in with Google</string>
+    
+    <!-- Folder Browser -->
+    <string name="browse_folders">Browse Folders</string>
+    <string name="search_folders">Search folders…</string>
+    <string name="select_all">Select All</string>
+    <string name="deselect_all">Deselect All</string>
+    <string name="include_subfolders">Include subfolders</string>
+    <string name="no_folders_found">No folders found</string>
+    <string name="selected_folders_summary">Selected: 0 folders (0 photos)</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="search">Search</string>
+
+    <!-- About -->
+    <string name="about">About</string>
+
+    <!-- Settings -->
+    <string name="slideshow_duration">Slide Duration</string>
+    <string name="transition_effect">Transition Effect</string>
+    <string name="image_fit">Image Fit</string>
+    <string name="shuffle_photos">Shuffle Photos</string>
+    <string name="show_captions">Show Captions</string>
+    
+    <!-- Transitions -->
+    <string name="transition_fade">Fade</string>
+    <string name="transition_slide">Slide</string>
+    <string name="transition_zoom">Zoom</string>
+    <string name="transition_none">None</string>
+    
+    <!-- Image Fit -->
+    <string name="fit_crop">Crop</string>
+    <string name="fit_fit_center">Fit Center</string>
+    <string name="fit_center_inside">Center Inside</string>
+    
+    <!-- Errors -->
+    <string name="error_loading_photos">Error loading photos</string>
+    <string name="error_authentication">Authentication failed</string>
+    <string name="error_network">Network error</string>
+    <string name="no_photos_found">No photos found</string>
+    <string name="retry">Retry</string>
+    
+    <!-- Permissions -->
+    <string name="permission_gallery_rationale">Permission to access photos is required to display them in the screensaver</string>
+</resources>

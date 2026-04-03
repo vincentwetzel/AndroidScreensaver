@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Audio Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Audio"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:layout_marginBottom="8dp" />
+
+        <RadioGroup
+            android:id="@+id/radio_audio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp">
+
+            <RadioButton
+                android:id="@+id/radio_mute"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mute" />
+
+            <RadioButton
+                android:id="@+id/radio_system_volume"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Use System Volume" />
+
+            <RadioButton
+                android:id="@+id/radio_custom_volume"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Use Custom Volume" />
+
+        </RadioGroup>
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/slider_volume"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:valueFrom="0"
+            android:valueTo="100"
+            android:value="75"
+            android:enabled="false"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Playback Behavior Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Playback Behavior"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:layout_marginBottom="8dp" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switch_autoplay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Auto-play videos"
+            android:checked="true"
+            android:layout_marginBottom="8dp" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switch_loop_short"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Loop short videos"
+            android:checked="true"
+            android:layout_marginBottom="8dp" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/switch_controls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Show playback controls"
+            android:checked="false"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Max Video Duration -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Max Video Duration"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:layout_marginBottom="8dp" />
+
+        <Spinner
+            android:id="@+id/spinner_max_duration"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Video Display Mode Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Video Display Mode"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:layout_marginBottom="8dp" />
+
+        <RadioGroup
+            android:id="@+id/radio_display_mode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp">
+
+            <RadioButton
+                android:id="@+id/radio_play_full"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Play full duration" />
+
+            <RadioButton
+                android:id="@+id/radio_play_fixed"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Play fixed time" />
+
+            <RadioButton
+                android:id="@+id/radio_still_frame"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Extract still frame" />
+
+        </RadioGroup>
+
+        <!-- Still Timestamp (conditional) -->
+        <LinearLayout
+            android:id="@+id/layout_still_timestamp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Still Frame Timestamp"
+                android:textAppearance="?attr/textAppearanceTitleSmall"
+                android:layout_marginBottom="8dp" />
+
+            <Spinner
+                android:id="@+id/spinner_still_timestamp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+        </LinearLayout>
+
+        <!-- Save Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_save"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/save"
+            android:layout_marginTop="24dp" />
+
+    </LinearLayout>
+
+</androidx.core.widget.NestedScrollView>

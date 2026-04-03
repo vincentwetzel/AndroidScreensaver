@@ -1,0 +1,86 @@
+# .gitignore for Android/Kotlin project
+
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+release/
+
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# IntelliJ
+*.iml
+.idea/
+*.ipr
+*.iws
+
+# Android Studio Navigation editor temp files
+.navigation/
+
+# Android Studio
+captures/
+.externalNativeBuild
+.cxx
+
+# Keystore files
+*.jks
+*.keystore
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Windows
+desktop.ini
+
+# Temporary files
+*.tmp
+*.log
+*.swp
+*~
+
+# Environment
+.env
+.env.local
+
+# Credentials (NEVER commit these)
+secrets.properties
+google-services.json
+*-debug.keystore
+*.jks
+*.keystore
+
+# Crashlytics
+fabric.properties
+
+# Profiling
+.hprof
+
+# NDK
+obj/
+
+# Kotlin
+*.kotlin_metadata
+
+# Misc
+*.orig
+*.bak
+.DS_Store
