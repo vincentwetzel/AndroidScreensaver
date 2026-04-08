@@ -28,7 +28,7 @@
 - [x] Account email displayed on source status and sign-in toast
 
 ## Features
-- [ ] Video playback in slideshow
+- [x] Video playback in slideshow (ExoPlayer with auto-advance on completion)
 - [ ] Date/clock overlay on photos
 - [ ] Weather overlay
 - [ ] Photo info overlay (filename, date, source)
@@ -49,6 +49,7 @@
 - ✅ Gallery source with MediaStore API, folder browsing, caching
 - ✅ Google Drive source with OAuth2, folder browsing, persistent auth, caching
 - ✅ Google Drive photos now display in slideshow (downloaded with OAuth headers to local cache)
+- ✅ Google Drive auth persists across app launches (checkExistingSignIn called in repository init)
 - ✅ Folder browser with subfolder navigation and checkbox selection (state persists)
 - ✅ Folder selection persistence fixed (setSelectedFolders/saveSelectedFolders added to SettingsManager)
 - ✅ Activation card that auto-hides when app is set as screensaver

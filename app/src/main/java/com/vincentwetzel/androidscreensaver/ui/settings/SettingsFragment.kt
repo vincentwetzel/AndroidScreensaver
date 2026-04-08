@@ -43,6 +43,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         setPreferencesFromResource(R.xml.settings_main, rootKey)
 
         setupPreferences()
+        syncSettingsFromDataStore()
     }
 
     private fun setupPreferences() {
@@ -131,17 +132,90 @@ class SettingsFragment : PreferenceFragmentCompat() {
             true
         }
 
-        // Set up summary updates for list preferences
-        setupListPreferenceSummary("media_order")
-        setupListPreferenceSummary("content_filter")
-        setupListPreferenceSummary("display_time")
-        setupListPreferenceSummary("display_effect")
-        setupListPreferenceSummary("transition_effect")
-        setupListPreferenceSummary("transition_duration")
-        setupListPreferenceSummary("screen_rotation")
-        setupListPreferenceSummary("sync_interval")
-        setupListPreferenceSummary("network_timeout")
-        setupListPreferenceSummary("exit_trigger")
+        // Set up summary updates for list preferences (with DataStore sync)
+        setupListPreferenceWithSave("display_effect") { _, config, value ->
+            config.copy(displayEffect = enumValueOfOrNull(value))
+        }
+        setupListPreferenceWithSave("transition_effect") { _, config, value ->
+            config.copy(transitionEffect = enumValueOfOrNull(value))
+        }
+        setupListPreferenceWithSave("transition_duration") { _, config, value ->
+            config.copy(transitionDurationMs = value.toIntOrNull() ?: 1000)
+        }
+        setupListPreferenceWithSave("screen_rotation") { _, config, value ->
+            val orientation = when (value) {
+                "portrait" -> com.vincentwetzel.androidscreensaver.data.model.ScreenOrientation.PORTRAIT
+                "landscape" -> com.vincentwetzel.androidscreensaver.data.model.ScreenOrientation.LANDSCAPE
+                else -> com.vincentwetzel.androidscreensaver.data.model.ScreenOrientation.SYSTEM_DEFAULT
+            }
+            config.copy(screenOrientation = orientation)
+        }
+        setupListPreferenceWithSave("sync_interval") { _, config, value ->
+            // Sync interval is stored as minutes in preferences, but as enum in DataStore
+            val minutes = value.toIntOrNull()
+            val interval = when {
+                value == "auto" || value == "custom" || value == "manual" -> config.syncInterval
+                minutes != null && minutes <= 30 -> com.vincentwetzel.androidscreensaver.data.model.SyncInterval.HOURLY
+                minutes != null && minutes <= 90 -> com.vincentwetzel.androidscreensaver.data.model.SyncInterval.DAILY
+                else -> com.vincentwetzel.androidscreensaver.data.model.SyncInterval.WEEKLY
+            }
+            config.copy(syncInterval = interval)
+        }
+        setupListPreferenceWithSave("network_timeout") { _, config, value ->
+            config.copy(networkTimeoutSeconds = value.toIntOrNull() ?: 30)
+        }
+        setupListPreferenceWithSave("exit_trigger") { _, config, value ->
+            val trigger = when (value) {
+                "touch" -> com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger.TOUCH
+                "remote" -> com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger.REMOTE_BUTTON
+                "shake" -> com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger.SHAKE
+                "voice" -> com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger.VOICE_COMMAND
+                else -> com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger.TOUCH
+            }
+            config.copy(exitOnTrigger = trigger)
+        }
+
+        // Display time: update summary AND save to DataStore
+        setupDisplayTimePreference()
+
+        // Content filter: update summary AND save to DataStore
+        findPreference<ListPreference>("content_filter")?.setOnPreferenceChangeListener { preference, newValue ->
+            val listPref = preference as ListPreference
+            val index = listPref.findIndexOfValue(newValue.toString())
+            if (index >= 0) preference.summary = listPref.entries[index]
+
+            val filter = when (newValue.toString()) {
+                "images" -> com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY
+                "videos" -> com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY
+                else -> com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_AND_VIDEOS
+            }
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveSlideshowConfig(
+                requireContext(), config.copy(mediaTypeFilter = filter)
+            )
+            true
+        }
+
+        // Media order: update summary AND save to DataStore
+        findPreference<ListPreference>("media_order")?.setOnPreferenceChangeListener { preference, newValue ->
+            val listPref = preference as ListPreference
+            val index = listPref.findIndexOfValue(newValue.toString())
+            if (index >= 0) preference.summary = listPref.entries[index]
+
+            val order = when (newValue.toString()) {
+                "name_asc" -> com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.NAME_A_Z
+                "name_desc" -> com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.NAME_Z_A
+                "date_asc" -> com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.DATE_OLDEST_FIRST
+                "date_desc" -> com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.DATE_NEWEST_FIRST
+                else -> com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.DATE_NEWEST_FIRST // shuffle
+            }
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveSlideshowConfig(
+                requireContext(),
+                config.copy(shuffle = newValue.toString() == "shuffle", photoOrder = order)
+            )
+            true
+        }
     }
 
     /**
@@ -157,6 +231,201 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 ""
             }
             true
+        }
+    }
+
+    /**
+     * Update summary AND save to DataStore when a ListPreference changes
+     */
+    private fun setupListPreferenceWithSave(
+        key: String,
+        transform: (Preference, com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig, String) -> com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig
+    ) {
+        findPreference<ListPreference>(key)?.setOnPreferenceChangeListener { preference, newValue ->
+            val listPref = preference as ListPreference
+            val value = newValue.toString()
+            val index = listPref.findIndexOfValue(value)
+            if (index >= 0) preference.summary = listPref.entries[index]
+
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            val newConfig = transform(preference, config, value)
+            com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveSlideshowConfig(requireContext(), newConfig)
+            true
+        }
+    }
+
+    /**
+     * Safely convert a string to an enum value, returning the default if not found
+     */
+    private inline fun <reified T : Enum<T>> enumValueOfOrNull(name: String): T {
+        return try {
+            enumValueOf<T>(name.uppercase())
+        } catch (e: IllegalArgumentException) {
+            // Return the first enum constant as fallback
+            enumValues<T>().first()
+        }
+    }
+
+    /**
+     * Display time preference: updates summary AND saves to DataStore
+     */
+    private fun setupDisplayTimePreference() {
+        findPreference<ListPreference>("display_time")?.setOnPreferenceChangeListener { preference, newValue ->
+            val listPref = preference as ListPreference
+            val index = listPref.findIndexOfValue(newValue.toString())
+            // Update summary text
+            if (index >= 0) {
+                preference.summary = listPref.entries[index]
+            }
+            // Save to DataStore so slideshow picks it up
+            val seconds = newValue.toString().toIntOrNull() ?: 5
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveSlideshowConfig(
+                requireContext(),
+                config.copy(slideDurationSeconds = seconds)
+            )
+            true
+        }
+    }
+
+    /**
+     * Read current config from DataStore and sync summaries with actual saved values
+     */
+    private fun syncSettingsFromDataStore() {
+        val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+
+        // Display time
+        findPreference<ListPreference>("display_time")?.let { pref ->
+            val value = config.slideDurationSeconds.toString()
+            pref.value = value
+            pref.summary = config.slideDurationSeconds.let { s ->
+                when (s) {
+                    3 -> "3 seconds"
+                    5 -> "5 seconds"
+                    10 -> "10 seconds"
+                    15 -> "15 seconds"
+                    30 -> "30 seconds"
+                    60 -> "1 minute"
+                    120 -> "2 minutes"
+                    300 -> "5 minutes"
+                    else -> "$s seconds"
+                }
+            }
+        }
+
+        // Media order (enum: DATE_NEWEST_FIRST, NAME_A_Z -> pref: shuffle, name_asc)
+        findPreference<ListPreference>("media_order")?.let { pref ->
+            val value = if (config.shuffle) {
+                "shuffle"
+            } else {
+                when (config.photoOrder) {
+                    com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.NAME_A_Z -> "name_asc"
+                    com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.NAME_Z_A -> "name_desc"
+                    com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.DATE_OLDEST_FIRST -> "date_asc"
+                    com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.DATE_NEWEST_FIRST -> "date_desc"
+                    else -> "shuffle"
+                }
+            }
+            pref.value = value
+            pref.summary = pref.entry
+        }
+
+        // Content filter (enum: IMAGES_ONLY -> pref: images, etc)
+        findPreference<ListPreference>("content_filter")?.let { pref ->
+            val value = when (config.mediaTypeFilter) {
+                com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "images"
+                com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY -> "videos"
+                else -> "both"
+            }
+            pref.value = value
+            pref.summary = pref.entry
+        }
+
+        // Match orientation
+        findPreference<SwitchPreferenceCompat>("match_orientation")?.let { pref ->
+            pref.isChecked = config.matchDeviceOrientation
+        }
+
+        // Display effect (enum: CROP_TO_FIT -> pref: crop_to_fit)
+        findPreference<ListPreference>("display_effect")?.let { pref ->
+            val value = config.displayEffect.name.lowercase()
+            pref.value = value
+            pref.summary = pref.entry
+        }
+
+        // Transition effect (enum: FADE -> pref: fade)
+        findPreference<ListPreference>("transition_effect")?.let { pref ->
+            val value = config.transitionEffect.name.lowercase().replace("cross_fade", "cross_fade")
+            pref.value = value
+            pref.summary = pref.entry
+        }
+
+        // Transition duration
+        findPreference<ListPreference>("transition_duration")?.let { pref ->
+            val value = config.transitionDurationMs.toString()
+            pref.value = value
+            pref.summary = pref.entry
+        }
+
+        // Screen rotation (enum: SYSTEM_DEFAULT -> pref: system)
+        findPreference<ListPreference>("screen_rotation")?.let { pref ->
+            val value = config.screenOrientation.name.lowercase()
+            pref.value = value
+            pref.summary = pref.entry
+        }
+
+        // Keep screen on
+        findPreference<SwitchPreferenceCompat>("keep_screen_on")?.let { pref ->
+            pref.isChecked = config.keepScreenOn
+        }
+
+        // Sync interval
+        findPreference<ListPreference>("sync_interval")?.let { pref ->
+            val value = config.syncInterval.name.lowercase()
+            pref.value = value
+            pref.summary = pref.entry
+        }
+
+        // Wi-Fi only
+        findPreference<SwitchPreferenceCompat>("wifi_only")?.let { pref ->
+            pref.isChecked = config.wifiOnly
+        }
+
+        // Network timeout
+        findPreference<ListPreference>("network_timeout")?.let { pref ->
+            val value = config.networkTimeoutSeconds.toString()
+            pref.value = value
+            pref.summary = pref.entry
+        }
+
+        // Background color
+        findPreference<Preference>("background_color")?.summary =
+            String.format("#%06X", 0xFFFFFF and config.backgroundColor)
+
+        // Cache limit
+        val cacheLimit = if (config.cacheConfig.usePresetLimit) {
+            config.cacheConfig.presetLimit.name.replace("MB_", "").replace("GB_", "000 ").let { "$it MB" }
+        } else {
+            "${config.cacheConfig.cacheSizeLimitMB} MB"
+        }
+        findPreference<Preference>("cache_limit")?.summary = cacheLimit
+
+        // Exit trigger (enum: TOUCH -> pref: touch, REMOTE_BUTTON -> pref: remote)
+        findPreference<ListPreference>("exit_trigger")?.let { pref ->
+            val value = when (config.exitOnTrigger) {
+                com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger.TOUCH -> "touch"
+                com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger.REMOTE_BUTTON -> "remote"
+                com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger.SHAKE -> "shake"
+                com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger.VOICE_COMMAND -> "voice"
+                else -> "touch"
+            }
+            pref.value = value
+            pref.summary = pref.entry
+        }
+
+        // Sync interval (stored as minutes, not enum)
+        findPreference<ListPreference>("sync_interval")?.let { pref ->
+            pref.summary = pref.entry ?: "Auto"
         }
     }
 

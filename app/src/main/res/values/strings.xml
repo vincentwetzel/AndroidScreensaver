@@ -80,4 +80,11 @@
     
     <!-- Loading -->
     <string name="loading_photos">Loading photos…</string>
+
+    <!-- Add Sources -->
+    <string name="your_sources">Your Sources</string>
+    <string name="sources_connected_subtitle">Sources connected to this app</string>
+    <string name="add_sources">Add Sources</string>
+    <string name="available_sources">Available Sources</string>
+    <string name="device_photos">Device photos</string>
 </resources>

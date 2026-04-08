@@ -41,7 +41,7 @@ class SlideshowManager @Inject constructor(
     /**
      * Load configuration from settings
      */
-    private fun loadConfig() {
+    fun loadConfig() {
         config = SettingsManager.getSlideshowConfig(context)
     }
 
@@ -106,8 +106,48 @@ class SlideshowManager @Inject constructor(
             }
 
             loadedPhotos = allPhotos
-            allPhotos
+
+            // Apply media type filter
+            val filteredPhotos = when (config.mediaTypeFilter) {
+                com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY ->
+                    allPhotos.filter { isImage(it.uri) }
+                com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY ->
+                    allPhotos.filter { isVideo(it.uri) }
+                else -> allPhotos
+            }
+
+            loadedPhotos = filteredPhotos
+            filteredPhotos
         }
+    }
+
+    /**
+     * Check if a URI points to an image file
+     */
+    private fun isImage(uri: String): Boolean {
+        val lower = uri.lowercase()
+        // File extension check (Google Drive cached photos)
+        val hasImageExtension = lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") ||
+               lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".bmp") ||
+               lower.endsWith(".heic") || lower.endsWith(".heif") || lower.endsWith(".svg") ||
+               lower.endsWith(".tiff") || lower.endsWith(".tif")
+        // Content URI check (Gallery photos - MediaStore path)
+        val isImageContentUri = lower.contains("/images/media/") || lower.contains("media_type_image")
+        return hasImageExtension || isImageContentUri
+    }
+
+    /**
+     * Check if a URI points to a video file
+     */
+    private fun isVideo(uri: String): Boolean {
+        val lower = uri.lowercase()
+        // File extension check (Google Drive cached photos)
+        val hasVideoExtension = lower.endsWith(".mp4") || lower.endsWith(".avi") || lower.endsWith(".mov") ||
+               lower.endsWith(".mkv") || lower.endsWith(".webm") || lower.endsWith(".wmv") ||
+               lower.endsWith(".flv") || lower.endsWith(".m4v")
+        // Content URI check (Gallery photos - MediaStore path)
+        val isVideoContentUri = lower.contains("/video/media/") || lower.contains("media_type_video")
+        return hasVideoExtension || isVideoContentUri
     }
 
     /**

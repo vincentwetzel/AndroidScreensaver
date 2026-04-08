@@ -15,6 +15,7 @@
 - **ScreensaverPreviewActivity** — Activity-based preview that mirrors DreamService for testing
 - **Pull-to-refresh** — Swipe down on folder browser to force a manual refresh from remote source (Google Drive, Gallery)
 - **Account email display** — Remote source status shows "Signed in as [email]" instead of generic "Authenticated". Toast notification on sign-in shows "Successfully signed in as [email]". Applies to all sources (Google Drive, and future: Dropbox, OneDrive, Google Photos)
+- **Video playback support** — Videos now play with ExoPlayer (Media3) in the slideshow, auto-advancing when finished. Content filter "Videos Only" now works correctly
 
 ### Fixed
 - Google Sign-In `DEVELOPER_ERROR` (status 10) caused by incorrect `requestIdToken()` usage
@@ -37,6 +38,7 @@
 - **Cache not detecting new/removed folders** — switched from permanent cache to TTL-based cache (60s for folders, 5min for photo counts) so changes are automatically detected
 - **Google Drive photos now display in slideshow** — photos were showing black screen because Coil couldn't load Drive URLs without OAuth headers; now downloads photos to local cache with auth headers and loads via file:// URI
 - **SlideshowView error logging** — added Coil load listeners to diagnose image loading failures
+- **Google Drive auth now restores on app launch** — `checkExistingSignIn()` was never called at startup, so `isAuthenticated` stayed false and slideshow skipped Drive photos; now auto-checks in repository `init` block
 
 ### Changed
 - Removed arrow button from folder list; folder name clicks now navigate into folder

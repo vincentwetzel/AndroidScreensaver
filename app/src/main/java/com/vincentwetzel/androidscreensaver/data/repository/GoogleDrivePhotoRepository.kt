@@ -136,6 +136,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
                     .setQ(query.toString())
                     .setPageSize(1000)
                     .setFields("nextPageToken, files(id, name, parents)")
+                    .setOrderBy("name")
                     .execute()
 
                 files.files?.forEach { file ->

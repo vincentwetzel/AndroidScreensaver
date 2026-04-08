@@ -7,141 +7,54 @@
     android:background="@color/background_tv"
     android:padding="48dp">
 
-    <!-- Header - Larger for TV -->
+    <!-- Header -->
     <TextView
         android:id="@+id/tv_header"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/select_sources"
+        android:text="@string/your_sources"
         android:textAppearance="?attr/textAppearanceDisplayLarge"
         android:textColor="@color/text_primary_tv"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
-    <!-- Google Drive Card - Larger for TV -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/card_google_drive"
-        android:layout_width="0dp"
+    <!-- Subtitle -->
+    <TextView
+        android:id="@+id/tv_sources_subtitle"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="48dp"
-        android:focusable="true"
-        android:focusableInTouchMode="true"
-        app:cardBackgroundColor="@color/card_background_tv"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="8dp"
+        android:text="@string/sources_connected_subtitle"
+        android:textAppearance="?attr/textAppearanceBodyLarge"
+        android:textColor="@color/text_secondary_tv"
+        android:layout_marginTop="8dp"
         app:layout_constraintTop_toBottomOf="@id/tv_header"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintStart_toStartOf="parent" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="32dp"
-            android:gravity="center_vertical">
-
-            <ImageView
-                android:layout_width="72dp"
-                android:layout_height="72dp"
-                android:src="@drawable/ic_source_google_drive"
-                android:contentDescription="@string/source_google_drive"
-                android:layout_marginEnd="32dp" />
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/source_google_drive"
-                    android:textAppearance="?attr/textAppearanceHeadlineMedium"
-                    android:textColor="@color/text_primary_tv" />
-
-                <TextView
-                    android:id="@+id/status_google_drive"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/not_authenticated"
-                    android:textAppearance="?attr/textAppearanceBodyLarge"
-                    android:textColor="@color/text_secondary_tv" />
-
-            </LinearLayout>
-
-            <com.google.android.material.materialswitch.MaterialSwitch
-                android:id="@+id/switch_google_drive"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:scaleX="1.5"
-                android:scaleY="1.5" />
-
-        </LinearLayout>
-
-    </com.google.android.material.card.MaterialCardView>
-
-    <!-- Gallery Card - Larger for TV -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/card_gallery"
+    <!-- Connected sources container - populated dynamically -->
+    <LinearLayout
+        android:id="@+id/connected_sources_container"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:focusable="true"
-        android:focusableInTouchMode="true"
-        app:cardBackgroundColor="@color/card_background_tv"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="8dp"
-        app:layout_constraintTop_toBottomOf="@id/card_google_drive"
+        android:orientation="vertical"
+        android:layout_marginTop="32dp"
+        app:layout_constraintTop_toBottomOf="@id/tv_sources_subtitle"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintEnd_toEndOf="parent" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="32dp"
-            android:gravity="center_vertical">
-
-            <ImageView
-                android:layout_width="72dp"
-                android:layout_height="72dp"
-                android:src="@drawable/ic_source_gallery"
-                android:contentDescription="@string/source_gallery"
-                android:layout_marginEnd="32dp" />
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/source_gallery"
-                    android:textAppearance="?attr/textAppearanceHeadlineMedium"
-                    android:textColor="@color/text_primary_tv" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Device photos"
-                    android:textAppearance="?attr/textAppearanceBodyLarge"
-                    android:textColor="@color/text_secondary_tv" />
-
-            </LinearLayout>
-
-            <com.google.android.material.materialswitch.MaterialSwitch
-                android:id="@+id/switch_gallery"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:scaleX="1.5"
-                android:scaleY="1.5" />
-
-        </LinearLayout>
-
-    </com.google.android.material.card.MaterialCardView>
+    <!-- Add Sources Button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_add_sources"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="@string/add_sources"
+        android:textAppearance="?attr/textAppearanceTitleLarge"
+        android:paddingVertical="20dp"
+        android:layout_marginTop="16dp"
+        app:icon="@android:drawable/ic_input_add"
+        app:iconSize="28dp"
+        app:layout_constraintTop_toBottomOf="@id/connected_sources_container"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
     <!-- Activation Card for TV -->
     <com.google.android.material.card.MaterialCardView
@@ -154,7 +67,7 @@
         app:cardBackgroundColor="@color/card_background_tv"
         app:cardCornerRadius="16dp"
         app:cardElevation="8dp"
-        app:layout_constraintTop_toBottomOf="@id/card_gallery"
+        app:layout_constraintTop_toBottomOf="@id/btn_add_sources"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
@@ -194,7 +107,7 @@
 
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Settings Button - Larger for TV -->
+    <!-- Settings Button -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_settings"
         android:layout_width="0dp"
