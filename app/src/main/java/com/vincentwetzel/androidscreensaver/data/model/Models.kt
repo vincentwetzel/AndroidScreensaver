@@ -65,7 +65,7 @@ data class SlideshowConfig(
     val photoOrder: PhotoOrder = PhotoOrder.DATE_NEWEST_FIRST,
     
     // Content filter
-    val mediaTypeFilter: MediaTypeFilter = MediaTypeFilter.IMAGES_AND_VIDEOS,
+    val mediaTypeFilter: MediaTypeFilter = MediaTypeFilter.IMAGES_ONLY,
     val matchDeviceOrientation: Boolean = false,
     val dateRangeStart: Long? = null, // Timestamp
     val dateRangeEnd: Long? = null, // Timestamp

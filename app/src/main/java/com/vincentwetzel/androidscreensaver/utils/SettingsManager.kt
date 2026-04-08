@@ -88,8 +88,8 @@ object SettingsManager {
 
                 // Content filter
                 mediaTypeFilter = enumValueOfOrNull<MediaTypeFilter>(
-                    preferences[PreferencesKeys.MEDIA_TYPE_FILTER] ?: MediaTypeFilter.IMAGES_AND_VIDEOS.name
-                ) ?: MediaTypeFilter.IMAGES_AND_VIDEOS,
+                    preferences[PreferencesKeys.MEDIA_TYPE_FILTER] ?: MediaTypeFilter.IMAGES_ONLY.name
+                ) ?: MediaTypeFilter.IMAGES_ONLY,
                 matchDeviceOrientation = preferences[PreferencesKeys.MATCH_ORIENTATION] ?: false,
 
                 // Display effects

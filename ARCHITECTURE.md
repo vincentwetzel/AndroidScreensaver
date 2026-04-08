@@ -114,7 +114,7 @@ All settings are persisted via **DataStore Preferences**.
 | `slide_duration_seconds` | Int | `5` | Seconds per photo |
 | `shuffle` | Boolean | `true` | Randomize photo order |
 | `photo_order` | String | `DATE_NEWEST_FIRST` | Sort order |
-| `media_type_filter` | String | `IMAGES_AND_VIDEOS` | Filter by media type |
+| `media_type_filter` | String | `IMAGES_ONLY` | Filter by media type |
 | `match_orientation` | Boolean | `false` | Match device orientation |
 | `display_effect` | String | `CROP_TO_FIT` | Photo display effect |
 | `pan_direction` | String | `RANDOM` | Pan direction for pan effect |

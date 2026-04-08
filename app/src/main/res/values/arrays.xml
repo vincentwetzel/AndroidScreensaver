@@ -18,9 +18,9 @@
 
     <!-- Content Filter -->
     <string-array name="content_filter_entries">
-        <item>Images AND Videos</item>
         <item>Images Only</item>
         <item>Videos Only</item>
+        <item>Images AND Videos</item>
     </string-array>
     <string-array name="content_filter_values">
         <item>both</item>
