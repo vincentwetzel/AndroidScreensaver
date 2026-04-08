@@ -39,6 +39,11 @@ class GoogleDriveRepository @Inject constructor(
     private var driveService: Drive? = null
     private var driveCredential: GoogleAccountCredential? = null
 
+    init {
+        // Automatically check for existing sign-in when repository is created
+        checkExistingSignIn()
+    }
+
     // Google Sign-In client
     private val googleSignInClient: GoogleSignInClient by lazy {
         val signInOptions = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
