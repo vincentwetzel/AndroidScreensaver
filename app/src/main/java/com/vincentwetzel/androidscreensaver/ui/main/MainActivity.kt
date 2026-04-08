@@ -84,6 +84,9 @@ class MainActivity : AppCompatActivity() {
             showSnackbar("${selectedFolders?.size ?: 0} folders selected")
         }
     }
+    
+    // Flag to prevent toggle listeners from firing during state restoration
+    private var isRestoringToggleState = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -137,7 +140,11 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            // Restore saved toggle state without triggering the listener
+            isRestoringToggleState = true
+            
             b.switchGallery?.setOnCheckedChangeListener { _, isChecked ->
+                if (isRestoringToggleState) return@setOnCheckedChangeListener
                 if (isChecked) {
                     viewModel.enableSource(SourceType.GALLERY)
                     com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSourceEnabled(
@@ -158,7 +165,8 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            b.switchGoogleDrive.setOnCheckedChangeListener { _, isChecked ->
+            b.switchGoogleDrive?.setOnCheckedChangeListener { _, isChecked ->
+                if (isRestoringToggleState) return@setOnCheckedChangeListener
                 if (isChecked) {
                     if (viewModel.isGoogleDriveAuthenticated.value == true) {
                         viewModel.enableSource(SourceType.GOOGLE_DRIVE)
@@ -186,7 +194,32 @@ class MainActivity : AppCompatActivity() {
             b.btnActivateScreensaver?.setOnClickListener {
                 openScreensaverSettings()
             }
+            
+            // Restore source toggle state from saved settings
+            isRestoringToggleState = true
+            restoreSourceToggleState()
+            isRestoringToggleState = false // Allow user interactions now
         }
+    }
+    
+    /**
+     * Restore source toggle states from saved settings
+     */
+    private fun restoreSourceToggleState() {
+        val galleryEnabled = com.vincentwetzel.androidscreensaver.utils.SettingsManager.isSourceEnabled(
+            this,
+            com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
+        )
+        val driveEnabled = com.vincentwetzel.androidscreensaver.utils.SettingsManager.isSourceEnabled(
+            this,
+            com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE
+        )
+        
+        // Set toggles to match saved state (won't trigger listeners since restoringState is true)
+        binding?.switchGallery?.isChecked = galleryEnabled
+        binding?.switchGoogleDrive?.isChecked = driveEnabled
+        bindingTv?.switchGallery?.isChecked = galleryEnabled
+        bindingTv?.switchGoogleDrive?.isChecked = driveEnabled
     }
 
     private fun setupTvUI() {
@@ -209,7 +242,11 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            // Restore saved toggle state without triggering the listener
+            isRestoringToggleState = true
+            
             b.switchGallery?.setOnCheckedChangeListener { _, isChecked ->
+                if (isRestoringToggleState) return@setOnCheckedChangeListener
                 if (isChecked) {
                     viewModel.enableSource(SourceType.GALLERY)
                     com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSourceEnabled(
@@ -230,7 +267,8 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            b.switchGoogleDrive.setOnCheckedChangeListener { _, isChecked ->
+            b.switchGoogleDrive?.setOnCheckedChangeListener { _, isChecked ->
+                if (isRestoringToggleState) return@setOnCheckedChangeListener
                 if (isChecked) {
                     if (viewModel.isGoogleDriveAuthenticated.value == true) {
                         viewModel.enableSource(SourceType.GOOGLE_DRIVE)
@@ -262,6 +300,11 @@ class MainActivity : AppCompatActivity() {
             b.btnSettings.setOnClickListener {
                 startActivity(android.content.Intent(this, SettingsActivity::class.java))
             }
+            
+            // Restore source toggle state from saved settings
+            isRestoringToggleState = true
+            restoreSourceToggleState()
+            isRestoringToggleState = false // Allow user interactions now
         }
     }
 

@@ -28,6 +28,7 @@
   - MainActivity now saves folder selection results when user taps Save
   - GalleryFolderBrowserActivity now restores checkbox state from saved preferences
   - FolderBrowserActivity now restores checkbox state from saved preferences (Google Drive)
+- **Source toggle switches now restore saved state on app launch** — toggles reflect persisted settings instead of defaulting to "off"
 
 ### Changed
 - Removed arrow button from folder list; folder name clicks now navigate into folder
