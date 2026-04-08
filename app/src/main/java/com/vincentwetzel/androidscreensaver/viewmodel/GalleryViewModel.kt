@@ -75,7 +75,7 @@ class GalleryViewModel @Inject constructor(
      */
     fun navigateBack() {
         val currentId = _currentFolderId.value ?: return
-        loadFolders(null, forceRefresh = true)
+        loadFolders(null, forceRefresh = false) // Use cache
     }
 
     /**

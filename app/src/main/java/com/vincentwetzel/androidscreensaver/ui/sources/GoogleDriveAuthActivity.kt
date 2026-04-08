@@ -42,6 +42,7 @@ class GoogleDriveAuthActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "GoogleDriveAuth"
+        const val EXTRA_ACCOUNT_NAME = "account_name"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,9 +74,19 @@ class GoogleDriveAuthActivity : AppCompatActivity() {
                         binding.errorMessage.visibility = View.GONE
                     }
                     is AuthState.Authenticated -> {
-                        // Auth successful, go back to previous screen
-                        Toast.makeText(this@GoogleDriveAuthActivity, "Successfully signed in!", Toast.LENGTH_SHORT).show()
-                        setResult(RESULT_OK)
+                        // Auth successful, show account email and return
+                        val accountEmail = driveRepository.currentAccount.value?.email
+                        val message = if (accountEmail != null) {
+                            "Successfully signed in as $accountEmail"
+                        } else {
+                            "Successfully signed in!"
+                        }
+                        Toast.makeText(this@GoogleDriveAuthActivity, message, Toast.LENGTH_LONG).show()
+
+                        val resultIntent = Intent().apply {
+                            putExtra(EXTRA_ACCOUNT_NAME, accountEmail)
+                        }
+                        setResult(RESULT_OK, resultIntent)
                         finish()
                     }
                     is AuthState.Error -> {

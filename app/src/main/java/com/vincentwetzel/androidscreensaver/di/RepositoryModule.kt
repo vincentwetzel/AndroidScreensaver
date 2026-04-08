@@ -39,9 +39,10 @@ object RepositoryModule {
     @Provides
     @Singleton
     fun provideGoogleDrivePhotoRepository(
+        @ApplicationContext context: Context,
         driveRepository: GoogleDriveRepository
     ): GoogleDrivePhotoRepository {
-        return GoogleDrivePhotoRepository(driveRepository)
+        return GoogleDrivePhotoRepository(context, driveRepository)
     }
 
     @Provides

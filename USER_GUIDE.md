@@ -17,6 +17,7 @@ After enabling a source, tap it to browse folders:
 - **Tap a folder name** to open it and see subfolders
 - Use the **back arrow** in the toolbar to go up one level
 - Toggle **"Include subfolders"** to also include photos in nested folders
+- **Pull down** to refresh and detect new/removed folders from the source
 - Tap **Save** when done
 
 ### 3. Activate the Screensaver

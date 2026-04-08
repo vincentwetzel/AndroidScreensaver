@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.databinding.ActivityFolderBrowserBinding
 import com.vincentwetzel.androidscreensaver.viewmodel.GoogleDriveViewModel
@@ -86,6 +87,11 @@ class FolderBrowserActivity : AppCompatActivity() {
     }
 
     private fun setupButtons() {
+        // Pull-to-refresh for force reload
+        binding.swipeRefresh.setOnRefreshListener {
+            viewModel.loadFolders(forceRefresh = true)
+        }
+
         binding.btnSelectAll.setOnClickListener {
             adapter.selectAll()
         }
@@ -128,7 +134,6 @@ class FolderBrowserActivity : AppCompatActivity() {
                     // Restore selected folders after list is submitted
                     restoreSelectedFolders()
                 }
-                binding.progressBar.visibility = View.GONE
             }
         }
 
@@ -145,13 +150,14 @@ class FolderBrowserActivity : AppCompatActivity() {
         lifecycleScope.launch {
             viewModel.isLoading.collectLatest { isLoading ->
                 binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+                binding.swipeRefresh.isRefreshing = isLoading
             }
         }
 
         lifecycleScope.launch {
             viewModel.error.collectLatest { error ->
                 error?.let {
-                    binding.progressBar.visibility = View.GONE
+                    binding.swipeRefresh.isRefreshing = false
                     com.google.android.material.snackbar.Snackbar.make(
                         binding.root,
                         it,

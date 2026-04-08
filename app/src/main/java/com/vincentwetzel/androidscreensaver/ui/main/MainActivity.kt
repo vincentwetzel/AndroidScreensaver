@@ -42,9 +42,9 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) {
-            // User successfully authenticated
-            viewModel.onGoogleDriveAuthenticated(true)
-            updateDriveStatus(true)
+            val accountName = result.data?.getStringExtra(GoogleDriveAuthActivity.EXTRA_ACCOUNT_NAME)
+            viewModel.onGoogleDriveAuthenticated(true, accountName)
+            updateDriveStatus(true, accountName)
             showSnackbar("Google Drive connected!")
             // Now open folder browser
             openFolderBrowser()
@@ -327,7 +327,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun observeViewModel() {
         viewModel.isGoogleDriveAuthenticated.observe(this) { isAuthenticated ->
-            updateDriveStatus(isAuthenticated == true)
+            updateDriveStatus(isAuthenticated == true, viewModel.googleDriveAccountName.value)
+        }
+
+        viewModel.googleDriveAccountName.observe(this) { accountName ->
+            updateDriveStatus(viewModel.isGoogleDriveAuthenticated.value == true, accountName)
         }
 
         viewModel.enabledSources.observe(this) { sources ->
@@ -336,19 +340,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateDriveStatus(isAuthenticated: Boolean) {
-        if (isTvLayout) {
-            bindingTv?.statusGoogleDrive?.text = if (isAuthenticated) {
-                getString(R.string.authenticated)
-            } else {
-                getString(R.string.not_authenticated)
-            }
+    private fun updateDriveStatus(isAuthenticated: Boolean, accountName: String? = null) {
+        val displayText = if (isAuthenticated) {
+            accountName?.let { "Signed in as $it" } ?: getString(R.string.authenticated)
         } else {
-            binding?.statusGoogleDrive?.text = if (isAuthenticated) {
-                getString(R.string.authenticated)
-            } else {
-                getString(R.string.not_authenticated)
-            }
+            getString(R.string.not_authenticated)
+        }
+
+        if (isTvLayout) {
+            bindingTv?.statusGoogleDrive?.text = displayText
+        } else {
+            binding?.statusGoogleDrive?.text = displayText
         }
     }
 

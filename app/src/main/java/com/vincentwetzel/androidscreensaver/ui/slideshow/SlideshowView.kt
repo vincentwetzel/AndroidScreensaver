@@ -203,11 +203,23 @@ class SlideshowView @JvmOverloads constructor(
         
         // Load the photo
         val uri = Uri.parse(photo.uri)
+        android.util.Log.d(TAG, "Loading photo: uri=$uri, title=${photo.title}")
         targetView.load(uri) {
             crossfade(false) // We handle crossfade manually
             placeholder(android.R.color.black)
             error(android.R.color.black)
             allowHardware(false) // Better for long-lived views like screensavers
+            listener(
+                onStart = {
+                    android.util.Log.d(TAG, "Started loading: $uri")
+                },
+                onSuccess = { _, _ ->
+                    android.util.Log.d(TAG, "Successfully loaded: $uri")
+                },
+                onError = { _, result ->
+                    android.util.Log.e(TAG, "Failed to load: $uri, error=${result.throwable?.message}")
+                }
+            )
         }
         
         if (animate) {

@@ -23,8 +23,28 @@ class GalleryPhotoRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) : PhotoRepository {
 
+    companion object {
+        // Cache TTL: folders are considered stale after this many milliseconds
+        // 60 seconds - balances snappy UX with detecting changes
+        private const val FOLDER_CACHE_TTL_MS = 60_000L
+        private const val PHOTO_COUNT_CACHE_TTL_MS = 300_000L // 5 minutes for counts
+    }
+
+    // Cache entry with timestamp for TTL-based expiration
+    private data class CacheEntry<T>(val data: T, val timestampMs: Long = System.currentTimeMillis()) {
+        val isStale: Boolean
+            get() = System.currentTimeMillis() - timestampMs > FOLDER_CACHE_TTL_MS
+    }
+
     // Cache for loaded folders (survives Activity recreation)
-    private val folderCache = mutableMapOf<String?, List<PhotoFolder>>()
+    private val folderCache = mutableMapOf<String?, CacheEntry<List<PhotoFolder>>>()
+
+    // Cache for folder photo counts (survives Activity recreation)
+    private data class CountCacheEntry(val count: Int, val timestampMs: Long = System.currentTimeMillis()) {
+        val isStale: Boolean
+            get() = System.currentTimeMillis() - timestampMs > PHOTO_COUNT_CACHE_TTL_MS
+    }
+    private val photoCountCache = mutableMapOf<String, CountCacheEntry>()
 
     // Supported image file extensions
     private val imageMimeTypes = setOf(
@@ -44,9 +64,10 @@ class GalleryPhotoRepository @Inject constructor(
     }
 
     override suspend fun listFolders(parentFolderId: String?, forceRefresh: Boolean): List<PhotoFolder> {
-        // Check cache first
-        if (!forceRefresh && folderCache.containsKey(parentFolderId)) {
-            return folderCache[parentFolderId]!!
+        // Check cache first (only if not forcing refresh and cache is fresh)
+        val cached = folderCache[parentFolderId]
+        if (!forceRefresh && cached != null && !cached.isStale) {
+            return cached.data
         }
 
         return withContext(Dispatchers.IO) {
@@ -115,7 +136,7 @@ class GalleryPhotoRepository @Inject constructor(
                 throw Exception("Failed to list folders: ${e.message}")
             }
 
-            folders.also { folderCache[parentFolderId] = it }
+            folders.also { folderCache[parentFolderId] = CacheEntry(it) }
         }
     }
 
@@ -325,38 +346,50 @@ class GalleryPhotoRepository @Inject constructor(
         allFolders.filter { it.name.contains(query, ignoreCase = true) }
     }
 
-    override suspend fun getFolderPhotoCount(folderId: String): Int = withContext(Dispatchers.IO) {
-        try {
-            val contentResolver = context.contentResolver
-            val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
-            } else {
-                MediaStore.Files.getContentUri("external")
+    override suspend fun getFolderPhotoCount(folderId: String): Int {
+        // Check cache first (only if fresh)
+        val cached = photoCountCache[folderId]
+        if (cached != null && !cached.isStale) {
+            return cached.count
+        }
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val contentResolver = context.contentResolver
+                val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+                } else {
+                    MediaStore.Files.getContentUri("external")
+                }
+
+                val projection = arrayOf(
+                    MediaStore.Files.FileColumns._ID
+                )
+
+                val selection = "${MediaStore.Files.FileColumns.BUCKET_ID} = ? AND ${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
+                val selectionArgs = arrayOf(
+                    folderId,
+                    MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
+                    MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString()
+                )
+
+                val cursor = contentResolver.query(
+                    collection,
+                    projection,
+                    selection,
+                    selectionArgs,
+                    null
+                )
+
+                cursor?.use {
+                    val count = it.count
+                    photoCountCache[folderId] = CountCacheEntry(count)
+                    count
+                } ?: 0
+            } catch (e: Exception) {
+                e.printStackTrace()
+                0
             }
-
-            val projection = arrayOf(
-                MediaStore.Files.FileColumns._ID
-            )
-
-            val selection = "${MediaStore.Files.FileColumns.BUCKET_ID} = ? AND ${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
-            val selectionArgs = arrayOf(
-                folderId,
-                MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
-                MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString()
-            )
-
-            val cursor = contentResolver.query(
-                collection,
-                projection,
-                selection,
-                selectionArgs,
-                null
-            )
-
-            cursor?.use { it.count } ?: 0
-        } catch (e: Exception) {
-            e.printStackTrace()
-            0
         }
     }
 

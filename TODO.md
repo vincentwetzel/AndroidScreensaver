@@ -12,7 +12,9 @@
 
 ## Caching & Performance
 - [ ] Local photo cache for offline use
-- [ ] Photo preloading for next photo (SlideshowManager.preloadPhoto() only handles Google Drive currently)
+- [x] Photo count caching with TTL (5 min) for both Gallery and Google Drive
+- [x] TTL-based folder cache (60s) to detect new/removed folders
+- [ ] Photo preloading for next photo (SlideshowManager.preloadPhoto for Gallery)
 - [x] Thumbnail caching for folder browser (Coil handles this automatically)
 
 ## UI/UX
@@ -21,6 +23,9 @@
 - [ ] Source status indicators (connected, syncing, error)
 - [ ] Photo count display per source
 - [x] TEST button to launch screensaver without waiting for timeout
+- [x] Pull-to-refresh in folder browser for manual refresh
+- [x] Source toggle switches restore saved state on launch
+- [x] Account email displayed on source status and sign-in toast
 
 ## Features
 - [ ] Video playback in slideshow
@@ -43,6 +48,7 @@
 ### Completed
 - ✅ Gallery source with MediaStore API, folder browsing, caching
 - ✅ Google Drive source with OAuth2, folder browsing, persistent auth, caching
+- ✅ Google Drive photos now display in slideshow (downloaded with OAuth headers to local cache)
 - ✅ Folder browser with subfolder navigation and checkbox selection (state persists)
 - ✅ Folder selection persistence fixed (setSelectedFolders/saveSelectedFolders added to SettingsManager)
 - ✅ Activation card that auto-hides when app is set as screensaver

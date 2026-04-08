@@ -123,7 +123,7 @@ class GoogleDriveViewModel @Inject constructor(
      */
     fun navigateBack() {
         val currentId = _currentFolderId.value ?: return // Already at root
-        loadFolders(null, forceRefresh = true) // Go back to root and refresh
+        loadFolders(null, forceRefresh = false) // Go back to root, use cache
     }
 
     /**

@@ -1,10 +1,15 @@
 package com.vincentwetzel.androidscreensaver.data.repository
 
+import android.content.Context
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
 import com.vincentwetzel.androidscreensaver.data.model.SourceType
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -14,11 +19,77 @@ import javax.inject.Singleton
  */
 @Singleton
 class GoogleDrivePhotoRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val driveRepository: GoogleDriveRepository
 ) : PhotoRepository {
 
+    companion object {
+        // Cache TTL: folders are considered stale after this many milliseconds
+        // 60 seconds - balances snappy UX with detecting changes
+        private const val FOLDER_CACHE_TTL_MS = 60_000L
+        private const val PHOTO_COUNT_CACHE_TTL_MS = 300_000L // 5 minutes for counts
+
+        private val httpClient = OkHttpClient()
+    }
+
+    /**
+     * Download a photo from Google Drive with OAuth auth headers
+     * Returns a local cache file URI that Coil can load without auth
+     */
+    suspend fun downloadPhotoToLocalCache(photoId: String): String? {
+        return withContext(Dispatchers.IO) {
+            try {
+                // Get access token from the repository
+                val accessToken = driveRepository.getAccessToken()
+                    ?: return@withContext null
+
+                // Download photo with OAuth header
+                val url = "https://www.googleapis.com/drive/v3/files/$photoId?alt=media"
+                val request = Request.Builder()
+                    .url(url)
+                    .header("Authorization", "Bearer $accessToken")
+                    .build()
+
+                val response = httpClient.newCall(request).execute()
+                if (!response.isSuccessful || response.body == null) {
+                    android.util.Log.e("GoogleDrivePhotoRepo", "Failed to download photo: ${response.code}")
+                    return@withContext null
+                }
+
+                // Save to local cache
+                val cacheDir = File(context.cacheDir, "drive_photos")
+                if (!cacheDir.exists()) cacheDir.mkdirs()
+
+                val cacheFile = File(cacheDir, "$photoId.jpg")
+                cacheFile.outputStream().use { out ->
+                    response.body!!.byteStream().use { input ->
+                        input.copyTo(out)
+                    }
+                }
+
+                cacheFile.absolutePath
+            } catch (e: Exception) {
+                android.util.Log.e("GoogleDrivePhotoRepo", "Error downloading photo", e)
+                null
+            }
+        }
+    }
+
+    // Cache entry with timestamp for TTL-based expiration
+    private data class CacheEntry<T>(val data: T, val timestampMs: Long = System.currentTimeMillis()) {
+        val isStale: Boolean
+            get() = System.currentTimeMillis() - timestampMs > FOLDER_CACHE_TTL_MS
+    }
+
     // Cache for loaded folders (survives Activity recreation)
-    private val folderCache = mutableMapOf<String?, List<PhotoFolder>>()
+    private val folderCache = mutableMapOf<String?, CacheEntry<List<PhotoFolder>>>()
+
+    // Cache for folder photo counts (survives Activity recreation)
+    private data class CountCacheEntry(val count: Int, val timestampMs: Long = System.currentTimeMillis()) {
+        val isStale: Boolean
+            get() = System.currentTimeMillis() - timestampMs > PHOTO_COUNT_CACHE_TTL_MS
+    }
+    private val photoCountCache = mutableMapOf<String, CountCacheEntry>()
 
     // Supported image file extensions
     private val imageExtensions = listOf(
@@ -35,9 +106,10 @@ class GoogleDrivePhotoRepository @Inject constructor(
     }
 
     override suspend fun listFolders(parentFolderId: String?, forceRefresh: Boolean): List<PhotoFolder> {
-        // Check cache first
-        if (!forceRefresh && folderCache.containsKey(parentFolderId)) {
-            return folderCache[parentFolderId]!!
+        // Check cache first (only if not forcing refresh and cache is fresh)
+        val cached = folderCache[parentFolderId]
+        if (!forceRefresh && cached != null && !cached.isStale) {
+            return cached.data
         }
 
         return withContext(Dispatchers.IO) {
@@ -82,7 +154,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 throw Exception("Failed to list folders: ${e.message}")
             }
 
-            folders.also { folderCache[parentFolderId] = it }
+            folders.also { folderCache[parentFolderId] = CacheEntry(it) }
         }
     }
 
@@ -252,29 +324,37 @@ class GoogleDrivePhotoRepository @Inject constructor(
         return@withContext folders
     }
 
-    override suspend fun getFolderPhotoCount(folderId: String): Int = withContext(Dispatchers.IO) {
-        val driveService = driveRepository.getDriveService()
-            ?: return@withContext 0
+    override suspend fun getFolderPhotoCount(folderId: String): Int {
+        // Check cache first (only if fresh)
+        val cached = photoCountCache[folderId]
+        if (cached != null && !cached.isStale) {
+            return cached.count
+        }
 
-        return@withContext try {
-            val mimeTypeQuery = imageExtensions.joinToString(" or ") { ext ->
-                "name contains '.$ext'"
+        return withContext(Dispatchers.IO) {
+            val driveService = driveRepository.getDriveService()
+                ?: return@withContext 0
+
+            return@withContext try {
+                val mimeTypeQuery = imageExtensions.joinToString(" or ") { ext ->
+                    "name contains '.$ext'"
+                }
+
+                val query = "($mimeTypeQuery) and trashed=false and '$folderId' in parents"
+
+                val files = driveService.files().list()
+                    .setQ(query)
+                    .setPageSize(1)
+                    .setFields("files(id)")
+                    .execute()
+
+                val count = files.files?.size ?: 0
+                photoCountCache[folderId] = CountCacheEntry(count)
+                count
+            } catch (e: Exception) {
+                e.printStackTrace()
+                0
             }
-
-            val query = "($mimeTypeQuery) and trashed=false and '$folderId' in parents"
-
-            val files = driveService.files().list()
-                .setQ(query)
-                .setPageSize(1)
-                .setFields("files(id)")
-                .execute()
-
-            // Google Drive doesn't provide count directly, so we'd need to paginate
-            // For now, return approximate count from a single request
-            files.files?.size ?: 0
-        } catch (e: Exception) {
-            e.printStackTrace()
-            0
         }
     }
 

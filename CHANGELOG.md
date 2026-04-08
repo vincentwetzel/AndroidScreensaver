@@ -13,6 +13,8 @@
 - **Full photo slideshow** — SlideshowView renders photos from Gallery/Google Drive with crossfade transitions
 - **SlideshowView** — Reusable custom view that handles photo loading (via Coil), auto-advance, transitions, and lifecycle management
 - **ScreensaverPreviewActivity** — Activity-based preview that mirrors DreamService for testing
+- **Pull-to-refresh** — Swipe down on folder browser to force a manual refresh from remote source (Google Drive, Gallery)
+- **Account email display** — Remote source status shows "Signed in as [email]" instead of generic "Authenticated". Toast notification on sign-in shows "Successfully signed in as [email]". Applies to all sources (Google Drive, and future: Dropbox, OneDrive, Google Photos)
 
 ### Fixed
 - Google Sign-In `DEVELOPER_ERROR` (status 10) caused by incorrect `requestIdToken()` usage
@@ -29,11 +31,19 @@
   - GalleryFolderBrowserActivity now restores checkbox state from saved preferences
   - FolderBrowserActivity now restores checkbox state from saved preferences (Google Drive)
 - **Source toggle switches now restore saved state on app launch** — toggles reflect persisted settings instead of defaulting to "off"
+- **NavigateBack no longer forces unnecessary refresh** — changing `forceRefresh = true` to `false` so cache is respected
+- **Folder photo count caching** — `getFolderPhotoCount()` was hitting the API every time with no cache; now uses TTL-based cache
+- **Pull-to-refresh spinner no longer spins forever** — fixed by tying `isRefreshing` to `isLoading` flow instead of `folders` flow
+- **Cache not detecting new/removed folders** — switched from permanent cache to TTL-based cache (60s for folders, 5min for photo counts) so changes are automatically detected
+- **Google Drive photos now display in slideshow** — photos were showing black screen because Coil couldn't load Drive URLs without OAuth headers; now downloads photos to local cache with auth headers and loads via file:// URI
+- **SlideshowView error logging** — added Coil load listeners to diagnose image loading failures
 
 ### Changed
 - Removed arrow button from folder list; folder name clicks now navigate into folder
 - Simplified DreamService manifest (removed `category` and `meta-data`)
 - "Preview Screensaver" button replaced with activation card
+- Default content filter changed from "Images and Videos" to "Images Only"
+- Folder and photo count caches use TTL expiration instead of permanent caching
 
 ### Known Issues
 - Google Drive requires Web Client ID for `requestIdToken()` (currently disabled)

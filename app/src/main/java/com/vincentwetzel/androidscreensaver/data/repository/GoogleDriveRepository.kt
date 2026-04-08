@@ -37,6 +37,7 @@ class GoogleDriveRepository @Inject constructor(
 
     // Drive API client
     private var driveService: Drive? = null
+    private var driveCredential: GoogleAccountCredential? = null
 
     // Google Sign-In client
     private val googleSignInClient: GoogleSignInClient by lazy {
@@ -85,18 +86,30 @@ class GoogleDriveRepository @Inject constructor(
      * Initialize the Drive API service with the authenticated account
      */
     private fun initializeDriveService(account: GoogleSignInAccount) {
-        val credential = GoogleAccountCredential.usingOAuth2(
+        driveCredential = GoogleAccountCredential.usingOAuth2(
             context, listOf(DriveScopes.DRIVE_READONLY)
         )
-        credential.selectedAccount = account.account
+        driveCredential!!.selectedAccount = account.account
 
         driveService = Drive.Builder(
             NetHttpTransport(),
             GsonFactory.getDefaultInstance(),
-            credential
+            driveCredential
         )
             .setApplicationName("Android Screensaver")
             .build()
+    }
+
+    /**
+     * Get the OAuth access token for the current account (for use with OkHttp)
+     */
+    fun getAccessToken(): String? {
+        return try {
+            driveCredential?.getToken()
+        } catch (e: Exception) {
+            android.util.Log.e("GoogleDriveRepo", "Failed to get access token", e)
+            null
+        }
     }
 
     /**

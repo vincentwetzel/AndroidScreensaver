@@ -64,19 +64,24 @@ class SlideshowManager @Inject constructor(
             if (driveRepository.isAuthenticated.value && isSourceEnabled(com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE)) {
                 try {
                     val selectedFolders = getSelectedFolders(com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE)
-
-                    if (selectedFolders.isEmpty()) {
-                        val allFolders = photoRepository.listFolders(null, forceRefresh = false)
-                        for (folder in allFolders) {
-                            allPhotos.addAll(photoRepository.listPhotos(folder.id))
-                        }
+                    val driveFolders = if (selectedFolders.isEmpty()) {
+                        photoRepository.listFolders(null, forceRefresh = false)
                     } else {
-                        for (folder in selectedFolders) {
-                            allPhotos.addAll(photoRepository.listPhotos(folder.id))
+                        selectedFolders
+                    }
+
+                    for (folder in driveFolders) {
+                        val folderPhotos = photoRepository.listPhotos(folder.id)
+                        // Download each photo to local cache (Google Drive API requires OAuth headers)
+                        val photosWithLocalUris = folderPhotos.mapNotNull { photo ->
+                            val localPath = photoRepository.downloadPhotoToLocalCache(photo.id)
+                                ?: return@mapNotNull null
+                            photo.copy(uri = "file://$localPath")
                         }
+                        allPhotos.addAll(photosWithLocalUris)
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    android.util.Log.e(TAG, "Error loading Google Drive photos", e)
                 }
             }
 
