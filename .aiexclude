@@ -1,0 +1,45 @@
+# AI Agent Exclusion Rules
+# Files and patterns that AI agents should ignore or handle carefully
+
+## Ignore These Directories (Generated/Build Output)
+app/build/
+.gradle/
+.idea/
+captures/
+local.properties
+
+## Ignore These File Types
+*.class
+*.jar
+*.aar
+*.dex
+*.apk
+*.aab
+*.so
+*.iml
+*.hprof
+*.log
+*.png
+*.jpg
+*.gif
+*.webp
+*.svg
+
+## Handle Carefully (Don't Modify Unless Explicitly Requested)
+app/src/main/res/values/colors.xml
+app/src/main/res/values/themes.xml
+app/src/main/res/values/strings.xml
+app/src/main/AndroidManifest.xml
+app/build.gradle.kts
+build.gradle.kts
+settings.gradle.kts
+gradle.properties
+
+## Never Auto-Commit
+*.keystore
+*.jks
+google-services.json
+local.properties
+secrets.properties
+**/secrets.*
+**/api-keys.*

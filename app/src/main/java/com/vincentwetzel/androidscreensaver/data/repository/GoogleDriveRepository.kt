@@ -42,9 +42,14 @@ class GoogleDriveRepository @Inject constructor(
     private val googleSignInClient: GoogleSignInClient by lazy {
         val signInOptions = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
-            .requestIdToken(GoogleOAuthConfig.CLIENT_ID)
             .requestScopes(Scope(DriveScopes.DRIVE_READONLY))
             .requestScopes(Scope(DriveScopes.DRIVE_METADATA_READONLY))
+            .apply {
+                // Only request ID token if WEB_CLIENT_ID is configured
+                if (GoogleOAuthConfig.WEB_CLIENT_ID.isNotEmpty()) {
+                    requestIdToken(GoogleOAuthConfig.WEB_CLIENT_ID)
+                }
+            }
             .build()
 
         GoogleSignIn.getClient(context, signInOptions)
@@ -129,9 +134,9 @@ class GoogleDriveRepository @Inject constructor(
     fun checkExistingSignIn() {
         val account = GoogleSignIn.getLastSignedInAccount(context)
         if (account != null && GoogleOAuthConfig.CLIENT_ID.isNotEmpty()) {
-            // We'll validate this properly when they try to use Drive
             _currentAccount.value = account
-            // Don't set authenticated yet - we need to validate the token
+            _isAuthenticated.value = true
+            initializeDriveService(account)
         }
     }
 }

@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Android Screensaver</string>
-    <string name="screensaver_name">Photo Screensaver</string>
     <string name="screensaver_settings">Screensaver Settings</string>
     <string name="source_auth">Authenticate Source</string>
     <string name="browse_photos">Browse Photos</string>
@@ -41,6 +40,7 @@
     <string name="cancel">Cancel</string>
     <string name="save">Save</string>
     <string name="search">Search</string>
+    <string name="open_folder">Open folder</string>
 
     <!-- About -->
     <string name="about">About</string>
@@ -72,4 +72,12 @@
     
     <!-- Permissions -->
     <string name="permission_gallery_rationale">Permission to access photos is required to display them in the screensaver</string>
+
+    <!-- No sources configured -->
+    <string name="no_sources_title">No Photos to Display</string>
+    <string name="no_sources_message">Go to the main menu and enable at least one source with photos (Gallery or Google Drive) to start the screensaver.</string>
+    <string name="go_to_settings">Open Main Menu</string>
+    
+    <!-- Loading -->
+    <string name="loading_photos">Loading photos…</string>
 </resources>

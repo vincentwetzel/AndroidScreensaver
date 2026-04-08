@@ -1,76 +1,82 @@
-# AndroidScreensaver
+# Android Screensaver
 
-A photo screensaver app for Android devices, optimized for NVidia Shield but compatible with all Android devices.
-
-## Overview
-
-AndroidScreensaver allows users to create a slideshow screensaver from multiple photo sources including:
-- Local gallery
-- Dropbox
-- Google Drive
-- Google Photos
-- OneDrive
-- Local network (SMB/WebDAV)
+A photo slideshow screensaver app for Android phones, tablets, and TV devices. Displays photos from multiple sources as a fullscreen screensaver.
 
 ## Features
 
-- **Multi-source photo access**: Authenticate and browse photos from various cloud storage providers
-- **Folder selection**: Select specific folders/subfolders from each source with a hierarchical tree view
-- **Customizable slideshow**: Configure display timing, effects, and transitions
-- **Daydream integration**: Uses Android's built-in DreamService for screensaver functionality
-- **Material Design UI**: Clean, modern interface following Android design guidelines
+- **Multiple Photo Sources**
+  - **Gallery** — Browse and select folders from device photos (via MediaStore API)
+  - **Google Drive** — Browse and select folders from Google Drive (OAuth2 authenticated)
+  - *More sources planned: Dropbox, Google Photos, OneDrive, Local Network*
 
-### v1.0 Focus: Google Drive
-The initial release will focus exclusively on **Google Drive** as the photo source to ensure a polished, stable experience. Future updates will add support for additional sources including Gallery, Dropbox, Google Photos, OneDrive, and local network storage.
+- **Customizable Slideshow**
+  - Shuffle/random order
+  - Configurable slide duration
+  - Multiple transition effects with crossfade animation
+  - Display effects (crop-to-fit, scale-to-fit, zoom, pan)
+  - Photo ordering (date, name, size)
+
+- **Testing & Debugging**
+  - **TEST button** — Instantly preview the screensaver without waiting for screen timeout
+  - Informative "No Photos" screen when no sources are configured
+
+- **Screensaver Activation**
+  - System DreamService (screensaver) — configure via **Settings → Display → Screen saver**
+  - Activation card on main screen guides users through setup; auto-hides when active
+
+- **Modern UI**
+  - Material Design 3 components
+  - Phone/tablet and TV (leanback) layouts
+  - Dark/light theme support
+
+## Quick Start
+
+1. **Build and run** in Android Studio or via `./gradlew installDebug`
+2. **Enable a photo source** — Toggle Gallery or Google Drive ON
+3. **Select folders** — Tap the source to browse and select folders
+4. **Activate screensaver** — The activation card at the top will guide you. Tap "Open Screensaver Settings", select "Android Screensaver", return to the app and the card will disappear.
+5. **Configure** — Set when to start (while charging, while docked, etc.) in system settings.
 
 ## Tech Stack
 
-- **Language**: Kotlin
-- **Min SDK**: 26 (Android 8.0)
-- **Target SDK**: 34 (Android 14)
-- **Architecture**: MVVM with Repository pattern
-- **Dependency Injection**: Hilt
-- **Async**: Kotlin Coroutines & Flow
-- **Image Loading**: Coil
+- **Language:** Kotlin
+- **Architecture:** MVVM with Repository pattern
+- **DI:** Hilt
+- **Async:** Kotlin Coroutines + Flow
+- **Storage:** DataStore (preferences)
+- **Image Loading:** Coil
+- **Min SDK:** 26 (Android 8.0)
+- **Target SDK:** 34 (Android 14)
 
-## Cloud Storage APIs
+## Project Structure
 
-### v1.0 (Implemented First)
-- **Google Drive**: Google Play Services / Google Sign-In / Google Drive API
-
-### Future Releases (v1.1+)
-- **Dropbox**: Dropbox SDK
-- **Google Photos**: Google Photos API
-- **OneDrive**: Microsoft Graph SDK
-- **Local Network**: jCIFS (SMB) / Sardine (WebDAV)
-- **Local Gallery**: Android MediaStore API
-
-## Getting Started
-
-1. Clone the repository
-2. **Verify Google Cloud Setup** (see `GOOGLE_CLOUD_SETUP.md`):
-   - Ensure Google Drive API is enabled
-   - Ensure OAuth consent screen is configured with `drive.readonly` scope
-   - OAuth Client ID is already configured in the code
-3. Open in Android Studio
-4. Sync Gradle and build
-
-```bash
-git clone https://github.com/vincentwetzel/AndroidScreensaver.git
-cd AndroidScreensaver
+```
+app/src/main/java/com/vincentwetzel/androidscreensaver/
+├── data/
+│   ├── model/          # Data classes (Photo, PhotoFolder, SourceType, etc.)
+│   └── repository/     # PhotoRepository implementations
+├── di/                 # Hilt dependency injection modules
+├── dream/              # DreamService (screensaver service), SlideshowManager
+├── ui/
+│   ├── main/           # MainActivity (source selection)
+│   ├── settings/       # Settings activities
+│   ├── slideshow/      # SlideshowView (photo display with transitions), NoSourcesView
+│   └── sources/        # Source auth + folder browser activities
+├── utils/              # Utilities (SettingsManager, OAuth config)
+└── viewmodel/          # ViewModels (MainViewModel, GalleryViewModel, GoogleDriveViewModel)
 ```
 
-## Quick Links
+## Documentation
 
-- 📋 **TODO List**: See `TODO.md` for implementation roadmap
-- ⚙️ **Settings Spec**: See `SETTINGS.md` for all app settings
-- 🏗️ **Architecture**: See `ARCHITECTURE.md` for technical design
-- ☁️ **Google Cloud Setup**: See `GOOGLE_CLOUD_SETUP.md` for OAuth configuration
-- 🎨 **Resources to Update**: See `RESOURCES_TO_UPDATE.md` for icon placeholders
-- ✅ **Pre-Build Checklist**: See `PRE_BUILD_CHECKLIST.md` for configuration status
-- 📊 **Project Summary**: See `PROJECT_SUMMARY.md` for complete overview
-- 📝 **Changelog**: See `CHANGELOG.md` for version history
+| File | Purpose |
+|------|---------|
+| [BUILD.md](BUILD.md) | Build commands, Google Drive OAuth setup, troubleshooting |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Architecture, design patterns, key classes, settings reference |
+| [CHANGELOG.md](CHANGELOG.md) | Version history and changes |
+| [TODO.md](TODO.md) | Backlog and current progress |
+| [USER_GUIDE.md](USER_GUIDE.md) | User-facing setup and usage guide |
+| [AGENTS.md](AGENTS.md) | Developer roles, contributing guidelines, documentation rules |
 
 ## License
 
-MIT License
+See [LICENSE](LICENSE).

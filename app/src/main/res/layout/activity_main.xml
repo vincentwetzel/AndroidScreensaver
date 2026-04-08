@@ -34,7 +34,67 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <!-- Header with animation -->
+            <!-- Activation Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_activation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardBackgroundColor="?attr/colorPrimaryContainer"
+                app:cardElevation="4dp"
+                app:cardCornerRadius="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="8dp">
+
+                        <ImageView
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:src="@android:drawable/ic_menu_view"
+                            android:contentDescription="@null"
+                            android:layout_marginEnd="12dp"
+                            app:tint="?attr/colorOnPrimaryContainer" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Activate Screensaver"
+                            android:textAppearance="?attr/textAppearanceTitleMedium"
+                            android:textColor="?attr/colorOnPrimaryContainer" />
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Select this app as your device's screensaver, then pick photo sources below."
+                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                        android:textColor="?attr/colorOnPrimaryContainer"
+                        android:layout_marginBottom="16dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_activate_screensaver"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Open Screensaver Settings"
+                        app:icon="@android:drawable/ic_menu_preferences"
+                        style="@style/Widget.Material3.Button.IconButton.Filled.Tonal" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Header -->
             <TextView
                 android:id="@+id/tv_header"
                 android:layout_width="wrap_content"
@@ -107,22 +167,15 @@
                 android:background="?android:attr/listDivider"
                 android:layout_marginVertical="16dp" />
 
-            <!-- Coming Soon Header -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/coming_soon"
-                android:textAppearance="?attr/textAppearanceTitleMedium"
-                android:textColor="?android:attr/textColorSecondary"
-                android:layout_marginBottom="12dp" />
-
-            <!-- Gallery Card (Coming Soon) -->
+            <!-- Gallery Card -->
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_gallery"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="8dp"
-                android:alpha="0.5"
-                android:clickable="false">
+                android:clickable="true"
+                android:focusable="true"
+                app:cardElevation="2dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -153,21 +206,29 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/coming_soon"
+                            android:text="Device photos"
                             android:textAppearance="?attr/textAppearanceBodySmall"
                             android:textColor="?android:attr/textColorSecondary" />
 
                     </LinearLayout>
 
-                    <com.google.android.material.chip.Chip
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_gallery"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/coming_soon"
-                        android:clickable="false" />
+                        android:layout_height="wrap_content" />
 
                 </LinearLayout>
 
             </com.google.android.material.card.MaterialCardView>
+
+            <!-- Coming Soon Header -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/coming_soon"
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:textColor="?android:attr/textColorSecondary"
+                android:layout_marginVertical="16dp" />
 
             <!-- Dropbox Card (Coming Soon) -->
             <com.google.android.material.card.MaterialCardView
@@ -380,15 +441,6 @@
                 </LinearLayout>
 
             </com.google.android.material.card.MaterialCardView>
-
-            <!-- Preview Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_preview"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/preview_screensaver"
-                android:layout_marginTop="24dp"
-                app:icon="@drawable/ic_preview" />
 
         </LinearLayout>
 

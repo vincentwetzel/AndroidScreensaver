@@ -1,209 +1,67 @@
 # User Guide
 
-Welcome to Android Screensaver - your photos, beautifully displayed!
+## Getting Started
 
----
+### 1. Enable a Photo Source
 
-## Quick Start
+Open the app and toggle ON the sources you want to use:
 
-### 1. Connect Google Drive
-
-1. Open the app
-2. Toggle **Google Drive** ON
-3. Sign in with your Google account
-4. Grant permission to access your photos
+- **Gallery** — Photos stored on your device. No sign-in required.
+- **Google Drive** — Photos stored in your Google Drive. Requires Google account sign-in.
 
 ### 2. Select Folders
 
-1. After signing in, the folder browser opens automatically
-2. Check the folders you want to display
-3. Tap **Save**
+After enabling a source, tap it to browse folders:
 
-### 3. Configure Screensaver
+- **Check boxes** next to folders you want to include
+- **Tap a folder name** to open it and see subfolders
+- Use the **back arrow** in the toolbar to go up one level
+- Toggle **"Include subfolders"** to also include photos in nested folders
+- Tap **Save** when done
 
-1. Open **Settings** (gear icon in toolbar)
-2. Configure your preferences:
-   - **Display Time**: How long each photo shows
-   - **Transition Effects**: Fade, slide, cross-fade, and more
-   - **Schedule**: When to start/stop automatically
-   - **Decorations**: Add date, clock, or weather
+### 3. Activate the Screensaver
 
-### 4. Activate Screensaver
+1. The **"Activate Screensaver"** card at the top of the app will appear when this app is not yet your active screensaver
+2. Tap **"Open Screensaver Settings"** to go to your device's screensaver settings
+3. Select **"Android Screensaver"** from the list
+4. Configure when to start (while charging, while docked, etc.) and the delay
+5. Once selected, return to the app — the activation card will automatically disappear
 
-1. Go to your device's **Settings**
-2. Navigate to **Display** → **Screen saver** (or **Daydream** on some devices)
-3. Select **Photo Screensaver**
-4. Tap **Start now** to preview
+### 4. Test It
 
----
+**Quick Preview:** Tap the **preview icon** (👁) in the top toolbar to instantly launch the screensaver — no need to wait for screen timeout.
 
-## Settings Guide
+**Full Activation:** After activation, lock your screen or put the device on a charger. The screensaver should start after your configured delay.
+If the system sends you back to **"Colors"**, update to a build that includes the DreamService permission fix or verify that your device supports DreamService.
 
-### Sources
-Manage your photo sources. For v1.0, Google Drive is the primary source.
+## Screensaver Settings
 
-**Folder Selection:**
-- Tap **Select All** to include all folders
-- Use search to find specific folders
-- Toggle **Include subfolders** to get nested photos
+Within the app, you can customize:
+- Slide duration (how long each photo is shown)
+- Shuffle (random order)
+- Transition effects (fade, slide, etc.)
+- Display effects (crop-to-fit, scale-to-fit, zoom, pan)
+- Background color
+- Screen orientation
 
-### Media & Content
-Control what photos appear in your slideshow.
+These are accessed via **Menu → Settings**.
 
-- **Media Order**: Shuffle or sort by name/date
-- **Content Filter**: Show images, videos, or both
-- **Match Device Orientation**: Only show photos that match screen orientation
+## Sources
 
-### Slideshow
-Configure slideshow timing and behavior.
+### Gallery
 
-- **Display Time**: 3 seconds to 5 minutes (or custom)
-- **Video Playback**: Mute, use system volume, or custom volume
+Shows photo folders from your device (Camera, Screenshots, Downloads, etc.). No permissions needed on Android 13+. On older Android, grants photo read permission.
 
-### Display & Transitions
-Visual effects for your slideshow.
+### Google Drive
 
-- **Display Effect**: How photos render (pan, zoom, crop, etc.)
-- **Transition Effect**: How photos change (fade, slide, wipe, etc.)
-- **Transition Duration**: Speed of transitions
-
-### Decorations
-Add overlays to your slideshow.
-
-- **Date**: Show current date with customizable format
-- **Clock**: Show time with 12/24 hour options
-- **Weather**: Show current weather (uses Open-Meteo, no API key needed)
-
-### Photo Information
-Show metadata about the current photo.
-
-- **Fields**: File name, folder, date, source, dimensions, file size
-- **Fade Out**: Info disappears after X seconds
-- **Appearance**: Position, layout, colors, opacity
-
-### Schedule & Timer
-Automate when screensaver runs.
-
-- **Autostart**: Start at specific times on specific days
-- **Autostop**: Stop at specific times
-- **Only when charging**: Prevent battery drain
-
-### Display & Power
-Control device behavior during screensaver.
-
-- **Screen Rotation**: Portrait, landscape, or system default
-- **Keep Screen On**: Override system sleep settings
-
-### Sync & Network
-Control when and how photos sync.
-
-- **Sync Interval**: How often to check for new photos
-- **Wi-Fi Only**: Prevent mobile data usage
-- **Timeout**: Network request timeout
-
-### Appearance
-Visual customization.
-
-- **Background Color**: Choose from 14 presets or custom
-- **Cache Limit**: Control storage usage
-- **Clear Cache**: Free up space
-
-### Advanced
-Power user options.
-
-- **Power Management**: Screen brightness, wake lock
-- **Exit Trigger**: How to exit screensaver (touch, remote, shake)
-- **About**: App info, links, version
-
----
+Shows folders from your Google Drive account. Requires Google account authentication. The app requests **read-only** access to your Drive files — it cannot modify or delete anything.
 
 ## Troubleshooting
 
-### Google Drive Connection Issues
-
-**"Sign-in failed"**
-- Check your internet connection
-- Verify Google Drive API is enabled in your Google Cloud project
-- Ensure your Google account is added as a test user
-
-**"No folders found"**
-- Verify you have photos in Google Drive
-- Check folder permissions in Google Drive
-- Try searching for specific folder names
-
-### Screensaver Not Starting
-
-**"Screensaver won't start automatically"**
-- Check Schedule settings are enabled
-- Verify device is charging (if "Only when charging" is enabled)
-- Ensure screensaver is enabled in Android settings
-
-**"Black screen instead of photos"**
-- Check that folders are selected and contain photos
-- Verify Wi-Fi Only setting if on mobile network
-- Try clearing cache in Appearance settings
-
-### Performance Issues
-
-**"Photos load slowly"**
-- Increase cache limit in Appearance settings
-- Check network connection
-- Reduce max photo resolution in settings (future feature)
-
-**"App uses too much storage"**
-- Go to Settings → Appearance → Cache Limit
-- Set a lower limit (e.g., 100 MB)
-- Tap "Clear Cache" to free space immediately
-
-### Weather Not Showing
-
-**"Weather shows 'Unknown'"**
-- Enable location services on your device
-- Check internet connection
-- Open-Meteo API may be temporarily unavailable (rare)
-
----
-
-## Keyboard Shortcuts (TV Remote)
-
-| Button | Action |
-|--------|--------|
-| D-Pad Up/Down | Navigate settings |
-| D-Pad Center/OK | Select/Enter |
-| Back | Return to previous screen |
-| Home | Exit screensaver |
-
----
-
-## Tips & Tricks
-
-1. **Mix Photos and Videos**: Enable both in Content Filter for dynamic slideshows
-2. **Use Schedules**: Set different schedules for weekdays vs weekends
-3. **Save Battery**: Enable "Only when charging" to prevent battery drain
-4. **Custom Weather Location**: Set a specific city instead of device location
-5. **Debug Mode**: Tap version 7 times in settings to access developer tools
-
----
-
-## Privacy
-
-- **Data Collection**: This app does NOT collect personal data
-- **Cloud Storage**: Your photos stay on your device or in your cloud account
-- **Weather**: Location data is only used for weather and is not stored
-- **Google Drive**: We only request read-only access to your Drive
-
----
-
-## Support
-
-- **Discord**: Join our community server (link in About screen)
-- **GitHub**: Report issues at github.com/vincentwetzel/AndroidScreensaver
-- **Email**: Contact the developer through GitHub issues
-
----
-
-## License
-
-MIT License - See LICENSE file for details
-
-Open source project by Vincent Wetzel
+| Issue | Solution |
+|-------|----------|
+| Activation card still shows after selecting | Close and reopen the app to refresh detection |
+| Screensaver doesn't start | Check that "Android Screensaver" is selected in system screen saver settings |
+| No photos showing | Verify folders are selected and contain photos |
+| Google Drive sign-in fails | Check that your device has a Google account added |
+| Gallery shows empty | Ensure device has photos and permission is granted |

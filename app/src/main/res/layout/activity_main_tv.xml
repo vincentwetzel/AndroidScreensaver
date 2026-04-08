@@ -81,32 +81,118 @@
 
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Coming Soon Section -->
-    <TextView
-        android:id="@+id/tv_coming_soon"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/coming_soon"
-        android:textAppearance="?attr/textAppearanceHeadlineSmall"
-        android:textColor="@color/text_secondary_tv"
-        android:layout_marginTop="48dp"
-        app:layout_constraintTop_toBottomOf="@id/card_google_drive"
-        app:layout_constraintStart_toStartOf="parent" />
-
-    <!-- Preview Button - Larger for TV -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_preview"
+    <!-- Gallery Card - Larger for TV -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/card_gallery"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="@string/preview_screensaver"
-        android:textAppearance="?attr/textAppearanceTitleLarge"
-        android:paddingVertical="24dp"
-        android:layout_marginTop="64dp"
-        app:icon="@drawable/ic_preview"
-        app:iconSize="32dp"
-        app:layout_constraintTop_toBottomOf="@id/tv_coming_soon"
+        android:layout_marginTop="24dp"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        app:cardBackgroundColor="@color/card_background_tv"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp"
+        app:layout_constraintTop_toBottomOf="@id/card_google_drive"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="32dp"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:src="@drawable/ic_source_gallery"
+                android:contentDescription="@string/source_gallery"
+                android:layout_marginEnd="32dp" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/source_gallery"
+                    android:textAppearance="?attr/textAppearanceHeadlineMedium"
+                    android:textColor="@color/text_primary_tv" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Device photos"
+                    android:textAppearance="?attr/textAppearanceBodyLarge"
+                    android:textColor="@color/text_secondary_tv" />
+
+            </LinearLayout>
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switch_gallery"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:scaleX="1.5"
+                android:scaleY="1.5" />
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Activation Card for TV -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/card_activate"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        app:cardBackgroundColor="@color/card_background_tv"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp"
+        app:layout_constraintTop_toBottomOf="@id/card_gallery"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="32dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Activate Screensaver"
+                android:textAppearance="?attr/textAppearanceHeadlineMedium"
+                android:textColor="@color/text_primary_tv"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Select this app as your device's screensaver, then pick photo sources below."
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:textColor="@color/text_secondary_tv"
+                android:layout_marginBottom="24dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_activate_screensaver"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Open Screensaver Settings"
+                android:textAppearance="?attr/textAppearanceTitleLarge"
+                android:paddingVertical="20dp"
+                app:icon="@android:drawable/ic_menu_preferences"
+                app:iconSize="28dp" />
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
 
     <!-- Settings Button - Larger for TV -->
     <com.google.android.material.button.MaterialButton
@@ -119,7 +205,7 @@
         android:layout_marginTop="16dp"
         app:icon="@drawable/ic_settings"
         app:iconSize="32dp"
-        app:layout_constraintTop_toBottomOf="@id/btn_preview"
+        app:layout_constraintTop_toBottomOf="@id/card_activate"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 

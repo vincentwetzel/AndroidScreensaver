@@ -131,8 +131,7 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
             com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_RIGHT -> 1
             com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_LEFT -> 2
             com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_RIGHT -> 3
-            com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_CENTER -> 4
-            com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_CENTER -> 5
+            com.vincentwetzel.androidscreensaver.data.model.ClockPosition.CENTER -> 4
             else -> 0
         }
         binding.spinnerPosition.setSelection(positionIndex)
@@ -188,12 +187,12 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
 
         // Filename options
         binding.switchFilename.setOnCheckedChangeListener { _, isChecked ->
-            binding.layoutFilenameOptions.visibility = if (isChecked) View.VISIBLE else View.GONE
+            binding.switchFilenameExt.visibility = if (isChecked) View.VISIBLE else View.GONE
         }
 
         // Folder options
         binding.switchFolder.setOnCheckedChangeListener { _, isChecked ->
-            binding.layoutFolderOptions.visibility = if (isChecked) View.VISIBLE else View.GONE
+            binding.switchFolderPath.visibility = if (isChecked) View.VISIBLE else View.GONE
         }
 
         // Save button
@@ -249,8 +248,7 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
                 1 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_RIGHT
                 2 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_LEFT
                 3 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_RIGHT
-                4 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_CENTER
-                5 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_CENTER
+                4 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.CENTER
                 else -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_LEFT
             },
             layout = when (binding.spinnerLayout.selectedItemPosition) {

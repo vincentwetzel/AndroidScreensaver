@@ -2,10 +2,8 @@ package com.vincentwetzel.androidscreensaver.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
-import com.vincentwetzel.androidscreensaver.data.repository.GoogleDriveRepository
-import com.vincentwetzel.androidscreensaver.data.repository.GoogleDrivePhotoRepository
+import com.vincentwetzel.androidscreensaver.data.repository.GalleryPhotoRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,21 +12,12 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * ViewModel for Google Drive authentication and folder browsing
+ * ViewModel for Gallery folder browsing
  */
 @HiltViewModel
-class GoogleDriveViewModel @Inject constructor(
-    private val driveRepository: GoogleDriveRepository,
-    private val photoRepository: GoogleDrivePhotoRepository
+class GalleryViewModel @Inject constructor(
+    private val photoRepository: GalleryPhotoRepository
 ) : ViewModel() {
-
-    // Authentication state
-    private val _authState = MutableStateFlow<AuthState>(AuthState.Unauthenticated)
-    val authState: StateFlow<AuthState> = _authState.asStateFlow()
-
-    // Account info
-    private val _accountName = MutableStateFlow<String?>(null)
-    val accountName: StateFlow<String?> = _accountName.asStateFlow()
 
     // Folder state
     private val _folders = MutableStateFlow<List<PhotoFolder>>(emptyList())
@@ -46,45 +35,8 @@ class GoogleDriveViewModel @Inject constructor(
     private val _includeSubfolders = MutableStateFlow(true)
     val includeSubfolders: StateFlow<Boolean> = _includeSubfolders.asStateFlow()
 
-    init {
-        // Check if user is already signed in
-        driveRepository.checkExistingSignIn()
-        if (driveRepository.isAuthenticated.value) {
-            _authState.value = AuthState.Authenticated
-            _accountName.value = driveRepository.currentAccount.value?.displayName
-        }
-    }
-
     /**
-     * Handle successful authentication
-     */
-    fun onAuthenticated(account: GoogleSignInAccount) {
-        viewModelScope.launch {
-            val success = driveRepository.handleSignInResult(account)
-            if (success) {
-                _authState.value = AuthState.Authenticated
-                _accountName.value = account.displayName
-                _error.value = null
-            } else {
-                _authState.value = AuthState.Error("Failed to authenticate")
-            }
-        }
-    }
-
-    /**
-     * Sign out
-     */
-    fun signOut() {
-        viewModelScope.launch {
-            driveRepository.signOut()
-            _authState.value = AuthState.Unauthenticated
-            _accountName.value = null
-            _folders.value = emptyList()
-        }
-    }
-
-    /**
-     * Load folders from Google Drive
+     * Load folders from Gallery (buckets)
      * Cache is in the repository, so it persists across Activity recreations
      */
     fun loadFolders(parentFolderId: String? = null, forceRefresh: Boolean = false) {
@@ -96,7 +48,7 @@ class GoogleDriveViewModel @Inject constructor(
                 _currentFolderId.value = parentFolderId
                 val folderList = photoRepository.listFolders(parentFolderId, forceRefresh)
 
-                // Get photo counts for each folder (cached separately per folder)
+                // Get photo counts for each folder
                 val foldersWithCounts = folderList.map { folder ->
                     val count = photoRepository.getFolderPhotoCount(folder.id)
                     folder.copy(photoCount = count)
@@ -122,8 +74,8 @@ class GoogleDriveViewModel @Inject constructor(
      * Navigate back to parent folder or root
      */
     fun navigateBack() {
-        val currentId = _currentFolderId.value ?: return // Already at root
-        loadFolders(null, forceRefresh = true) // Go back to root and refresh
+        val currentId = _currentFolderId.value ?: return
+        loadFolders(null, forceRefresh = true)
     }
 
     /**
@@ -158,7 +110,6 @@ class GoogleDriveViewModel @Inject constructor(
      * Set include subfolders preference
      */
     fun setIncludeSubfolders(include: Boolean) {
-        // Store this preference for use when loading folders
         _includeSubfolders.value = include
     }
 
@@ -168,14 +119,4 @@ class GoogleDriveViewModel @Inject constructor(
     fun getPhotoCount(): Int {
         return folders.value.sumOf { it.photoCount }
     }
-}
-
-/**
- * Authentication state
- */
-sealed class AuthState {
-    object Unauthenticated : AuthState()
-    object Authenticated : AuthState()
-    object Authenticating : AuthState()
-    data class Error(val message: String) : AuthState()
 }

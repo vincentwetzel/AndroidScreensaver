@@ -14,4 +14,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "AndroidScreensaver"
-include(':app')
+include(":app")

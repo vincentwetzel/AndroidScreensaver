@@ -84,3 +84,29 @@ obj/
 *.orig
 *.bak
 .DS_Store
+
+# Qwen Code
+.qwen/
+.qwen/**
+
+# VS Code
+.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# Cursor
+.cursor/
+.cursor/**
+
+# Windows
+Desktop.ini
+$RECYCLE.BIN/
+System Volume Information/
+
+# Linux
+*~
+.Trash-*/

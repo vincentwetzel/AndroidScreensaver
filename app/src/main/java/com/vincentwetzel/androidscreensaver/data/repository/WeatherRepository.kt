@@ -1,7 +1,6 @@
 package com.vincentwetzel.androidscreensaver.data.repository
 
 import android.location.Location
-import com.vincentwetzel.androidscreensaver.data.model.WeatherData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient

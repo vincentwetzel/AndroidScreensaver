@@ -1,6 +1,7 @@
 package com.vincentwetzel.androidscreensaver.di
 
 import android.content.Context
+import com.vincentwetzel.androidscreensaver.data.repository.GalleryPhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDrivePhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDriveRepository
 import com.vincentwetzel.androidscreensaver.data.repository.WeatherRepository
@@ -8,6 +9,7 @@ import com.vincentwetzel.androidscreensaver.dream.SlideshowManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -20,8 +22,16 @@ object RepositoryModule {
 
     @Provides
     @Singleton
+    fun provideGalleryPhotoRepository(
+        @ApplicationContext context: Context
+    ): GalleryPhotoRepository {
+        return GalleryPhotoRepository(context)
+    }
+
+    @Provides
+    @Singleton
     fun provideGoogleDriveRepository(
-        @android.content.Context context: android.content.Context
+        @ApplicationContext context: Context
     ): GoogleDriveRepository {
         return GoogleDriveRepository(context)
     }
@@ -37,11 +47,12 @@ object RepositoryModule {
     @Provides
     @Singleton
     fun provideSlideshowManager(
-        @android.content.Context context: android.content.Context,
+        @ApplicationContext context: Context,
         driveRepository: GoogleDriveRepository,
-        photoRepository: GoogleDrivePhotoRepository
+        photoRepository: GoogleDrivePhotoRepository,
+        galleryPhotoRepository: GalleryPhotoRepository
     ): SlideshowManager {
-        return SlideshowManager(context, driveRepository, photoRepository)
+        return SlideshowManager(context, driveRepository, photoRepository, galleryPhotoRepository)
     }
 
     @Provides

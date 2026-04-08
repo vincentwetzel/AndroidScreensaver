@@ -7,14 +7,18 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.common.api.ApiException
 import com.vincentwetzel.androidscreensaver.R
+import com.vincentwetzel.androidscreensaver.data.repository.GoogleDriveRepository
 import com.vincentwetzel.androidscreensaver.databinding.ActivityGoogleDriveAuthBinding
 import com.vincentwetzel.androidscreensaver.viewmodel.AuthState
 import com.vincentwetzel.androidscreensaver.viewmodel.GoogleDriveViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Google Drive Authentication Activity
@@ -25,6 +29,9 @@ class GoogleDriveAuthActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityGoogleDriveAuthBinding
     private val viewModel: GoogleDriveViewModel by viewModels()
+
+    @Inject
+    lateinit var driveRepository: GoogleDriveRepository
 
     // Activity result launcher for Google Sign-In
     private val signInLauncher = registerForActivityResult(
@@ -53,41 +60,45 @@ class GoogleDriveAuthActivity : AppCompatActivity() {
     }
 
     private fun observeViewModel() {
-        viewModel.authState.observe(this) { state ->
-            when (state) {
-                is AuthState.Unauthenticated -> {
-                    binding.btnSignIn.isEnabled = true
-                    binding.progressBar.visibility = View.GONE
-                }
-                is AuthState.Authenticating -> {
-                    binding.btnSignIn.isEnabled = false
-                    binding.progressBar.visibility = View.VISIBLE
-                    binding.errorMessage.visibility = View.GONE
-                }
-                is AuthState.Authenticated -> {
-                    // Auth successful, go back to previous screen
-                    Toast.makeText(this, "Successfully signed in!", Toast.LENGTH_SHORT).show()
-                    setResult(RESULT_OK)
-                    finish()
-                }
-                is AuthState.Error -> {
-                    binding.btnSignIn.isEnabled = true
-                    binding.progressBar.visibility = View.GONE
-                    binding.errorMessage.text = state.message
-                    binding.errorMessage.visibility = View.VISIBLE
+        lifecycleScope.launch {
+            viewModel.authState.collect { state ->
+                when (state) {
+                    is AuthState.Unauthenticated -> {
+                        binding.btnSignIn.isEnabled = true
+                        binding.progressBar.visibility = View.GONE
+                    }
+                    is AuthState.Authenticating -> {
+                        binding.btnSignIn.isEnabled = false
+                        binding.progressBar.visibility = View.VISIBLE
+                        binding.errorMessage.visibility = View.GONE
+                    }
+                    is AuthState.Authenticated -> {
+                        // Auth successful, go back to previous screen
+                        Toast.makeText(this@GoogleDriveAuthActivity, "Successfully signed in!", Toast.LENGTH_SHORT).show()
+                        setResult(RESULT_OK)
+                        finish()
+                    }
+                    is AuthState.Error -> {
+                        binding.btnSignIn.isEnabled = true
+                        binding.progressBar.visibility = View.GONE
+                        binding.errorMessage.text = state.message
+                        binding.errorMessage.visibility = View.VISIBLE
+                    }
                 }
             }
         }
 
-        viewModel.accountName.observe(this) { name ->
-            if (name != null) {
-                binding.btnSignIn.text = "Signed in as $name"
+        lifecycleScope.launch {
+            viewModel.accountName.collect { name ->
+                if (name != null) {
+                    binding.btnSignIn.text = "Signed in as $name"
+                }
             }
         }
     }
 
     private fun startGoogleSignIn() {
-        val signInIntent = viewModel.getSignInIntent()
+        val signInIntent = driveRepository.getSignInIntent()
         signInLauncher.launch(signInIntent)
     }
 
@@ -97,10 +108,13 @@ class GoogleDriveAuthActivity : AppCompatActivity() {
             val account: GoogleSignInAccount = task.getResult(ApiException::class.java)
             viewModel.onAuthenticated(account)
         } catch (e: ApiException) {
+            android.util.Log.e(TAG, "Google Sign-In failed: statusCode=${e.statusCode}", e)
             val errorMessage = when (e.statusCode) {
+                10 -> "Developer error: Check SHA-1 fingerprint and package name in Google Cloud Console"
                 12500 -> "Sign-in failed. Please try again."
-                10 -> "No Google account found on this device."
-                else -> "Sign-in failed: ${e.statusMessage}"
+                12501 -> "Sign-in cancelled"
+                12502 -> "No Google account found on this device"
+                else -> "Sign-in failed (code ${e.statusCode}): ${e.statusMessage}"
             }
             Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show()
         }

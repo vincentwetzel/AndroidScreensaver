@@ -18,7 +18,7 @@ interface PhotoRepository {
     /**
      * List all folders from the source
      */
-    suspend fun listFolders(parentFolderId: String? = null): List<PhotoFolder>
+    suspend fun listFolders(parentFolderId: String?, forceRefresh: Boolean): List<PhotoFolder>
     
     /**
      * List all photos in a folder

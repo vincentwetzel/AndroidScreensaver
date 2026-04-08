@@ -63,6 +63,8 @@ object SettingsManager {
         // Sources
         val SOURCE_GOOGLE_DRIVE_ENABLED = booleanPreferencesKey("source_google_drive_enabled")
         val SOURCE_GOOGLE_DRIVE_FOLDERS = stringSetPreferencesKey("source_google_drive_folders")
+        val SOURCE_GALLERY_ENABLED = booleanPreferencesKey("source_gallery_enabled")
+        val SOURCE_GALLERY_FOLDERS = stringSetPreferencesKey("source_gallery_folders")
     }
 
     /**
@@ -71,6 +73,8 @@ object SettingsManager {
     fun getSlideshowConfig(context: Context): SlideshowConfig {
         return runBlocking {
             val preferences = context.dataStore.data.first()
+
+            val cacheEnabled = preferences[PreferencesKeys.ENABLE_CACHE] ?: true
 
             SlideshowConfig(
                 // Display time
@@ -116,7 +120,7 @@ object SettingsManager {
                 keepScreenOn = preferences[PreferencesKeys.KEEP_SCREEN_ON] ?: false,
 
                 // Cache
-                enableCaching = preferences[PreferencesKeys.ENABLE_CACHE] ?: true,
+                cacheConfig = CacheConfig(enabled = cacheEnabled),
             )
         }
     }
@@ -141,7 +145,7 @@ object SettingsManager {
                 preferences[PreferencesKeys.BACKGROUND_COLOR] = config.backgroundColor
                 preferences[PreferencesKeys.SCREEN_ORIENTATION] = config.screenOrientation.name
                 preferences[PreferencesKeys.KEEP_SCREEN_ON] = config.keepScreenOn
-                preferences[PreferencesKeys.ENABLE_CACHE] = config.enableCaching
+                preferences[PreferencesKeys.ENABLE_CACHE] = config.cacheConfig.enabled
             }
         }
     }
@@ -155,8 +159,36 @@ object SettingsManager {
             when (sourceType) {
                 com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE ->
                     preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_ENABLED] ?: false
+                com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY ->
+                    preferences[PreferencesKeys.SOURCE_GALLERY_ENABLED] ?: false
                 else -> false
             }
+        }
+    }
+
+    /**
+     * Check if any sources are configured with selected folders
+     * Returns true if at least one source is enabled AND has folders selected
+     */
+    fun hasAnySourceConfigured(context: Context): Boolean {
+        return runBlocking {
+            val preferences = context.dataStore.data.first()
+            
+            // Check Google Drive
+            val googleDriveEnabled = preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_ENABLED] ?: false
+            if (googleDriveEnabled) {
+                val googleDriveFolders = preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_FOLDERS] ?: emptySet()
+                if (googleDriveFolders.isNotEmpty()) return@runBlocking true
+            }
+            
+            // Check Gallery
+            val galleryEnabled = preferences[PreferencesKeys.SOURCE_GALLERY_ENABLED] ?: false
+            if (galleryEnabled) {
+                val galleryFolders = preferences[PreferencesKeys.SOURCE_GALLERY_FOLDERS] ?: emptySet()
+                if (galleryFolders.isNotEmpty()) return@runBlocking true
+            }
+            
+            false
         }
     }
 
@@ -172,10 +204,50 @@ object SettingsManager {
             when (sourceType) {
                 com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE -> {
                     val folderIds = preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_FOLDERS] ?: emptySet()
-                    // Return empty list - will be populated from actual folder data
-                    emptyList()
+                    folderIds.map { id ->
+                        com.vincentwetzel.androidscreensaver.data.model.PhotoFolder(
+                            id = id,
+                            sourceType = com.vincentwetzel.androidscreensaver.data.model.SourceType.GOOGLE_DRIVE,
+                            name = id,
+                            parentFolderId = null,
+                            photoCount = 0
+                        )
+                    }
+                }
+                com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY -> {
+                    val folderIds = preferences[PreferencesKeys.SOURCE_GALLERY_FOLDERS] ?: emptySet()
+                    folderIds.map { id ->
+                        com.vincentwetzel.androidscreensaver.data.model.PhotoFolder(
+                            id = id,
+                            sourceType = com.vincentwetzel.androidscreensaver.data.model.SourceType.GALLERY,
+                            name = id,
+                            parentFolderId = null,
+                            photoCount = 0
+                        )
+                    }
                 }
                 else -> emptyList()
+            }
+        }
+    }
+
+    /**
+     * Save selected folders for a source
+     */
+    fun setSelectedFolders(
+        context: Context,
+        sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType,
+        folderIds: Set<String>
+    ) {
+        runBlocking {
+            context.dataStore.edit { preferences ->
+                when (sourceType) {
+                    com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE ->
+                        preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_FOLDERS] = folderIds
+                    com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY ->
+                        preferences[PreferencesKeys.SOURCE_GALLERY_FOLDERS] = folderIds
+                    else -> {}
+                }
             }
         }
     }
@@ -189,6 +261,8 @@ object SettingsManager {
                 when (sourceType) {
                     com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE ->
                         preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_ENABLED] = enabled
+                    com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY ->
+                        preferences[PreferencesKeys.SOURCE_GALLERY_ENABLED] = enabled
                     else -> {}
                 }
             }
@@ -198,10 +272,9 @@ object SettingsManager {
     // Helper function to safely parse enums
     private inline fun <reified T : Enum<T>> enumValueOfOrNull(name: String): T? {
         return try {
-                enumValueOf<T>(name)
-            } catch (e: IllegalArgumentException) {
-                null
-            }
+            enumValueOf<T>(name)
+        } catch (e: IllegalArgumentException) {
+            null
         }
     }
 }

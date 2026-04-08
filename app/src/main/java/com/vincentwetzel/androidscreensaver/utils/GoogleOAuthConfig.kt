@@ -9,12 +9,24 @@ package com.vincentwetzel.androidscreensaver.utils
  * 3. Copy the Client ID value
  */
 object GoogleOAuthConfig {
-    
+
     /**
      * OAuth 2.0 Client ID for Android
      * From: Google Cloud Console > APIs & Services > Credentials
+     * Type: Android
      */
     const val CLIENT_ID = "459442467476-r9unkjslnp6giff3v0iv642hiss1ntap.apps.googleusercontent.com"
+
+    /**
+     * OAuth 2.0 Web Client ID (for ID token requests)
+     * From: Google Cloud Console > APIs & Services > Credentials
+     * Type: Web application
+     *
+     * TODO: Create a "Web application" OAuth client in Google Cloud Console
+     * and replace this with its Client ID.
+     * If you don't need ID tokens, this can be left empty.
+     */
+    const val WEB_CLIENT_ID = ""
     
     /**
      * Required scope for Google Drive read-only access

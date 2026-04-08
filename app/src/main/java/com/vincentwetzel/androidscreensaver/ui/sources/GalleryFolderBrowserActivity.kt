@@ -1,35 +1,53 @@
 package com.vincentwetzel.androidscreensaver.ui.sources
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.databinding.ActivityFolderBrowserBinding
-import com.vincentwetzel.androidscreensaver.viewmodel.GoogleDriveViewModel
+import com.vincentwetzel.androidscreensaver.viewmodel.GalleryViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
- * Folder Browser Activity
- * Allows user to select which Google Drive folders to include in the screensaver
+ * Gallery Folder Browser Activity
+ * Allows user to select which Gallery folders to include in the screensaver
  */
 @AndroidEntryPoint
-class FolderBrowserActivity : AppCompatActivity() {
+class GalleryFolderBrowserActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityFolderBrowserBinding
-    private val viewModel: GoogleDriveViewModel by viewModels()
+    private val viewModel: GalleryViewModel by viewModels()
     private lateinit var adapter: FolderAdapter
 
     companion object {
         const val EXTRA_SELECTED_FOLDERS = "selected_folders"
         const val RESULT_SELECTED_FOLDERS = "selected_folders_result"
+    }
+
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.values.all { it }
+        if (allGranted) {
+            viewModel.loadFolders()
+        } else {
+            Toast.makeText(this, "Photo permission is required to browse Gallery folders", Toast.LENGTH_LONG).show()
+            binding.progressBar.visibility = View.GONE
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,8 +60,29 @@ class FolderBrowserActivity : AppCompatActivity() {
         setupButtons()
         observeViewModel()
 
-        // Load folders (repository handles caching)
-        viewModel.loadFolders()
+        // Check and request permissions before loading folders
+        if (hasGalleryPermissions()) {
+            viewModel.loadFolders()
+        } else {
+            requestGalleryPermissions()
+        }
+    }
+
+    private fun hasGalleryPermissions(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun requestGalleryPermissions() {
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+        } else {
+            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        permissionLauncher.launch(permissions)
     }
 
     private fun setupToolbar() {
@@ -79,7 +118,7 @@ class FolderBrowserActivity : AppCompatActivity() {
     private fun restoreSelectedFolders() {
         val savedFolders = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSelectedFolders(
             this,
-            com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE
+            com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
         )
         val savedFolderIds = savedFolders.map { it.id }.toSet()
         adapter.setSelectedFolders(savedFolderIds)
@@ -109,7 +148,6 @@ class FolderBrowserActivity : AppCompatActivity() {
         }
 
         binding.switchIncludeSubfolders.setOnCheckedChangeListener { _, isChecked ->
-            // Reload folders with subfolder setting
             viewModel.setIncludeSubfolders(isChecked)
             viewModel.loadFolders(forceRefresh = true)
         }

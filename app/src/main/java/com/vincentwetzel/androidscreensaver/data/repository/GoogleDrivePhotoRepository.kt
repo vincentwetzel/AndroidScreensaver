@@ -3,6 +3,8 @@ package com.vincentwetzel.androidscreensaver.data.repository
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
 import com.vincentwetzel.androidscreensaver.data.model.SourceType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -15,6 +17,9 @@ class GoogleDrivePhotoRepository @Inject constructor(
     private val driveRepository: GoogleDriveRepository
 ) : PhotoRepository {
 
+    // Cache for loaded folders (survives Activity recreation)
+    private val folderCache = mutableMapOf<String?, List<PhotoFolder>>()
+
     // Supported image file extensions
     private val imageExtensions = listOf(
         "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif", "svg", "tiff", "tif"
@@ -26,55 +31,62 @@ class GoogleDrivePhotoRepository @Inject constructor(
     )
 
     override fun isAuthenticated(): Boolean {
-        return driveRepository.isAuthenticated().value
+        return driveRepository.isAuthenticated.value
     }
 
-    override suspend fun listFolders(parentFolderId: String?): List<PhotoFolder> {
-        val driveService = driveRepository.getDriveService()
-            ?: throw IllegalStateException("Not authenticated with Google Drive")
-
-        val folders = mutableListOf<PhotoFolder>()
-
-        try {
-            // Build query for folders
-            val query = StringBuilder()
-            query.append("mimeType='application/vnd.google-apps.folder'")
-            query.append(" and trashed=false")
-
-            if (parentFolderId != null) {
-                query.append(" and '$parentFolderId' in parents")
-            } else {
-                // Root folder
-                query.append(" and 'root' in parents")
-            }
-
-            // Execute the query
-            val files = driveService.files().list()
-                .setQ(query.toString())
-                .setPageSize(1000)
-                .setFields("nextPageToken, files(id, name, parents)")
-                .execute()
-
-            files.files?.forEach { file ->
-                folders.add(
-                    PhotoFolder(
-                        id = file.id ?: "",
-                        sourceType = SourceType.GOOGLE_DRIVE,
-                        name = file.name ?: "Unknown",
-                        parentFolderId = file.parents?.firstOrNull(),
-                        photoCount = 0 // Will be populated separately
-                    )
-                )
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            throw Exception("Failed to list folders: ${e.message}")
+    override suspend fun listFolders(parentFolderId: String?, forceRefresh: Boolean): List<PhotoFolder> {
+        // Check cache first
+        if (!forceRefresh && folderCache.containsKey(parentFolderId)) {
+            return folderCache[parentFolderId]!!
         }
 
-        return folders
+        return withContext(Dispatchers.IO) {
+            val driveService = driveRepository.getDriveService()
+                ?: throw IllegalStateException("Not authenticated with Google Drive")
+
+            val folders = mutableListOf<PhotoFolder>()
+
+            try {
+                // Build query for folders
+                val query = StringBuilder()
+                query.append("mimeType='application/vnd.google-apps.folder'")
+                query.append(" and trashed=false")
+
+                if (parentFolderId != null) {
+                    query.append(" and '$parentFolderId' in parents")
+                } else {
+                    // Root folder
+                    query.append(" and 'root' in parents")
+                }
+
+                // Execute the query
+                val files = driveService.files().list()
+                    .setQ(query.toString())
+                    .setPageSize(1000)
+                    .setFields("nextPageToken, files(id, name, parents)")
+                    .execute()
+
+                files.files?.forEach { file ->
+                    folders.add(
+                        PhotoFolder(
+                            id = file.id ?: "",
+                            sourceType = SourceType.GOOGLE_DRIVE,
+                            name = file.name ?: "Unknown",
+                            parentFolderId = file.parents?.firstOrNull(),
+                            photoCount = 0 // Will be populated separately
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                throw Exception("Failed to list folders: ${e.message}")
+            }
+
+            folders.also { folderCache[parentFolderId] = it }
+        }
     }
 
-    override suspend fun listPhotos(folderId: String): List<Photo> {
+    override suspend fun listPhotos(folderId: String): List<Photo> = withContext(Dispatchers.IO) {
         val driveService = driveRepository.getDriveService()
             ?: throw IllegalStateException("Not authenticated with Google Drive")
 
@@ -140,14 +152,14 @@ class GoogleDrivePhotoRepository @Inject constructor(
             throw Exception("Failed to list photos: ${e.message}")
         }
 
-        return photos
+        return@withContext photos
     }
 
-    override suspend fun getPhotoMetadata(photoId: String): Photo? {
+    override suspend fun getPhotoMetadata(photoId: String): Photo? = withContext(Dispatchers.IO) {
         val driveService = driveRepository.getDriveService()
-            ?: throw IllegalStateException("Not authenticated with Google Drive")
+            ?: return@withContext null
 
-        return try {
+        try {
             val file = driveService.files().get(photoId)
                 .setFields("id, name, mimeType, size, modifiedTime, imageMediaMetadata, videoMediaMetadata")
                 .execute()
@@ -181,11 +193,11 @@ class GoogleDrivePhotoRepository @Inject constructor(
         }
     }
 
-    override suspend fun getPhotoUrl(photoId: String): String? {
+    override suspend fun getPhotoUrl(photoId: String): String? = withContext(Dispatchers.IO) {
         val driveService = driveRepository.getDriveService()
-            ?: throw IllegalStateException("Not authenticated with Google Drive")
+            ?: return@withContext null
 
-        return try {
+        try {
             // Get a download URL that works with authenticated requests
             "https://www.googleapis.com/drive/v3/files/$photoId?alt=media"
         } catch (e: Exception) {
@@ -194,11 +206,11 @@ class GoogleDrivePhotoRepository @Inject constructor(
         }
     }
 
-    override suspend fun getThumbnailUrl(photoId: String): String? {
+    override suspend fun getThumbnailUrl(photoId: String): String? = withContext(Dispatchers.IO) {
         val driveService = driveRepository.getDriveService()
-            ?: throw IllegalStateException("Not authenticated with Google Drive")
+            ?: return@withContext null
 
-        return try {
+        try {
             // Google Drive provides thumbnails at this endpoint
             "https://www.googleapis.com/drive/v3/files/$photoId/thumbnail?sz=w400"
         } catch (e: Exception) {
@@ -207,9 +219,9 @@ class GoogleDrivePhotoRepository @Inject constructor(
         }
     }
 
-    override suspend fun searchFolders(query: String): List<PhotoFolder> {
+    override suspend fun searchFolders(query: String): List<PhotoFolder> = withContext(Dispatchers.IO) {
         val driveService = driveRepository.getDriveService()
-            ?: throw IllegalStateException("Not authenticated with Google Drive")
+            ?: return@withContext emptyList<PhotoFolder>()
 
         val folders = mutableListOf<PhotoFolder>()
 
@@ -237,14 +249,14 @@ class GoogleDrivePhotoRepository @Inject constructor(
             e.printStackTrace()
         }
 
-        return folders
+        return@withContext folders
     }
 
-    override suspend fun getFolderPhotoCount(folderId: String): Int {
+    override suspend fun getFolderPhotoCount(folderId: String): Int = withContext(Dispatchers.IO) {
         val driveService = driveRepository.getDriveService()
-            ?: throw IllegalStateException("Not authenticated with Google Drive")
+            ?: return@withContext 0
 
-        return try {
+        return@withContext try {
             val mimeTypeQuery = imageExtensions.joinToString(" or ") { ext ->
                 "name contains '.$ext'"
             }
@@ -266,9 +278,9 @@ class GoogleDrivePhotoRepository @Inject constructor(
         }
     }
 
-    override suspend fun syncPhotos(): Boolean {
+    override suspend fun syncPhotos(): Boolean = withContext(Dispatchers.IO) {
         // For Google Drive, we don't need to sync locally
         // We fetch photos on-demand from the API
-        return true
+        true
     }
 }

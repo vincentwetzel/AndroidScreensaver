@@ -1,7 +1,6 @@
 package com.vincentwetzel.androidscreensaver.utils
 
 import android.content.Context
-import android.content.pm.PackageName
 import androidx.core.content.pm.PackageInfoCompat
 
 /**

@@ -1,86 +1,95 @@
 # Build Instructions
 
-## How to Build the Project
+## Requirements
 
-### Option 1: Android Studio (Recommended)
+- Android Studio Hedgehog or newer
+- JDK 17 (configured in project)
+- Android SDK 34 (compileSdk), minSdk 26
 
-1. **Open Android Studio**
-2. **Open the project**:
-   - File → Open
-   - Navigate to `i:\coding_workspaces\Kotlin\AndroidScreensaver`
-   - Click "OK"
-3. **Sync Gradle**:
-   - Android Studio will prompt to sync automatically
-   - Wait for "Gradle sync finished" message
-4. **Build the project**:
-   - Build → Make Project (Ctrl+F9)
-   - Or click the hammer icon in the toolbar
-5. **Run on device/emulator**:
-   - Run → Run 'app' (Shift+F10)
-   - Select connected device or emulator
+## Build Commands
 
-### Option 2: Command Line (After Android Studio sync)
-
-After opening in Android Studio once, the Gradle wrapper will be created:
-
+### Debug Build
 ```bash
-cd i:\coding_workspaces\Kotlin\AndroidScreensaver
-.\gradlew assembleDebug
+./gradlew assembleDebug
 ```
 
----
+Output: `app/build/outputs/apk/debug/app-debug.apk`
 
-## Build Requirements
+### Install on Device
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
 
-- **Android Studio**: Hedgehog (2023.1.1) or later
-- **JDK**: Version 17 (bundled with Android Studio)
-- **Android SDK**: 
-  - Compile SDK: 34
-  - Min SDK: 26
-  - Target SDK: 34
-- **Gradle**: 8.2 (managed by Android Studio)
+### Clean Build
+```bash
+./gradlew clean assembleDebug
+```
 
----
+### Run Tests
+```bash
+./gradlew test
+./gradlew connectedAndroidTest
+```
+
+### Signing Report
+```bash
+./gradlew signingReport
+```
+
+Shows debug keystore SHA-1 fingerprint for Google Cloud Console setup.
+
+## Google Drive OAuth Setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Select project `androidscreensaver`
+3. Edit the Android OAuth Client:
+   - **Package name:** `com.vincentwetzel.androidscreensaver.debug` (debug build)
+   - **SHA-1 fingerprint:** Run `./gradlew signingReport` to get it
+4. Add your test Google account email under **OAuth Consent Screen → Test users**
+
+See [GOOGLE_CLOUD_SETUP.md](GOOGLE_CLOUD_SETUP.md) for full details.
 
 ## Troubleshooting
 
-### "Gradle sync failed" errors:
-1. Check that you have Android Studio installed
-2. Go to File → Invalidate Caches → Invalidate and Restart
-3. Wait for Gradle to sync
+### Google Sign-In fails with status code 10
+- Verify SHA-1 fingerprint matches your debug keystore
+- Verify package name includes `.debug` suffix for debug builds
+- Check that `requestIdToken()` is NOT called with the Android Client ID (only use Web Client ID for ID tokens)
 
-### "SDK not found" errors:
-1. File → Project Structure → SDK Location
-2. Ensure Android SDK path is correct
-3. Install SDK 34 if not already installed
+### Activation card doesn't hide after selecting screensaver
+- Close and reopen the app to force re-checking the system settings
+- Verify you actually selected "Android Screensaver" in the system screensaver settings
 
-### "Dependency resolution failed" errors:
-1. Check internet connection
-2. File → Sync Project with Gradle Files
-3. Wait for all dependencies to download
+### Gallery shows no folders
+- Grant photo permission when prompted
+- Ensure device has photos in MediaStore
 
-### Build succeeds but app crashes:
-1. Check logcat for error messages
-2. Verify Google Drive API is enabled in Google Cloud Console
-3. Ensure OAuth consent screen is configured
+## Pre-Build Checklist
 
----
+Before building or releasing a new version:
 
-## Current Build Status
+### Code Quality
+- [ ] `./gradlew assembleDebug` passes without errors
+- [ ] No new lint warnings (or they are suppressed with justification)
+- [ ] All TODO items reviewed
 
-- ✅ Project structure created
-- ✅ All dependencies configured
-- ✅ Main UI implemented
-- ✅ Settings screen implemented
-- ✅ All resources created (icons, strings, arrays)
-- ⏭️ **Ready to build in Android Studio**
+### Documentation
+- [ ] `CHANGELOG.md` updated with changes
+- [ ] `TODO.md` updated with task status
+- [ ] `README.md` reflects new features/removals
+- [ ] `ARCHITECTURE.md` updated if structure changed
+- [ ] `AGENTS.md` documentation rule followed
 
----
+### Testing
+- [ ] App launches and main screen renders
+- [ ] Gallery source: folders load and photos display
+- [ ] Google Drive source: sign-in works, folders load
+- [ ] Folder browser: navigation in/out of subfolders works
+- [ ] Screensaver: selectable in system settings, activation card auto-hides when selected
+- [ ] Activation card: appears when not set as screensaver, disappears when set
 
-## Next Steps After Successful Build
-
-1. Test the main menu displays correctly
-2. Test settings screen opens and shows all categories
-3. Verify all placeholder icons display
-4. Verify all string resources load correctly
-5. Move to Phase 3: Google Drive Integration
+### Build
+- [ ] Version code incremented in `build.gradle.kts`
+- [ ] Version name updated (semver: `major.minor.patch`)
+- [ ] `signingReport` confirms SHA-1 for Google Cloud setup
+- [ ] Release APK builds: `./gradlew assembleRelease`

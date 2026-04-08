@@ -3,6 +3,7 @@ package com.vincentwetzel.androidscreensaver.dream
 import android.content.Context
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig
+import com.vincentwetzel.androidscreensaver.data.repository.GalleryPhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDrivePhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDriveRepository
 import com.vincentwetzel.androidscreensaver.utils.SettingsManager
@@ -19,7 +20,8 @@ import javax.inject.Singleton
 class SlideshowManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val driveRepository: GoogleDriveRepository,
-    private val photoRepository: GoogleDrivePhotoRepository
+    private val photoRepository: GoogleDrivePhotoRepository,
+    private val galleryPhotoRepository: GalleryPhotoRepository
 ) {
     // Current slideshow configuration
     lateinit var config: SlideshowConfig
@@ -59,21 +61,38 @@ class SlideshowManager @Inject constructor(
             val allPhotos = mutableListOf<Photo>()
 
             // Check if Google Drive is authenticated and enabled
-            if (driveRepository.isAuthenticated().value && isSourceEnabled(SourceType.GOOGLE_DRIVE)) {
+            if (driveRepository.isAuthenticated.value && isSourceEnabled(com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE)) {
                 try {
-                    // Get selected folders
-                    val selectedFolders = getSelectedFolders(SourceType.GOOGLE_DRIVE)
+                    val selectedFolders = getSelectedFolders(com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE)
 
                     if (selectedFolders.isEmpty()) {
-                        // Load from all folders if none selected
-                        val allFolders = photoRepository.listFolders()
+                        val allFolders = photoRepository.listFolders(null, forceRefresh = false)
                         for (folder in allFolders) {
                             allPhotos.addAll(photoRepository.listPhotos(folder.id))
                         }
                     } else {
-                        // Load from selected folders
                         for (folder in selectedFolders) {
                             allPhotos.addAll(photoRepository.listPhotos(folder.id))
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+            // Check if Gallery is enabled
+            if (isSourceEnabled(com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY)) {
+                try {
+                    val selectedFolders = getSelectedFolders(com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY)
+
+                    if (selectedFolders.isEmpty()) {
+                        val allFolders = galleryPhotoRepository.listFolders(null, forceRefresh = false)
+                        for (folder in allFolders) {
+                            allPhotos.addAll(galleryPhotoRepository.listPhotos(folder.id))
+                        }
+                    } else {
+                        for (folder in selectedFolders) {
+                            allPhotos.addAll(galleryPhotoRepository.listPhotos(folder.id))
                         }
                     }
                 } catch (e: Exception) {
@@ -129,14 +148,14 @@ class SlideshowManager @Inject constructor(
     /**
      * Check if a source is enabled
      */
-    private fun isSourceEnabled(sourceType: SourceType): Boolean {
+    private fun isSourceEnabled(sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType): Boolean {
         return SettingsManager.isSourceEnabled(context, sourceType)
     }
 
     /**
      * Get selected folders for a source
      */
-    private fun getSelectedFolders(sourceType: SourceType): List<com.vincentwetzel.androidscreensaver.data.model.PhotoFolder> {
+    private fun getSelectedFolders(sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType): List<com.vincentwetzel.androidscreensaver.data.model.PhotoFolder> {
         return SettingsManager.getSelectedFolders(context, sourceType)
     }
 

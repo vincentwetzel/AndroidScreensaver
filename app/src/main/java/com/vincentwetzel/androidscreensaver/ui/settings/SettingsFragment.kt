@@ -2,6 +2,8 @@ package com.vincentwetzel.androidscreensaver.ui.settings
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.preference.ListPreference
@@ -164,7 +166,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun showColorPickerDialog() {
-        val dialogView = layoutInflater.inflate(com.vincentwetzel.androidscreensaver.R.layout.dialog_color_picker, null)
+        val dialogView = layoutInflater.inflate(R.layout.dialog_color_picker, null)
         var selectedColor = 0xFF000000.toInt()
 
         val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
@@ -186,30 +188,30 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         // Setup color clicks
         val colorMap = mapOf(
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_black) to 0xFF000000.toInt(),
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_white) to 0xFFFFFFFF.toInt(),
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_red) to 0xFFF44336.toInt(),
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_green) to 0xFF4CAF50.toInt(),
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_blue) to 0xFF2196F3.toInt(),
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_orange) to 0xFFFF9800.toInt(),
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_purple) to 0xFF9C27B0.toInt(),
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_cyan) to 0xFF00BCD4.toInt(),
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_teal) to 0xFF009688.toInt(),
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_pink) to 0xFFE91E63.toInt(),
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_amber) to 0xFFFFC107.toInt(),
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_indigo) to 0xFF3F51B5.toInt(),
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_brown) to 0xFF795548.toInt(),
-            dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.color_grey) to 0xFF9E9E9E.toInt()
+            dialogView.findViewById<View>(R.id.color_black) to 0xFF000000.toInt(),
+            dialogView.findViewById<View>(R.id.color_white) to 0xFFFFFFFF.toInt(),
+            dialogView.findViewById<View>(R.id.color_red) to 0xFFF44336.toInt(),
+            dialogView.findViewById<View>(R.id.color_green) to 0xFF4CAF50.toInt(),
+            dialogView.findViewById<View>(R.id.color_blue) to 0xFF2196F3.toInt(),
+            dialogView.findViewById<View>(R.id.color_orange) to 0xFFFF9800.toInt(),
+            dialogView.findViewById<View>(R.id.color_purple) to 0xFF9C27B0.toInt(),
+            dialogView.findViewById<View>(R.id.color_cyan) to 0xFF00BCD4.toInt(),
+            dialogView.findViewById<View>(R.id.color_teal) to 0xFF009688.toInt(),
+            dialogView.findViewById<View>(R.id.color_pink) to 0xFFE91E63.toInt(),
+            dialogView.findViewById<View>(R.id.color_amber) to 0xFFFFC107.toInt(),
+            dialogView.findViewById<View>(R.id.color_indigo) to 0xFF3F51B5.toInt(),
+            dialogView.findViewById<View>(R.id.color_brown) to 0xFF795548.toInt(),
+            dialogView.findViewById<View>(R.id.color_grey) to 0xFF9E9E9E.toInt()
         )
 
-        val previewColor = dialogView.findViewById<View>(com.vincentwetzel.androidscreensaver.R.id.preview_color)
-        val tvColorHex = dialogView.findViewById<android.widget.TextView>(com.vincentwetzel.androidscreensaver.R.id.tv_color_hex)
+        val previewColor = dialogView.findViewById<View>(R.id.preview_color)
+        val tvColorHex = dialogView.findViewById<TextView>(R.id.tv_color_hex)
 
-        colorMap.forEach { (view, color) ->
-            view.setOnClickListener {
+        colorMap.forEach { (view: View?, color: Int) ->
+            view?.setOnClickListener {
                 selectedColor = color
-                previewColor.setBackgroundColor(color)
-                tvColorHex.text = String.format("#%06X", 0xFFFFFF and color)
+                previewColor?.setBackgroundColor(color)
+                tvColorHex?.text = String.format("#%06X", 0xFFFFFF and color)
             }
         }
 
@@ -217,9 +219,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     private fun showCustomCacheSizeDialog() {
-        val dialogView = layoutInflater.inflate(com.vincentwetzel.androidscreensaver.R.layout.dialog_custom_cache_size, null)
+        val dialogView = layoutInflater.inflate(R.layout.dialog_custom_cache_size, null)
         val editText = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(
-            com.vincentwetzel.androidscreensaver.R.id.et_cache_size)
+            R.id.et_cache_size)
 
         val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
             .setTitle("Custom Cache Size")

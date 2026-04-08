@@ -13,7 +13,8 @@ import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
  * Adapter for displaying folder list with checkboxes
  */
 class FolderAdapter(
-    private val onSelectionChanged: (Set<String>) -> Unit
+    private val onSelectionChanged: (Set<String>) -> Unit,
+    private val onFolderClick: (String) -> Unit
 ) : RecyclerView.Adapter<FolderAdapter.FolderViewHolder>() {
 
     private val folders = mutableListOf<PhotoFolder>()
@@ -75,7 +76,9 @@ class FolderAdapter(
             tvPhotoCount.text = "${folder.photoCount} photos"
             checkbox.isChecked = selectedFolderIds.contains(folder.id)
 
-            checkbox.setOnCheckedChangeListener { _, isChecked ->
+            // Use click listener instead of OnCheckedChangeListener to avoid triggering during bind()
+            checkbox.setOnClickListener {
+                val isChecked = checkbox.isChecked
                 if (isChecked) {
                     selectedFolderIds.add(folder.id)
                 } else {
@@ -84,9 +87,9 @@ class FolderAdapter(
                 onSelectionChanged(selectedFolderIds)
             }
 
-            // Also toggle when clicking the entire row
+            // Clicking anywhere on the row navigates into the folder
             itemView.setOnClickListener {
-                checkbox.isChecked = !checkbox.isChecked
+                onFolderClick(folder.id)
             }
         }
     }
