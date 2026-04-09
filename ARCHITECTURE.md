@@ -115,17 +115,40 @@ All settings are persisted via **DataStore Preferences**.
 | `shuffle` | Boolean | `true` | Randomize photo order |
 | `photo_order` | String | `DATE_NEWEST_FIRST` | Sort order |
 | `media_type_filter` | String | `IMAGES_ONLY` | Filter by media type |
-| `match_orientation` | Boolean | `false` | Match device orientation |
+| `match_orientation` | Boolean | `false` | Use FIT_CENTER for mismatched orientation |
 | `display_effect` | String | `CROP_TO_FIT` | Photo display effect |
 | `pan_direction` | String | `RANDOM` | Pan direction for pan effect |
 | `transition_effect` | String | `FADE` | Transition between photos |
 | `transition_duration_ms` | Int | `1000` | Transition animation duration |
 | `transition_easing` | String | `EASE_IN_OUT` | Transition easing curve |
 | `transition_direction` | String | `LEFT` | Transition direction |
-| `background_color` | Int | `0xFF000000` | Background color |
+| `background_color` | Int | `0xFF000000` | Slideshow background color |
 | `screen_orientation` | String | `SYSTEM_DEFAULT` | Screen orientation lock |
-| `keep_screen_on` | Boolean | `false` | Prevent screen dimming |
+| `keep_screen_on` | Boolean | `false` | Prevent screen dimming via FLAG_KEEP_SCREEN_ON |
 | `enable_cache` | Boolean | `true` | Enable photo caching |
+| `cache_limit_mb` | Int | `500` | Custom cache size limit in MB |
+| `cache_use_preset` | Boolean | `true` | Use preset cache limit vs custom value |
+| `wifi_only` | Boolean | `true` | Only fetch cloud sources on Wi-Fi |
+| `network_timeout` | Int | `30` | HTTP request timeout in seconds |
+| `exit_trigger` | String | `TOUCH` | How to exit screensaver (touch/remote/shake/voice) |
+| `timer_enabled` | Boolean | `false` | Enable timer-based screensaver start |
+| `photo_info_enabled` | Boolean | `false` | Show photo metadata overlay |
+| `photo_info_fade_seconds` | Int | `5` | Photo info overlay fade duration |
+| `decoration_date` | Boolean | `false` | Show date decoration |
+| `decoration_clock` | Boolean | `false` | Show clock decoration |
+| `decoration_weather` | Boolean | `false` | Show weather decoration |
+
+### Settings Runtime Behavior
+
+Settings are loaded from DataStore via `SettingsManager.getSlideshowConfig()` and applied at slideshow start:
+
+- `PhotoScreensaverService.onAttachedToWindow()` calls `SlideshowManager.loadConfig()` to refresh config
+- `SlideshowView.initialize()` applies `backgroundColor` to the view
+- DreamService applies `FLAG_KEEP_SCREEN_ON` and `screenOrientation` via WindowManager
+- `SlideshowManager.loadPhotos()` checks `wifiOnly` via `ConnectivityManager` before Google Drive fetches
+- `SlideshowView.showPhoto()` adjusts `scaleType` when `matchDeviceOrientation` is enabled
+- `SlideshowView.startAutoAdvance()` reloads config each cycle so setting changes take effect mid-slideshow
+- DreamService uses `GestureDetector` to handle touch exit when `exitOnTrigger` is TOUCH
 
 ### Accessing Settings
 

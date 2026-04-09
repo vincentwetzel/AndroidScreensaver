@@ -9,4 +9,7 @@
     <color name="background">#FFFFFF</color>
     <color name="surface">#FFFFFF</color>
     <color name="error">#B00020</color>
+    <color name="status_connected">#4CAF50</color>
+    <color name="status_syncing">#FF9800</color>
+    <color name="status_error">#F44336</color>
 </resources>

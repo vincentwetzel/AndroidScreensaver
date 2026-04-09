@@ -1,6 +1,8 @@
 package com.vincentwetzel.androidscreensaver.dream
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig
 import com.vincentwetzel.androidscreensaver.data.repository.GalleryPhotoRepository
@@ -62,26 +64,34 @@ class SlideshowManager @Inject constructor(
 
             // Check if Google Drive is authenticated and enabled
             if (driveRepository.isAuthenticated.value && isSourceEnabled(com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE)) {
-                try {
-                    val selectedFolders = getSelectedFolders(com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE)
-                    val driveFolders = if (selectedFolders.isEmpty()) {
-                        photoRepository.listFolders(null, forceRefresh = false)
-                    } else {
-                        selectedFolders
-                    }
-
-                    for (folder in driveFolders) {
-                        val folderPhotos = photoRepository.listPhotos(folder.id)
-                        // Download each photo to local cache (Google Drive API requires OAuth headers)
-                        val photosWithLocalUris = folderPhotos.mapNotNull { photo ->
-                            val localPath = photoRepository.downloadPhotoToLocalCache(photo.id)
-                                ?: return@mapNotNull null
-                            photo.copy(uri = "file://$localPath")
+                // Respect wifi_only setting
+                if (config.wifiOnly && !isOnWifi()) {
+                    android.util.Log.w(TAG, "Skipping Google Drive: not on Wi-Fi and wifi_only is enabled")
+                } else {
+                    try {
+                        val selectedFolders = getSelectedFolders(com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE)
+                        val excludedFolderIds = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getDeselectedFolders(
+                            context, com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE
+                        )
+                        val driveFolders = if (selectedFolders.isEmpty()) {
+                            photoRepository.listFolders(null, forceRefresh = false)
+                        } else {
+                            selectedFolders
                         }
-                        allPhotos.addAll(photosWithLocalUris)
+
+                        for (folder in driveFolders) {
+                            val folderPhotos = photoRepository.listPhotos(folder.id, excludedFolderIds)
+                            // Download each photo to local cache (Google Drive API requires OAuth headers)
+                            val photosWithLocalUris = folderPhotos.mapNotNull { photo ->
+                                val localPath = photoRepository.downloadPhotoToLocalCache(photo.id)
+                                    ?: return@mapNotNull null
+                                photo.copy(uri = "file://$localPath")
+                            }
+                            allPhotos.addAll(photosWithLocalUris)
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e(TAG, "Error loading Google Drive photos", e)
                     }
-                } catch (e: Exception) {
-                    android.util.Log.e(TAG, "Error loading Google Drive photos", e)
                 }
             }
 
@@ -89,15 +99,18 @@ class SlideshowManager @Inject constructor(
             if (isSourceEnabled(com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY)) {
                 try {
                     val selectedFolders = getSelectedFolders(com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY)
+                    val excludedFolderIds = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getDeselectedFolders(
+                        context, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
+                    )
 
                     if (selectedFolders.isEmpty()) {
                         val allFolders = galleryPhotoRepository.listFolders(null, forceRefresh = false)
                         for (folder in allFolders) {
-                            allPhotos.addAll(galleryPhotoRepository.listPhotos(folder.id))
+                            allPhotos.addAll(galleryPhotoRepository.listPhotos(folder.id, excludedFolderIds))
                         }
                     } else {
                         for (folder in selectedFolders) {
-                            allPhotos.addAll(galleryPhotoRepository.listPhotos(folder.id))
+                            allPhotos.addAll(galleryPhotoRepository.listPhotos(folder.id, excludedFolderIds))
                         }
                     }
                 } catch (e: Exception) {
@@ -105,15 +118,20 @@ class SlideshowManager @Inject constructor(
                 }
             }
 
-            loadedPhotos = allPhotos
+            // Deduplicate photos by ID (can happen when a parent folder is cascade-selected
+            // along with its subfolders — listPhotos recurses into subfolders, so the same
+            // photo can be loaded from both the parent and child folder entries)
+            val uniquePhotos = allPhotos.distinctBy { it.id }
+
+            loadedPhotos = uniquePhotos
 
             // Apply media type filter
             val filteredPhotos = when (config.mediaTypeFilter) {
                 com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY ->
-                    allPhotos.filter { isImage(it.uri) }
+                    uniquePhotos.filter { isImage(it.uri) }
                 com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY ->
-                    allPhotos.filter { isVideo(it.uri) }
-                else -> allPhotos
+                    uniquePhotos.filter { isVideo(it.uri) }
+                else -> uniquePhotos
             }
 
             loadedPhotos = filteredPhotos
@@ -179,13 +197,29 @@ class SlideshowManager @Inject constructor(
 
         withContext(Dispatchers.IO) {
             try {
-                // Get photo URL and cache it
-                val url = photoRepository.getPhotoUrl(photo.id)
-                if (url != null) {
+                // Route to correct source based on photo URI
+                if (photo.uri.startsWith("content://")) {
+                    // Gallery photos: content:// URIs - already local, Coil can load directly
                     preloadCache[photo.id] = true
+                    android.util.Log.d(TAG, "Preloaded Gallery photo: ${photo.uri}")
+                } else if (photo.uri.startsWith("file://")) {
+                    // Google Drive cached photos: file:// URIs - already downloaded
+                    preloadCache[photo.id] = true
+                    android.util.Log.d(TAG, "Preloaded cached Drive photo: ${photo.uri}")
+                } else if (photo.uri.startsWith("http")) {
+                    // Google Drive remote URLs - need to download
+                    val url = photoRepository.getPhotoUrl(photo.id)
+                    if (url != null) {
+                        preloadCache[photo.id] = true
+                        android.util.Log.d(TAG, "Preloaded remote Drive photo: ${photo.uri}")
+                    } else {
+                        android.util.Log.w(TAG, "Failed to get URL for Drive photo: ${photo.id}")
+                    }
+                } else {
+                    android.util.Log.w(TAG, "Unknown URI scheme for preloading: ${photo.uri}")
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e(TAG, "Error preloading photo: ${photo.uri}", e)
             }
         }
     }
@@ -202,6 +236,16 @@ class SlideshowManager @Inject constructor(
      */
     private fun getSelectedFolders(sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType): List<com.vincentwetzel.androidscreensaver.data.model.PhotoFolder> {
         return SettingsManager.getSelectedFolders(context, sourceType)
+    }
+
+    /**
+     * Check if the device is currently connected to Wi-Fi
+     */
+    private fun isOnWifi(): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
     }
 
     companion object {

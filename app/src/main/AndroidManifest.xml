@@ -139,6 +139,13 @@
             android:label="Debug Settings"
             android:theme="@style/Theme.AndroidScreensaver.Settings" />
 
+        <!-- Decoration Settings Activity -->
+        <activity
+            android:name=".ui.settings.DecorationSettingsActivity"
+            android:exported="false"
+            android:label="Customize Decorations"
+            android:theme="@style/Theme.AndroidScreensaver.Settings" />
+
         <!-- Screensaver Preview Activity (for testing without screen timeout) -->
         <activity
             android:name=".ui.ScreensaverPreviewActivity"

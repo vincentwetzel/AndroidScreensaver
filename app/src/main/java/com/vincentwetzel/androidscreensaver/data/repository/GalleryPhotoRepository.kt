@@ -9,7 +9,10 @@ import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
 import com.vincentwetzel.androidscreensaver.data.model.SourceType
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,6 +25,9 @@ import javax.inject.Singleton
 class GalleryPhotoRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) : PhotoRepository {
+
+    // Background scope for prefetch operations that outlive individual callers
+    private val prefetchScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {
         // Cache TTL: folders are considered stale after this many milliseconds
@@ -61,6 +67,107 @@ class GalleryPhotoRepository @Inject constructor(
     override fun isAuthenticated(): Boolean {
         // Gallery doesn't need authentication
         return true
+    }
+
+    /**
+     * Pre-fetch Gallery folders (MediaStore buckets) in the background.
+     * Results are cached so subsequent listFolders(null) calls return immediately.
+     * Safe to call multiple times — respects the folder cache TTL.
+     */
+    fun prefetchRootFolders() {
+        prefetchScope.launch {
+            try {
+                val folders = mutableListOf<PhotoFolder>()
+
+                val contentResolver = context.contentResolver
+                val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+                } else {
+                    MediaStore.Files.getContentUri("external")
+                }
+
+                val projection = arrayOf(
+                    MediaStore.Files.FileColumns._ID,
+                    MediaStore.Files.FileColumns.BUCKET_ID,
+                    MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME,
+                    MediaStore.Files.FileColumns.MEDIA_TYPE
+                )
+
+                val selection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
+                val selectionArgs = arrayOf(
+                    MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
+                    MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString()
+                )
+
+                val sortOrder = "${MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME} ASC"
+
+                val cursor = contentResolver.query(
+                    collection,
+                    projection,
+                    selection,
+                    selectionArgs,
+                    sortOrder
+                )
+
+                cursor?.use {
+                    val bucketIdIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.BUCKET_ID)
+                    val bucketNameIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME)
+
+                    val seenBuckets = mutableSetOf<String>()
+
+                    while (it.moveToNext()) {
+                        val bucketId = it.getString(bucketIdIndex)
+                        if (seenBuckets.contains(bucketId)) continue
+                        seenBuckets.add(bucketId)
+
+                        val bucketName = it.getString(bucketNameIndex) ?: "Unknown"
+
+                        folders.add(
+                            PhotoFolder(
+                                id = bucketId,
+                                sourceType = SourceType.GALLERY,
+                                name = bucketName,
+                                parentFolderId = null,
+                                photoCount = 0
+                            )
+                        )
+                    }
+                }
+
+                folders.sortBy { it.name.lowercase() }
+                folderCache[null] = CacheEntry(folders)
+                android.util.Log.d("GalleryPhotoRepo", "Prefetched ${folders.size} Gallery folders")
+            } catch (e: Exception) {
+                android.util.Log.w("GalleryPhotoRepo", "Prefetch failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Helper: Get the RELATIVE_PATH for a folder (bucket) ID.
+     * Used to include subfolder photos when listing photos for a folder.
+     */
+    private fun getFolderRelativePath(folderId: String): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+
+        try {
+            val contentResolver = context.contentResolver
+            val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            val projection = arrayOf(MediaStore.Files.FileColumns.RELATIVE_PATH)
+            val selection = "${MediaStore.Files.FileColumns.BUCKET_ID} = ?"
+            val selectionArgs = arrayOf(folderId)
+
+            val cursor = contentResolver.query(collection, projection, selection, selectionArgs, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val pathIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.RELATIVE_PATH)
+                    return it.getString(pathIndex)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("GalleryPhotoRepo", "Failed to get relative path for folder $folderId: ${e.message}")
+        }
+        return null
     }
 
     override suspend fun listFolders(parentFolderId: String?, forceRefresh: Boolean): List<PhotoFolder> {
@@ -140,7 +247,7 @@ class GalleryPhotoRepository @Inject constructor(
         }
     }
 
-    override suspend fun listPhotos(folderId: String): List<Photo> = withContext(Dispatchers.IO) {
+    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>): List<Photo> = withContext(Dispatchers.IO) {
         val photos = mutableListOf<Photo>()
 
         try {
@@ -150,6 +257,9 @@ class GalleryPhotoRepository @Inject constructor(
             } else {
                 MediaStore.Files.getContentUri("external")
             }
+
+            // First, get the folder's relative path to include subfolders
+            val folderRelativePath = getFolderRelativePath(folderId)
 
             val projection = arrayOf(
                 MediaStore.Files.FileColumns._ID,
@@ -167,12 +277,32 @@ class GalleryPhotoRepository @Inject constructor(
                 MediaStore.Files.FileColumns.DATA
             )
 
-            val selection = "${MediaStore.Files.FileColumns.BUCKET_ID} = ? AND ${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
-            val selectionArgs = arrayOf(
-                folderId,
-                MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
-                MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString()
-            )
+            // Build exclusion paths from deselected folder IDs
+            val excludedRelativePaths = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                excludedFolderIds.mapNotNull { getFolderRelativePath(it) }
+            } else {
+                emptyList()
+            }
+
+            val (selection, selectionArgs) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && folderRelativePath != null) {
+                if (excludedRelativePaths.isNotEmpty()) {
+                    // Include photos from this folder AND subfolders, minus excluded paths
+                    val excludeClause = excludedRelativePaths.joinToString(" AND ") { path ->
+                        "${MediaStore.Files.FileColumns.RELATIVE_PATH} NOT LIKE ?"
+                    }
+                    val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ? AND ${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?) AND ($excludeClause)"
+                    val excludeArgs = excludedRelativePaths.map { "$it%" }
+                    selection to arrayOf(folderRelativePath, MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(), MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString()) + excludeArgs.toTypedArray()
+                } else {
+                    // Include photos from this folder AND all subfolders using RELATIVE_PATH
+                    val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ? AND ${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
+                    selection to arrayOf("$folderRelativePath%", MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(), MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString())
+                }
+            } else {
+                // Fallback: only exact bucket match (Android < 10 or no RELATIVE_PATH available)
+                val selection = "${MediaStore.Files.FileColumns.BUCKET_ID} = ? AND ${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
+                selection to arrayOf(folderId, MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(), MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString())
+            }
 
             val sortOrder = "${MediaStore.Files.FileColumns.DATE_ADDED} DESC"
 
@@ -396,5 +526,39 @@ class GalleryPhotoRepository @Inject constructor(
     override suspend fun syncPhotos(): Boolean = withContext(Dispatchers.IO) {
         // Gallery doesn't need to sync
         true
+    }
+
+    override suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: String?): Int {
+        return withContext(Dispatchers.IO) {
+            try {
+                val contentResolver = context.contentResolver
+
+                // Query the appropriate MediaStore collection based on filter
+                val (collection, bucketIdColumn) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val volume = MediaStore.VOLUME_EXTERNAL
+                    when (mediaTypeFilter) {
+                        "images" -> MediaStore.Images.Media.getContentUri(volume) to MediaStore.Images.Media.BUCKET_ID
+                        "videos" -> MediaStore.Video.Media.getContentUri(volume) to MediaStore.Video.Media.BUCKET_ID
+                        else -> MediaStore.Files.getContentUri(volume) to MediaStore.Files.FileColumns.BUCKET_ID
+                    }
+                } else {
+                    when (mediaTypeFilter) {
+                        "images" -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI to MediaStore.Images.Media.BUCKET_ID
+                        "videos" -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI to MediaStore.Video.Media.BUCKET_ID
+                        else -> MediaStore.Files.getContentUri("external") to MediaStore.Files.FileColumns.BUCKET_ID
+                    }
+                }
+
+                val projection = arrayOf("_id")
+                val selection = "$bucketIdColumn = ?"
+                val selectionArgs = arrayOf(folderId)
+
+                val cursor = contentResolver.query(collection, projection, selection, selectionArgs, null)
+                cursor?.use { it.count } ?: 0
+            } catch (e: Exception) {
+                e.printStackTrace()
+                0
+            }
+        }
     }
 }

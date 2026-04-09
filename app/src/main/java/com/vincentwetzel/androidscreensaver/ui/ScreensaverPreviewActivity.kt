@@ -48,16 +48,22 @@ class ScreensaverPreviewActivity : AppCompatActivity() {
                 )
                 
                 onSlideshowStarted = { photos ->
-                    Toast.makeText(this@ScreensaverPreviewActivity, "Slideshow started: ${photos.size} photos", Toast.LENGTH_SHORT).show()
-                    android.util.Log.d("PreviewActivity", "Slideshow started with ${photos.size} photos")
+                    val label = when (slideshowManager.config.mediaTypeFilter) {
+                        com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY -> "videos"
+                        com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "photos"
+                        else -> "items"
+                    }
+                    Toast.makeText(this@ScreensaverPreviewActivity, "Slideshow started: ${photos.size} $label", Toast.LENGTH_SHORT).show()
+                    android.util.Log.d("PreviewActivity", "Slideshow started with ${photos.size} $label")
                 }
-                
+
                 onError = { error ->
                     Toast.makeText(this@ScreensaverPreviewActivity, "Error: $error", Toast.LENGTH_LONG).show()
                     android.util.Log.e("PreviewActivity", "Slideshow error: $error")
                 }
-                
+
                 // Initialize and start
+                slideshowManager.loadConfig()
                 initialize(slideshowManager)
             }
             

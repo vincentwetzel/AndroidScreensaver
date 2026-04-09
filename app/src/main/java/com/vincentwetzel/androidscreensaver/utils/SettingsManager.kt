@@ -46,6 +46,17 @@ object SettingsManager {
         val PHOTO_INFO_ENABLED = booleanPreferencesKey("photo_info_enabled")
         val PHOTO_INFO_FADE = intPreferencesKey("photo_info_fade_seconds")
 
+        // Video playback
+        val VIDEO_AUDIO_MODE = stringPreferencesKey("video_audio_mode")
+        val VIDEO_CUSTOM_VOLUME = intPreferencesKey("video_custom_volume")
+        val VIDEO_MAX_DURATION = intPreferencesKey("video_max_duration_seconds")
+        val VIDEO_AUTO_PLAY = booleanPreferencesKey("video_auto_play")
+        val VIDEO_SHOW_CONTROLS = booleanPreferencesKey("video_show_controls")
+        val VIDEO_LOOP_SHORT = booleanPreferencesKey("video_loop_short")
+        val VIDEO_DISPLAY_MODE = stringPreferencesKey("video_display_mode")
+        val VIDEO_FIXED_SECONDS = intPreferencesKey("video_fixed_play_seconds")
+        val VIDEO_STILL_TIMESTAMP = stringPreferencesKey("video_still_timestamp")
+
         // Decorations
         val DECORATION_DATE = booleanPreferencesKey("decoration_date")
         val DECORATION_CLOCK = booleanPreferencesKey("decoration_clock")
@@ -56,15 +67,21 @@ object SettingsManager {
         val WIFI_ONLY = booleanPreferencesKey("wifi_only")
         val NETWORK_TIMEOUT = intPreferencesKey("network_timeout")
 
+        // Timer
+        val TIMER_ENABLED = booleanPreferencesKey("timer_enabled")
+
         // Cache
         val CACHE_LIMIT = intPreferencesKey("cache_limit_mb")
+        val CACHE_USE_PRESET = booleanPreferencesKey("cache_use_preset")
         val ENABLE_CACHE = booleanPreferencesKey("enable_cache")
 
         // Sources
         val SOURCE_GOOGLE_DRIVE_ENABLED = booleanPreferencesKey("source_google_drive_enabled")
         val SOURCE_GOOGLE_DRIVE_FOLDERS = stringSetPreferencesKey("source_google_drive_folders")
+        val SOURCE_GOOGLE_DRIVE_DESELECTED = stringSetPreferencesKey("source_google_drive_deselected")
         val SOURCE_GALLERY_ENABLED = booleanPreferencesKey("source_gallery_enabled")
         val SOURCE_GALLERY_FOLDERS = stringSetPreferencesKey("source_gallery_folders")
+        val SOURCE_GALLERY_DESELECTED = stringSetPreferencesKey("source_gallery_deselected")
     }
 
     /**
@@ -119,8 +136,49 @@ object SettingsManager {
                 ) ?: ScreenOrientation.SYSTEM_DEFAULT,
                 keepScreenOn = preferences[PreferencesKeys.KEEP_SCREEN_ON] ?: false,
 
+                // Decorations
+                dateDecoration = if (preferences[PreferencesKeys.DECORATION_DATE] == true) DecorationConfig() else null,
+                clockDecoration = if (preferences[PreferencesKeys.DECORATION_CLOCK] == true) ClockDecorationConfig() else null,
+                weatherDecoration = if (preferences[PreferencesKeys.DECORATION_WEATHER] == true) WeatherDecorationConfig() else null,
+
+                // Photo info
+                photoInfoConfig = PhotoInfoConfig(
+                    enabled = preferences[PreferencesKeys.PHOTO_INFO_ENABLED] ?: false,
+                    fadeOutAfterSeconds = preferences[PreferencesKeys.PHOTO_INFO_FADE] ?: 5,
+                ),
+
+                // Video playback
+                videoAudioMode = enumValueOfOrNull<VideoAudioMode>(
+                    preferences[PreferencesKeys.VIDEO_AUDIO_MODE] ?: VideoAudioMode.SYSTEM_VOLUME.name
+                ) ?: VideoAudioMode.SYSTEM_VOLUME,
+                videoCustomVolume = preferences[PreferencesKeys.VIDEO_CUSTOM_VOLUME] ?: 75,
+                videoMaxDurationSeconds = preferences[PreferencesKeys.VIDEO_MAX_DURATION] ?: 120,
+                videoAutoPlay = preferences[PreferencesKeys.VIDEO_AUTO_PLAY] ?: true,
+                videoShowControls = preferences[PreferencesKeys.VIDEO_SHOW_CONTROLS] ?: false,
+                videoLoopShort = preferences[PreferencesKeys.VIDEO_LOOP_SHORT] ?: true,
+                videoDisplayMode = enumValueOfOrNull<VideoDisplayMode>(
+                    preferences[PreferencesKeys.VIDEO_DISPLAY_MODE] ?: VideoDisplayMode.PLAY_FULL.name
+                ) ?: VideoDisplayMode.PLAY_FULL,
+                videoFixedPlaySeconds = preferences[PreferencesKeys.VIDEO_FIXED_SECONDS] ?: 30,
+                videoStillTimestamp = enumValueOfOrNull<VideoStillTimestamp>(
+                    preferences[PreferencesKeys.VIDEO_STILL_TIMESTAMP] ?: VideoStillTimestamp.BEGINNING.name
+                ) ?: VideoStillTimestamp.BEGINNING,
+
                 // Cache
-                cacheConfig = CacheConfig(enabled = cacheEnabled),
+                cacheConfig = CacheConfig(
+                    enabled = cacheEnabled,
+                    cacheSizeLimitMB = preferences[PreferencesKeys.CACHE_LIMIT] ?: 500,
+                    usePresetLimit = preferences[PreferencesKeys.CACHE_USE_PRESET] ?: true,
+                ),
+
+                // Network
+                wifiOnly = preferences[PreferencesKeys.WIFI_ONLY] ?: true,
+                networkTimeoutSeconds = preferences[PreferencesKeys.NETWORK_TIMEOUT] ?: 30,
+
+                // Timer
+                timerConfig = TimerConfig(
+                    enabled = preferences[PreferencesKeys.TIMER_ENABLED] ?: false,
+                ),
             )
         }
     }
@@ -145,7 +203,38 @@ object SettingsManager {
                 preferences[PreferencesKeys.BACKGROUND_COLOR] = config.backgroundColor
                 preferences[PreferencesKeys.SCREEN_ORIENTATION] = config.screenOrientation.name
                 preferences[PreferencesKeys.KEEP_SCREEN_ON] = config.keepScreenOn
+
+                // Decorations
+                preferences[PreferencesKeys.DECORATION_DATE] = config.dateDecoration != null
+                preferences[PreferencesKeys.DECORATION_CLOCK] = config.clockDecoration != null
+                preferences[PreferencesKeys.DECORATION_WEATHER] = config.weatherDecoration != null
+
+                // Photo info
+                preferences[PreferencesKeys.PHOTO_INFO_ENABLED] = config.photoInfoConfig.enabled
+                preferences[PreferencesKeys.PHOTO_INFO_FADE] = config.photoInfoConfig.fadeOutAfterSeconds
+
+                // Video playback
+                preferences[PreferencesKeys.VIDEO_AUDIO_MODE] = config.videoAudioMode.name
+                preferences[PreferencesKeys.VIDEO_CUSTOM_VOLUME] = config.videoCustomVolume
+                preferences[PreferencesKeys.VIDEO_MAX_DURATION] = config.videoMaxDurationSeconds
+                preferences[PreferencesKeys.VIDEO_AUTO_PLAY] = config.videoAutoPlay
+                preferences[PreferencesKeys.VIDEO_SHOW_CONTROLS] = config.videoShowControls
+                preferences[PreferencesKeys.VIDEO_LOOP_SHORT] = config.videoLoopShort
+                preferences[PreferencesKeys.VIDEO_DISPLAY_MODE] = config.videoDisplayMode.name
+                preferences[PreferencesKeys.VIDEO_FIXED_SECONDS] = config.videoFixedPlaySeconds
+                preferences[PreferencesKeys.VIDEO_STILL_TIMESTAMP] = config.videoStillTimestamp.name
+
+                // Cache
                 preferences[PreferencesKeys.ENABLE_CACHE] = config.cacheConfig.enabled
+                preferences[PreferencesKeys.CACHE_LIMIT] = config.cacheConfig.cacheSizeLimitMB
+                preferences[PreferencesKeys.CACHE_USE_PRESET] = config.cacheConfig.usePresetLimit
+
+                // Network
+                preferences[PreferencesKeys.WIFI_ONLY] = config.wifiOnly
+                preferences[PreferencesKeys.NETWORK_TIMEOUT] = config.networkTimeoutSeconds
+
+                // Timer
+                preferences[PreferencesKeys.TIMER_ENABLED] = config.timerConfig.enabled
             }
         }
     }
@@ -263,6 +352,46 @@ object SettingsManager {
                         preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_ENABLED] = enabled
                     com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY ->
                         preferences[PreferencesKeys.SOURCE_GALLERY_ENABLED] = enabled
+                    else -> {}
+                }
+            }
+        }
+    }
+
+    /**
+     * Get deselected folders for a source (subfolders explicitly unchecked by user)
+     */
+    fun getDeselectedFolders(
+        context: Context,
+        sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType
+    ): Set<String> {
+        return runBlocking {
+            val preferences = context.dataStore.data.first()
+            when (sourceType) {
+                com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE ->
+                    preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_DESELECTED] ?: emptySet()
+                com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY ->
+                    preferences[PreferencesKeys.SOURCE_GALLERY_DESELECTED] ?: emptySet()
+                else -> emptySet()
+            }
+        }
+    }
+
+    /**
+     * Save deselected folders for a source
+     */
+    fun setDeselectedFolders(
+        context: Context,
+        sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType,
+        folderIds: Set<String>
+    ) {
+        runBlocking {
+            context.dataStore.edit { preferences ->
+                when (sourceType) {
+                    com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE ->
+                        preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_DESELECTED] = folderIds
+                    com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY ->
+                        preferences[PreferencesKeys.SOURCE_GALLERY_DESELECTED] = folderIds
                     else -> {}
                 }
             }

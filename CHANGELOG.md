@@ -19,6 +19,18 @@
 
 ### Fixed
 - Google Sign-In `DEVELOPER_ERROR` (status 10) caused by incorrect `requestIdToken()` usage
+- **Content filter now correctly restricts media types** — Fixed 2 bugs:
+  - `arrays.xml` content filter values were misaligned with entries (selecting "Images Only" actually set "Images AND Videos" and vice versa)
+  - `SlideshowManager` config was never reloaded before `loadPhotos()`, so stale filter settings from singleton init were used
+- **Settings wiring — 8 bugs fixed:**
+  - `screen_rotation` sync: `SYSTEM_DEFAULT.name.lowercase()` produced "system_default" but XML value is "system"; now maps explicitly
+  - `sync_interval` sync/readback: used `.name.lowercase()` which gave "daily" but XML values are minute numbers ("30", "60", "1440"); both save and sync now use the minute-value mapping
+  - `exit_trigger` sync: `REMOTE_BUTTON.name.lowercase()` produced "remote_button" but XML value is "remote"; now maps explicitly
+  - `match_orientation`, `keep_screen_on`, `wifi_only` switches: had no `OnPreferenceChangeListener`, so toggling them never persisted to DataStore
+  - `decoration_date/clock/weather` switches: saved as raw Android preferences but never read into `SlideshowConfig`; now persist to DataStore and reconstruct on config load
+  - `photo_info_enabled`: saved to `SlideshowConfig` but `saveSlideshowConfig()` never persisted `photoInfoConfig` fields and `getSlideshowConfig()` never read them back
+  - `cache_limit` custom value: saved `cacheSizeLimitMB` but left `usePresetLimit = true`, so the custom value was ignored at read time; now sets `usePresetLimit = false`
+  - `cache_limit` persistence: `cacheSizeLimitMB` and `usePresetLimit` were never written to or read from DataStore; now fully persisted
 - `FolderBrowserActivity` ActionBar theme conflict (crash on launch)
 - Google Drive API calls blocking main thread (wrapped in `Dispatchers.IO`)
 - Checkbox two-tap issue in folder list (switched to `setOnClickListener`)
@@ -39,13 +51,67 @@
 - **Google Drive photos now display in slideshow** — photos were showing black screen because Coil couldn't load Drive URLs without OAuth headers; now downloads photos to local cache with auth headers and loads via file:// URI
 - **SlideshowView error logging** — added Coil load listeners to diagnose image loading failures
 - **Google Drive auth now restores on app launch** — `checkExistingSignIn()` was never called at startup, so `isAuthenticated` stayed false and slideshow skipped Drive photos; now auto-checks in repository `init` block
+- **`decoration_customize` had no handler** — Created `DecorationSettingsActivity` with tabbed UI for date/clock/weather customization (position, format, font size, background, animation, opacity, pulse)
+- **Gallery photo preloading not working** — `SlideshowManager.preloadPhoto()` now routes correctly for Gallery (content:// URIs), Google Drive cached (file:// URIs), and remote URLs
+
+### Enhancements
+- **Photo count on source cards** — Main screen cards now show "X photos available" under the status text, fetched from repositories when cards are refreshed
+- **Source status indicators** — Colored dot indicators (green = connected, orange = syncing, red = error) on source cards for at-a-glance status
+- **Better folder browser error messages** — Created `FolderError` sealed class with typed errors (NetworkError, AuthError, PermissionError, ApiError, EmptyError, UnknownError) and user-friendly messages instead of raw exception text
+- **Folder thumbnail previews** — Folder items now show the first photo as a thumbnail using Coil (Gallery photos via content:// URIs, Google Drive falls back to folder icon). Folder item layout updated with 48dp rounded thumbnail card
+- **Background folder pre-fetching** — Root folders are now fetched on a background thread (`Dispatchers.IO`) when a source is enabled and authenticated. Both `GoogleDrivePhotoRepository` and `GalleryPhotoRepository` have `prefetchRootFolders()` that populate the folder cache before the user clicks into the folder browser, making the initial load instant. Triggered from `MainActivity.refreshSourceCards()` and the Google Drive auth callback.
 
 ### Changed
+- **Content filter-aware media counts and labels** — Folder counts and labels now respect the content filter setting. When filter is "Photos Only", shows "X photos"; when "Videos Only", shows "X videos"; when "Both", shows "X items". Applies to folder browser list items, folder browser summary text, and main screen source cards. Added `getFilteredFolderMediaCount()` to both repositories to query counts by media type.
+- **Folder browser navigation back stack** — Replaced the hardcoded "go to root" back button with a proper navigation stack. Each folder visit is pushed onto the stack; back button pops and returns to the previous folder. When stack is empty, finishes Activity to return to main menu. Toolbar title shows the current folder name.
+- **Photo deduplication in slideshow** — `SlideshowManager.loadPhotos()` now deduplicates photos by ID using `distinctBy { it.id }` to prevent double-counting when a parent folder is cascade-selected alongside its subfolders.
+- **Deselected folder persistence fixed** — Unchecking a subfolder now properly removes it from `selectedFolderIds` AND adds it to `deselectedFolderIds`. Previously the folder stayed in the selected set, causing the deselection to be ignored on the next bind.
+- **Gallery content filter counts fixed** — `getFilteredFolderMediaCount()` now queries the correct MediaStore table (`Images.Media` for photos, `Videos.Media` for videos, `Files` for both) instead of querying `Files` with a `media_type` filter which was unreliable across devices.
+- **Google Drive count pagination fixed** — `getFilteredFolderMediaCount()` and `getFolderPhotoCount()` now paginate through all results with `setPageSize(1000)` and accumulate the total. Previously `setPageSize(1)` capped counts at 1 file.
+- **Removed "Include subfolders" toggle** — Subfolder inclusion is now always-on by default. The toggle switch has been removed from both folder browser activities (Google Drive and Gallery), the `includeSubfolders` state and `setIncludeSubfolders()` methods have been removed from both ViewModels, and the `includeSubfolders` fields have been removed from `SourceConfig` and `SelectedFolder` data models.
+- **Fixed subfolder photo inclusion** — Checking a folder now correctly includes photos from all subfolders recursively:
+  - **Google Drive**: `listPhotos()` now uses `collectPhotosFromFolder()` which recursively traverses the folder tree, fetching photos from each subfolder level via the Drive API
+  - **Gallery (Android 10+)**: Uses `MediaStore.RELATIVE_PATH` with a `LIKE 'path%'` query to match photos from the selected folder and all subfolders. Falls back to exact bucket match on Android < 10
+- **Subfolder checkbox cascade** — Checking a folder's checkbox immediately checks all its descendant subfolders recursively. Unchecking a folder immediately unchecks all descendants. This happens in real-time by fetching the full subfolder tree from the Drive API and applying the state to the adapter's selected/deselected sets. The user can navigate into any subfolder later and override its state individually. Both selections and deselections are persisted to DataStore.
 - Removed arrow button from folder list; folder name clicks now navigate into folder
+- **Folder selection now auto-saves** — checking/unchecking a folder immediately saves the selection. No more Save/Cancel confirmation buttons.
 - Simplified DreamService manifest (removed `category` and `meta-data`)
 - "Preview Screensaver" button replaced with activation card
+- **Folder browser result handling simplified** — MainActivity and SettingsFragment no longer process folder selection results (auto-save happens in the browser)
 - Default content filter changed from "Images and Videos" to "Images Only"
 - Folder and photo count caches use TTL expiration instead of permanent caching
+
+### Runtime — Settings now consumed at slideshow time
+- **Background color** — `SlideshowView` now applies `config.backgroundColor` instead of hardcoding black
+- **Keep screen on** — DreamService now sets `FLAG_KEEP_SCREEN_ON` when enabled
+- **Screen rotation** — DreamService now applies `config.screenOrientation` via WindowManager
+- **Exit trigger (touch)** — DreamService now uses `GestureDetector` to catch single-tap and call `finish()` when exit trigger is set to TOUCH
+- **Wi-Fi only** — `SlideshowManager.loadPhotos()` now checks `ConnectivityManager` and skips Google Drive fetches when on cellular and `wifi_only` is enabled
+- **Match orientation** — `SlideshowView` now adjusts `scaleType` to `FIT_CENTER` when photo orientation doesn't match device orientation
+- **Clear cache** — Now actually clears Coil's memory and disk cache instead of showing a no-op toast
+- **Start by timer** — Switch now persists `timerConfig.enabled` to DataStore with proper readback
+- **DreamService lifecycle** — `onDetachedFromWindow` now nulls out references; added proper cleanup logging
+- **Video double-advance fix** — Added `isAdvancing` guard to prevent ExoPlayer end callback and auto-advance coroutine from racing
+
+### Video playback settings — 9 settings fully wired end-to-end
+- **Persistence** — All 9 video fields now have `PreferencesKey` entries and are saved/read in `SettingsManager`:
+  - `videoAudioMode` (mute / system volume / custom volume)
+  - `videoCustomVolume` (0-100 slider value)
+  - `videoMaxDurationSeconds` (hard cap on video playback length)
+  - `videoAutoPlay` (auto-start video vs require manual play)
+  - `videoShowControls` (show/hide ExoPlayer playback controls)
+  - `videoLoopShort` (loop short videos with `REPEAT_MODE_ONE`)
+  - `videoDisplayMode` (play full / play fixed seconds / extract still)
+  - `videoFixedPlaySeconds` (duration for PLAY_FIXED mode)
+  - `videoStillTimestamp` (where to seek for EXTRACT_STILL mode)
+- **Runtime** — `SlideshowView.showPhoto()` now applies all video config:
+  - ExoPlayer volume set based on `videoAudioMode` + `videoCustomVolume`
+  - `playWhenReady` respects `videoAutoPlay`
+  - `repeatMode` set to `REPEAT_MODE_ONE` when `videoLoopShort` enabled
+  - `useController` toggled based on `videoShowControls`
+  - `videoMaxDurationSeconds` enforced via cancelable coroutine timer
+  - `PLAY_FIXED` mode stops video after `videoFixedPlaySeconds`
+  - `EXTRACT_STILL` mode seeks to `videoStillTimestamp` and pauses
 
 ### Known Issues
 - Google Drive requires Web Client ID for `requestIdToken()` (currently disabled)

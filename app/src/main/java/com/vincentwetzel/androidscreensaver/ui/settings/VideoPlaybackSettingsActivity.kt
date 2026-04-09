@@ -1,6 +1,7 @@
 package com.vincentwetzel.androidscreensaver.ui.settings
 
 import android.os.Bundle
+import android.util.Log
 import android.view.MenuItem
 import android.view.View
 import android.widget.AdapterView
@@ -23,6 +24,10 @@ import dagger.hilt.android.AndroidEntryPoint
 class VideoPlaybackSettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityVideoPlaybackSettingsBinding
+
+    companion object {
+        private const val TAG = "VideoPlaybackSettings"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,6 +58,16 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
 
     private fun loadCurrentSettings() {
         val config = SettingsManager.getSlideshowConfig(this)
+        Log.d(TAG, "=== LOADING settings from DataStore ===")
+        Log.d(TAG, "  videoAudioMode=${config.videoAudioMode}")
+        Log.d(TAG, "  videoCustomVolume=${config.videoCustomVolume}")
+        Log.d(TAG, "  videoMaxDurationSeconds=${config.videoMaxDurationSeconds}")
+        Log.d(TAG, "  videoAutoPlay=${config.videoAutoPlay}")
+        Log.d(TAG, "  videoLoopShort=${config.videoLoopShort}")
+        Log.d(TAG, "  videoShowControls=${config.videoShowControls}")
+        Log.d(TAG, "  videoDisplayMode=${config.videoDisplayMode}")
+        Log.d(TAG, "  videoFixedPlaySeconds=${config.videoFixedPlaySeconds}")
+        Log.d(TAG, "  videoStillTimestamp=${config.videoStillTimestamp}")
 
         // Audio mode
         when (config.videoAudioMode) {
@@ -123,51 +138,92 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
     }
 
     private fun saveSettings() {
+        val videoAudioMode = when (binding.radioAudio.checkedRadioButtonId) {
+            R.id.radio_mute -> VideoAudioMode.MUTE
+            R.id.radio_system_volume -> VideoAudioMode.SYSTEM_VOLUME
+            R.id.radio_custom_volume -> VideoAudioMode.CUSTOM_VOLUME
+            else -> VideoAudioMode.SYSTEM_VOLUME
+        }
+        val videoCustomVolume = binding.sliderVolume.value.toInt()
+        val videoAutoPlay = binding.switchAutoplay.isChecked
+        val videoLoopShort = binding.switchLoopShort.isChecked
+        val videoShowControls = binding.switchControls.isChecked
+        val videoMaxDurationSeconds = when (binding.spinnerMaxDuration.selectedItemPosition) {
+            0 -> 10
+            1 -> 30
+            2 -> 60
+            3 -> 120
+            4 -> 300
+            else -> Int.MAX_VALUE
+        }
+        val videoDisplayMode = when (binding.radioDisplayMode.checkedRadioButtonId) {
+            R.id.radio_play_full -> VideoDisplayMode.PLAY_FULL
+            R.id.radio_play_fixed -> VideoDisplayMode.PLAY_FIXED
+            R.id.radio_still_frame -> VideoDisplayMode.EXTRACT_STILL
+            else -> VideoDisplayMode.PLAY_FULL
+        }
+        val videoStillTimestamp = when (binding.spinnerStillTimestamp.selectedItemPosition) {
+            0 -> VideoStillTimestamp.BEGINNING
+            1 -> VideoStillTimestamp.MIDDLE
+            2 -> VideoStillTimestamp.END
+            3 -> VideoStillTimestamp.CUSTOM
+            else -> VideoStillTimestamp.BEGINNING
+        }
+
+        Log.d(TAG, "=== SAVING settings to DataStore ===")
+        Log.d(TAG, "  videoAudioMode=$videoAudioMode")
+        Log.d(TAG, "  videoCustomVolume=$videoCustomVolume")
+        Log.d(TAG, "  videoMaxDurationSeconds=$videoMaxDurationSeconds")
+        Log.d(TAG, "  videoAutoPlay=$videoAutoPlay")
+        Log.d(TAG, "  videoLoopShort=$videoLoopShort")
+        Log.d(TAG, "  videoShowControls=$videoShowControls")
+        Log.d(TAG, "  videoDisplayMode=$videoDisplayMode")
+        Log.d(TAG, "  videoFixedPlaySeconds=${SettingsManager.getSlideshowConfig(this).videoFixedPlaySeconds}")
+        Log.d(TAG, "  videoStillTimestamp=$videoStillTimestamp")
+
         val config = SettingsManager.getSlideshowConfig(this).copy(
-            // Audio mode
-            videoAudioMode = when (binding.radioAudio.checkedRadioButtonId) {
-                R.id.radio_mute -> VideoAudioMode.MUTE
-                R.id.radio_system_volume -> VideoAudioMode.SYSTEM_VOLUME
-                R.id.radio_custom_volume -> VideoAudioMode.CUSTOM_VOLUME
-                else -> VideoAudioMode.SYSTEM_VOLUME
-            },
-            videoCustomVolume = binding.sliderVolume.value.toInt(),
-
-            // Playback toggles
-            videoAutoPlay = binding.switchAutoplay.isChecked,
-            videoLoopShort = binding.switchLoopShort.isChecked,
-            videoShowControls = binding.switchControls.isChecked,
-
-            // Max duration
-            videoMaxDurationSeconds = when (binding.spinnerMaxDuration.selectedItemPosition) {
-                0 -> 10
-                1 -> 30
-                2 -> 60
-                3 -> 120
-                4 -> 300
-                else -> Int.MAX_VALUE
-            },
-
-            // Display mode
-            videoDisplayMode = when (binding.radioDisplayMode.checkedRadioButtonId) {
-                R.id.radio_play_full -> VideoDisplayMode.PLAY_FULL
-                R.id.radio_play_fixed -> VideoDisplayMode.PLAY_FIXED
-                R.id.radio_still_frame -> VideoDisplayMode.EXTRACT_STILL
-                else -> VideoDisplayMode.PLAY_FULL
-            },
-
-            // Still timestamp
-            videoStillTimestamp = when (binding.spinnerStillTimestamp.selectedItemPosition) {
-                0 -> VideoStillTimestamp.BEGINNING
-                1 -> VideoStillTimestamp.MIDDLE
-                2 -> VideoStillTimestamp.END
-                3 -> VideoStillTimestamp.CUSTOM
-                else -> VideoStillTimestamp.BEGINNING
-            }
+            videoAudioMode = videoAudioMode,
+            videoCustomVolume = videoCustomVolume,
+            videoAutoPlay = videoAutoPlay,
+            videoLoopShort = videoLoopShort,
+            videoShowControls = videoShowControls,
+            videoMaxDurationSeconds = videoMaxDurationSeconds,
+            videoDisplayMode = videoDisplayMode,
+            videoStillTimestamp = videoStillTimestamp,
         )
 
         SettingsManager.saveSlideshowConfig(this, config)
-        Snackbar.make(binding.root, "Settings saved!", Snackbar.LENGTH_SHORT).show()
+
+        // Verify: re-read immediately
+        val verifyConfig = SettingsManager.getSlideshowConfig(this)
+        Log.d(TAG, "=== VERIFIED readback from DataStore ===")
+        Log.d(TAG, "  audioMode=${verifyConfig.videoAudioMode} (saved: $videoAudioMode)")
+        Log.d(TAG, "  volume=${verifyConfig.videoCustomVolume} (saved: $videoCustomVolume)")
+        Log.d(TAG, "  maxDuration=${verifyConfig.videoMaxDurationSeconds} (saved: $videoMaxDurationSeconds)")
+        Log.d(TAG, "  autoPlay=${verifyConfig.videoAutoPlay} (saved: $videoAutoPlay)")
+        Log.d(TAG, "  loopShort=${verifyConfig.videoLoopShort} (saved: $videoLoopShort)")
+        Log.d(TAG, "  showControls=${verifyConfig.videoShowControls} (saved: $videoShowControls)")
+        Log.d(TAG, "  displayMode=${verifyConfig.videoDisplayMode} (saved: $videoDisplayMode)")
+        Log.d(TAG, "  stillTimestamp=${verifyConfig.videoStillTimestamp} (saved: $videoStillTimestamp)")
+
+        val mismatched = listOfNotNull(
+            if (verifyConfig.videoAudioMode != videoAudioMode) "audioMode" else null,
+            if (verifyConfig.videoCustomVolume != videoCustomVolume) "volume" else null,
+            if (verifyConfig.videoMaxDurationSeconds != videoMaxDurationSeconds) "maxDuration" else null,
+            if (verifyConfig.videoAutoPlay != videoAutoPlay) "autoPlay" else null,
+            if (verifyConfig.videoLoopShort != videoLoopShort) "loopShort" else null,
+            if (verifyConfig.videoShowControls != videoShowControls) "showControls" else null,
+            if (verifyConfig.videoDisplayMode != videoDisplayMode) "displayMode" else null,
+            if (verifyConfig.videoStillTimestamp != videoStillTimestamp) "stillTimestamp" else null,
+        )
+        if (mismatched.isNotEmpty()) {
+            Log.e(TAG, "MISMATCH on: ${mismatched.joinToString(", ")}")
+            Snackbar.make(binding.root, "Warning: some settings did not save!", Snackbar.LENGTH_LONG).show()
+        } else {
+            Log.d(TAG, "All settings verified OK")
+            Snackbar.make(binding.root, "Settings saved!", Snackbar.LENGTH_SHORT).show()
+        }
+
         finish()
     }
 

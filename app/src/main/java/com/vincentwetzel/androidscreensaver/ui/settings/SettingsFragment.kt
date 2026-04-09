@@ -17,6 +17,7 @@ import com.vincentwetzel.androidscreensaver.ui.settings.VideoPlaybackSettingsAct
 import com.vincentwetzel.androidscreensaver.ui.settings.PhotoInfoSettingsActivity
 import com.vincentwetzel.androidscreensaver.ui.settings.ScheduleSettingsActivity
 import com.vincentwetzel.androidscreensaver.ui.settings.DebugSettingsActivity
+import com.vincentwetzel.androidscreensaver.ui.settings.DecorationSettingsActivity
 import com.vincentwetzel.androidscreensaver.utils.VersionUtils
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -32,11 +33,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
     // Activity result launcher for folder browser
     private val folderLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val selectedFolders = result.data?.getStringArrayListExtra(FolderBrowserActivity.RESULT_SELECTED_FOLDERS)
-            Toast.makeText(requireContext(), "${selectedFolders?.size ?: 0} folders selected", Toast.LENGTH_SHORT).show()
-        }
+    ) {
+        // Selections are auto-saved in the folder browser
+        Toast.makeText(requireContext(), "Folders updated", Toast.LENGTH_SHORT).show()
     }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
@@ -101,8 +100,11 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         // Clear cache
         findPreference<Preference>("clear_cache")?.setOnPreferenceClickListener {
-            // TODO: Clear cache with confirmation
-            Toast.makeText(requireContext(), "Cache cleared!", Toast.LENGTH_SHORT).show()
+            // Clear Coil's memory and disk cache
+            val imageLoader = coil.Coil.imageLoader(requireContext())
+            imageLoader.memoryCache?.clear()
+            imageLoader.diskCache?.clear()
+            Toast.makeText(requireContext(), "Image cache cleared!", Toast.LENGTH_SHORT).show()
             true
         }
 
@@ -110,6 +112,85 @@ class SettingsFragment : PreferenceFragmentCompat() {
         findPreference<Preference>("power_management")?.setOnPreferenceClickListener {
             // TODO: Open power management settings
             Toast.makeText(requireContext(), "Power management coming soon!", Toast.LENGTH_SHORT).show()
+            true
+        }
+
+        // Match orientation - add persistence
+        findPreference<SwitchPreferenceCompat>("match_orientation")?.setOnPreferenceChangeListener { _, newValue ->
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveSlideshowConfig(
+                requireContext(), config.copy(matchDeviceOrientation = newValue as Boolean)
+            )
+            true
+        }
+
+        // Keep screen on - add persistence
+        findPreference<SwitchPreferenceCompat>("keep_screen_on")?.setOnPreferenceChangeListener { _, newValue ->
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveSlideshowConfig(
+                requireContext(), config.copy(keepScreenOn = newValue as Boolean)
+            )
+            true
+        }
+
+        // Wi-Fi only - add persistence
+        findPreference<SwitchPreferenceCompat>("wifi_only")?.setOnPreferenceChangeListener { _, newValue ->
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveSlideshowConfig(
+                requireContext(), config.copy(wifiOnly = newValue as Boolean)
+            )
+            true
+        }
+
+        // Start by timer - add persistence
+        findPreference<SwitchPreferenceCompat>("start_by_timer")?.setOnPreferenceChangeListener { _, newValue ->
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveSlideshowConfig(
+                requireContext(),
+                config.copy(timerConfig = config.timerConfig.copy(enabled = newValue as Boolean))
+            )
+            true
+        }
+
+        // Decoration date - add persistence
+        findPreference<SwitchPreferenceCompat>("decoration_date")?.setOnPreferenceChangeListener { _, newValue ->
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            val newConfig = if (newValue as Boolean) {
+                config.copy(dateDecoration = com.vincentwetzel.androidscreensaver.data.model.DecorationConfig())
+            } else {
+                config.copy(dateDecoration = null)
+            }
+            com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveSlideshowConfig(requireContext(), newConfig)
+            true
+        }
+
+        // Decoration clock - add persistence
+        findPreference<SwitchPreferenceCompat>("decoration_clock")?.setOnPreferenceChangeListener { _, newValue ->
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            val newConfig = if (newValue as Boolean) {
+                config.copy(clockDecoration = com.vincentwetzel.androidscreensaver.data.model.ClockDecorationConfig())
+            } else {
+                config.copy(clockDecoration = null)
+            }
+            com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveSlideshowConfig(requireContext(), newConfig)
+            true
+        }
+
+        // Decoration weather - add persistence
+        findPreference<SwitchPreferenceCompat>("decoration_weather")?.setOnPreferenceChangeListener { _, newValue ->
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            val newConfig = if (newValue as Boolean) {
+                config.copy(weatherDecoration = com.vincentwetzel.androidscreensaver.data.model.WeatherDecorationConfig())
+            } else {
+                config.copy(weatherDecoration = null)
+            }
+            com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveSlideshowConfig(requireContext(), newConfig)
+            true
+        }
+
+        // Customize decorations
+        findPreference<Preference>("decoration_customize")?.setOnPreferenceClickListener {
+            startActivity(Intent(requireContext(), DecorationSettingsActivity::class.java))
             true
         }
 
@@ -151,13 +232,20 @@ class SettingsFragment : PreferenceFragmentCompat() {
             config.copy(screenOrientation = orientation)
         }
         setupListPreferenceWithSave("sync_interval") { _, config, value ->
-            // Sync interval is stored as minutes in preferences, but as enum in DataStore
-            val minutes = value.toIntOrNull()
+            // Sync interval XML values are minute numbers or "auto"/"custom"/"manual"
+            // Map to SyncInterval enum: HOURLY, DAILY, WEEKLY, NEVER
             val interval = when {
-                value == "auto" || value == "custom" || value == "manual" -> config.syncInterval
-                minutes != null && minutes <= 30 -> com.vincentwetzel.androidscreensaver.data.model.SyncInterval.HOURLY
-                minutes != null && minutes <= 90 -> com.vincentwetzel.androidscreensaver.data.model.SyncInterval.DAILY
-                else -> com.vincentwetzel.androidscreensaver.data.model.SyncInterval.WEEKLY
+                value == "manual" -> com.vincentwetzel.androidscreensaver.data.model.SyncInterval.NEVER
+                value == "auto" -> config.syncInterval // Keep current
+                value == "custom" -> config.syncInterval // Keep current
+                else -> {
+                    val minutes = value.toIntOrNull() ?: 60
+                    when {
+                        minutes <= 30 -> com.vincentwetzel.androidscreensaver.data.model.SyncInterval.HOURLY
+                        minutes <= 90 -> com.vincentwetzel.androidscreensaver.data.model.SyncInterval.DAILY
+                        else -> com.vincentwetzel.androidscreensaver.data.model.SyncInterval.WEEKLY
+                    }
+                }
             }
             config.copy(syncInterval = interval)
         }
@@ -313,7 +401,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             }
         }
 
-        // Media order (enum: DATE_NEWEST_FIRST, NAME_A_Z -> pref: shuffle, name_asc)
+        // Media order
         findPreference<ListPreference>("media_order")?.let { pref ->
             val value = if (config.shuffle) {
                 "shuffle"
@@ -330,7 +418,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             pref.summary = pref.entry
         }
 
-        // Content filter (enum: IMAGES_ONLY -> pref: images, etc)
+        // Content filter
         findPreference<ListPreference>("content_filter")?.let { pref ->
             val value = when (config.mediaTypeFilter) {
                 com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "images"
@@ -341,21 +429,18 @@ class SettingsFragment : PreferenceFragmentCompat() {
             pref.summary = pref.entry
         }
 
-        // Match orientation
-        findPreference<SwitchPreferenceCompat>("match_orientation")?.let { pref ->
-            pref.isChecked = config.matchDeviceOrientation
-        }
+        // Match orientation - init state and persistence handled in setupPreferences
 
-        // Display effect (enum: CROP_TO_FIT -> pref: crop_to_fit)
+        // Display effect
         findPreference<ListPreference>("display_effect")?.let { pref ->
             val value = config.displayEffect.name.lowercase()
             pref.value = value
             pref.summary = pref.entry
         }
 
-        // Transition effect (enum: FADE -> pref: fade)
+        // Transition effect
         findPreference<ListPreference>("transition_effect")?.let { pref ->
-            val value = config.transitionEffect.name.lowercase().replace("cross_fade", "cross_fade")
+            val value = config.transitionEffect.name.lowercase()
             pref.value = value
             pref.summary = pref.entry
         }
@@ -367,29 +452,37 @@ class SettingsFragment : PreferenceFragmentCompat() {
             pref.summary = pref.entry
         }
 
-        // Screen rotation (enum: SYSTEM_DEFAULT -> pref: system)
+        // Screen rotation
         findPreference<ListPreference>("screen_rotation")?.let { pref ->
-            val value = config.screenOrientation.name.lowercase()
+            val value = when (config.screenOrientation) {
+                com.vincentwetzel.androidscreensaver.data.model.ScreenOrientation.PORTRAIT -> "portrait"
+                com.vincentwetzel.androidscreensaver.data.model.ScreenOrientation.LANDSCAPE -> "landscape"
+                else -> "system"
+            }
             pref.value = value
             pref.summary = pref.entry
         }
 
-        // Keep screen on
-        findPreference<SwitchPreferenceCompat>("keep_screen_on")?.let { pref ->
-            pref.isChecked = config.keepScreenOn
-        }
+        // Keep screen on - init state
+        findPreference<SwitchPreferenceCompat>("keep_screen_on")?.isChecked = config.keepScreenOn
 
         // Sync interval
         findPreference<ListPreference>("sync_interval")?.let { pref ->
-            val value = config.syncInterval.name.lowercase()
+            val value = when (config.syncInterval) {
+                com.vincentwetzel.androidscreensaver.data.model.SyncInterval.HOURLY -> "30"
+                com.vincentwetzel.androidscreensaver.data.model.SyncInterval.DAILY -> "60"
+                com.vincentwetzel.androidscreensaver.data.model.SyncInterval.WEEKLY -> "1440"
+                com.vincentwetzel.androidscreensaver.data.model.SyncInterval.NEVER -> "manual"
+            }
             pref.value = value
             pref.summary = pref.entry
         }
 
-        // Wi-Fi only
-        findPreference<SwitchPreferenceCompat>("wifi_only")?.let { pref ->
-            pref.isChecked = config.wifiOnly
-        }
+        // Wi-Fi only - init state
+        findPreference<SwitchPreferenceCompat>("wifi_only")?.isChecked = config.wifiOnly
+
+        // Start by timer - init state
+        findPreference<SwitchPreferenceCompat>("start_by_timer")?.isChecked = config.timerConfig.enabled
 
         // Network timeout
         findPreference<ListPreference>("network_timeout")?.let { pref ->
@@ -410,7 +503,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
         findPreference<Preference>("cache_limit")?.summary = cacheLimit
 
-        // Exit trigger (enum: TOUCH -> pref: touch, REMOTE_BUTTON -> pref: remote)
+        // Exit trigger
         findPreference<ListPreference>("exit_trigger")?.let { pref ->
             val value = when (config.exitOnTrigger) {
                 com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger.TOUCH -> "touch"
@@ -423,10 +516,13 @@ class SettingsFragment : PreferenceFragmentCompat() {
             pref.summary = pref.entry
         }
 
-        // Sync interval (stored as minutes, not enum)
-        findPreference<ListPreference>("sync_interval")?.let { pref ->
-            pref.summary = pref.entry ?: "Auto"
-        }
+        // Photo info enabled - init state
+        findPreference<SwitchPreferenceCompat>("photo_info_enabled")?.isChecked = config.photoInfoConfig.enabled
+
+        // Decoration switches - init from config
+        findPreference<SwitchPreferenceCompat>("decoration_date")?.isChecked = config.dateDecoration != null
+        findPreference<SwitchPreferenceCompat>("decoration_clock")?.isChecked = config.clockDecoration != null
+        findPreference<SwitchPreferenceCompat>("decoration_weather")?.isChecked = config.weatherDecoration != null
     }
 
     private fun showAboutDialog() {
@@ -501,7 +597,10 @@ class SettingsFragment : PreferenceFragmentCompat() {
                     val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
                     com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveSlideshowConfig(
                         requireContext(),
-                        config.copy(cacheConfig = config.cacheConfig.copy(cacheSizeLimitMB = input))
+                        config.copy(cacheConfig = config.cacheConfig.copy(
+                            cacheSizeLimitMB = input,
+                            usePresetLimit = false
+                        ))
                     )
                     findPreference<Preference>("cache_limit")?.summary = "$input MB"
                     Toast.makeText(requireContext(), "Cache size set to $input MB", Toast.LENGTH_SHORT).show()

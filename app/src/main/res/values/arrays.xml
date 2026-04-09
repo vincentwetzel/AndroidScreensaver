@@ -23,9 +23,9 @@
         <item>Images AND Videos</item>
     </string-array>
     <string-array name="content_filter_values">
-        <item>both</item>
         <item>images</item>
         <item>videos</item>
+        <item>both</item>
     </string-array>
 
     <!-- Display Time -->

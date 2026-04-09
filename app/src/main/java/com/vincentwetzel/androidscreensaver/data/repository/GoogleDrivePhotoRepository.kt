@@ -5,7 +5,10 @@ import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
 import com.vincentwetzel.androidscreensaver.data.model.SourceType
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -22,6 +25,9 @@ class GoogleDrivePhotoRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val driveRepository: GoogleDriveRepository
 ) : PhotoRepository {
+
+    // Background scope for prefetch operations that outlive individual callers
+    private val prefetchScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {
         // Cache TTL: folders are considered stale after this many milliseconds
@@ -105,6 +111,48 @@ class GoogleDrivePhotoRepository @Inject constructor(
         return driveRepository.isAuthenticated.value
     }
 
+    /**
+     * Pre-fetch root folders from Google Drive in the background.
+     * Results are cached so subsequent listFolders(null) calls return immediately.
+     * Safe to call multiple times — respects the folder cache TTL.
+     */
+    fun prefetchRootFolders() {
+        prefetchScope.launch {
+            try {
+                val driveService = driveRepository.getDriveService()
+                    ?: return@launch // Not authenticated yet
+
+                val folders = mutableListOf<PhotoFolder>()
+
+                val query = "mimeType='application/vnd.google-apps.folder' and trashed=false and 'root' in parents"
+
+                val files = driveService.files().list()
+                    .setQ(query)
+                    .setPageSize(1000)
+                    .setFields("nextPageToken, files(id, name, parents)")
+                    .setOrderBy("name")
+                    .execute()
+
+                files.files?.forEach { file ->
+                    folders.add(
+                        PhotoFolder(
+                            id = file.id ?: "",
+                            sourceType = SourceType.GOOGLE_DRIVE,
+                            name = file.name ?: "Unknown",
+                            parentFolderId = file.parents?.firstOrNull(),
+                            photoCount = 0
+                        )
+                    )
+                }
+
+                folderCache[null] = CacheEntry(folders)
+                android.util.Log.d("GoogleDrivePhotoRepo", "Prefetched ${folders.size} root folders")
+            } catch (e: Exception) {
+                android.util.Log.w("GoogleDrivePhotoRepo", "Prefetch failed: ${e.message}")
+            }
+        }
+    }
+
     override suspend fun listFolders(parentFolderId: String?, forceRefresh: Boolean): List<PhotoFolder> {
         // Check cache first (only if not forcing refresh and cache is fresh)
         val cached = folderCache[parentFolderId]
@@ -159,11 +207,19 @@ class GoogleDrivePhotoRepository @Inject constructor(
         }
     }
 
-    override suspend fun listPhotos(folderId: String): List<Photo> = withContext(Dispatchers.IO) {
+    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>): List<Photo> = withContext(Dispatchers.IO) {
+        val photos = mutableListOf<Photo>()
+        collectPhotosFromFolder(folderId, excludedFolderIds, photos)
+        photos
+    }
+
+    /**
+     * Recursively collects photos from a folder and all its subfolders,
+     * skipping any folders in the excludedFolderIds set.
+     */
+    private fun collectPhotosFromFolder(folderId: String, excludedFolderIds: Set<String>, photos: MutableList<Photo>) {
         val driveService = driveRepository.getDriveService()
             ?: throw IllegalStateException("Not authenticated with Google Drive")
-
-        val photos = mutableListOf<Photo>()
 
         try {
             // Build query for images and videos
@@ -220,12 +276,34 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 nextPageToken = files.nextPageToken
             } while (nextPageToken != null)
 
+            // Now recurse into subfolders
+            val subfolderQuery = "mimeType='application/vnd.google-apps.folder' and trashed=false and '$folderId' in parents"
+            var subfolderPageToken: String? = null
+
+            do {
+                val subfolderFiles = driveService.files().list()
+                    .setQ(subfolderQuery)
+                    .setPageSize(1000)
+                    .setFields("nextPageToken, files(id, name, parents)")
+                    .setPageToken(subfolderPageToken)
+                    .execute()
+
+                val subfolderIds = subfolderFiles.files?.mapNotNull { it.id } ?: emptyList()
+
+                // Recurse into each subfolder (skip excluded ones)
+                for (subfolderId in subfolderIds) {
+                    if (subfolderId !in excludedFolderIds) {
+                        collectPhotosFromFolder(subfolderId, excludedFolderIds, photos)
+                    }
+                }
+
+                subfolderPageToken = subfolderFiles.nextPageToken
+            } while (subfolderPageToken != null)
+
         } catch (e: Exception) {
             e.printStackTrace()
             throw Exception("Failed to list photos: ${e.message}")
         }
-
-        return@withContext photos
     }
 
     override suspend fun getPhotoMetadata(photoId: String): Photo? = withContext(Dispatchers.IO) {
@@ -326,7 +404,6 @@ class GoogleDrivePhotoRepository @Inject constructor(
     }
 
     override suspend fun getFolderPhotoCount(folderId: String): Int {
-        // Check cache first (only if fresh)
         val cached = photoCountCache[folderId]
         if (cached != null && !cached.isStale) {
             return cached.count
@@ -340,18 +417,28 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 val mimeTypeQuery = imageExtensions.joinToString(" or ") { ext ->
                     "name contains '.$ext'"
                 }
+                val videoQuery = videoExtensions.joinToString(" or ") { ext ->
+                    "name contains '.$ext'"
+                }
+                val query = "($mimeTypeQuery or $videoQuery) and trashed=false and '$folderId' in parents"
 
-                val query = "($mimeTypeQuery) and trashed=false and '$folderId' in parents"
+                // Paginate through all matching files to get the real count
+                var total = 0
+                var nextPageToken: String? = null
+                do {
+                    val files = driveService.files().list()
+                        .setQ(query)
+                        .setPageSize(1000)
+                        .setFields("nextPageToken, files(id)")
+                        .setPageToken(nextPageToken)
+                        .execute()
 
-                val files = driveService.files().list()
-                    .setQ(query)
-                    .setPageSize(1)
-                    .setFields("files(id)")
-                    .execute()
+                    total += files.files?.size ?: 0
+                    nextPageToken = files.nextPageToken
+                } while (nextPageToken != null)
 
-                val count = files.files?.size ?: 0
-                photoCountCache[folderId] = CountCacheEntry(count)
-                count
+                photoCountCache[folderId] = CountCacheEntry(total)
+                total
             } catch (e: Exception) {
                 e.printStackTrace()
                 0
@@ -363,5 +450,58 @@ class GoogleDrivePhotoRepository @Inject constructor(
         // For Google Drive, we don't need to sync locally
         // We fetch photos on-demand from the API
         true
+    }
+
+    override suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: String?): Int {
+        return withContext(Dispatchers.IO) {
+            val driveService = driveRepository.getDriveService()
+                ?: return@withContext 0
+
+            return@withContext try {
+                val query = when (mediaTypeFilter) {
+                    "images" -> {
+                        val mimeTypeQuery = imageExtensions.joinToString(" or ") { ext ->
+                            "name contains '.$ext'"
+                        }
+                        "($mimeTypeQuery) and trashed=false and '$folderId' in parents"
+                    }
+                    "videos" -> {
+                        val videoQuery = videoExtensions.joinToString(" or ") { ext ->
+                            "name contains '.$ext'"
+                        }
+                        "($videoQuery) and trashed=false and '$folderId' in parents"
+                    }
+                    else -> {
+                        val mimeTypeQuery = imageExtensions.joinToString(" or ") { ext ->
+                            "name contains '.$ext'"
+                        }
+                        val videoQuery = videoExtensions.joinToString(" or ") { ext ->
+                            "name contains '.$ext'"
+                        }
+                        "($mimeTypeQuery or $videoQuery) and trashed=false and '$folderId' in parents"
+                    }
+                }
+
+                // Paginate through all matching files to get the real count
+                var total = 0
+                var nextPageToken: String? = null
+                do {
+                    val files = driveService.files().list()
+                        .setQ(query)
+                        .setPageSize(1000)
+                        .setFields("nextPageToken, files(id)")
+                        .setPageToken(nextPageToken)
+                        .execute()
+
+                    total += files.files?.size ?: 0
+                    nextPageToken = files.nextPageToken
+                } while (nextPageToken != null)
+
+                total
+            } catch (e: Exception) {
+                e.printStackTrace()
+                0
+            }
+        }
     }
 }

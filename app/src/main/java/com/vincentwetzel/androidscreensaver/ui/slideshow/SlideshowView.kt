@@ -66,6 +66,8 @@ class SlideshowView @JvmOverloads constructor(
     private var currentIndex = 0
     private var isPlaying = false
     private var slideJob: Job? = null
+    private var isAdvancing = false // Prevent double-advance (video end + auto-advance racing)
+    private var videoDurationJob: Job? = null // Cancelable job for video duration timers
 
     // Callbacks
     var onSlideshowStarted: ((List<Photo>) -> Unit)? = null
@@ -76,7 +78,8 @@ class SlideshowView @JvmOverloads constructor(
     }
 
     private fun setupViews() {
-        // Set dark background
+        // Background color will be set in initialize() once config is available
+        // Default to black until config is loaded
         setBackgroundColor(Color.parseColor("#000000"))
 
         // ImageView A
@@ -110,14 +113,14 @@ class SlideshowView @JvmOverloads constructor(
                 LayoutParams.MATCH_PARENT,
                 LayoutParams.MATCH_PARENT
             )
-            useController = false // No controls for screensaver
+            // useController is set dynamically in showPhoto() based on config
             visibility = GONE
         }
 
-        // Initialize ExoPlayer
+        // Initialize ExoPlayer — volume and repeat mode set dynamically in showVideo()
         videoPlayer = ExoPlayer.Builder(context).build().apply {
-            playWhenReady = true
-            repeatMode = Player.REPEAT_MODE_OFF // Don't loop, advance to next
+            // playWhenReady is set dynamically based on videoAutoPlay config
+            repeatMode = Player.REPEAT_MODE_OFF // Set dynamically in showVideo()
             addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_ENDED) {
@@ -176,6 +179,9 @@ class SlideshowView @JvmOverloads constructor(
      */
     fun initialize(slideshowManager: SlideshowManager) {
         this.slideshowManager = slideshowManager
+        // Apply configured background color
+        setBackgroundColor(slideshowManager.config.backgroundColor)
+        loadingLayout.setBackgroundColor(slideshowManager.config.backgroundColor)
         loadPhotosAndStart()
     }
 
@@ -208,9 +214,14 @@ class SlideshowView @JvmOverloads constructor(
                 photos = finalPhotos
 
                 if (photos.isEmpty()) {
-                    // No photos - caller should handle this case
+                    // No media - caller should handle this case
+                    val label = when (slideshowManager.config.mediaTypeFilter) {
+                        com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY -> "videos"
+                        com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "photos"
+                        else -> "items"
+                    }
                     withContext(Dispatchers.Main) {
-                        onError?.invoke("No photos found in selected sources")
+                        onError?.invoke("No $label found in selected sources")
                     }
                     return@launch
                 }
@@ -266,6 +277,25 @@ class SlideshowView @JvmOverloads constructor(
             android.util.Log.d(TAG, "Playing video: uri=$uri, title=${photo.title}")
             isPlayingVideo = true
 
+            val config = slideshowManager.config
+
+            // Apply display mode
+            when (config.videoDisplayMode) {
+                com.vincentwetzel.androidscreensaver.data.model.VideoDisplayMode.PLAY_FULL -> {
+                    // Play full video normally
+                }
+                com.vincentwetzel.androidscreensaver.data.model.VideoDisplayMode.PLAY_FIXED -> {
+                    // Will limit playback to fixed seconds — handled after prepare
+                }
+                com.vincentwetzel.androidscreensaver.data.model.VideoDisplayMode.EXTRACT_STILL -> {
+                    // For still extraction, we seek to the timestamp and pause
+                    // This is a simplified implementation — a full one would extract a frame
+                }
+            }
+
+            // Apply show controls
+            playerView.useController = config.videoShowControls
+
             // Hide image views, show video player
             currentView.visibility = GONE
             targetView.visibility = GONE
@@ -275,7 +305,71 @@ class SlideshowView @JvmOverloads constructor(
             val mediaItem = MediaItem.fromUri(uri)
             videoPlayer?.setMediaItem(mediaItem)
             videoPlayer?.prepare()
-            videoPlayer?.play()
+
+            // Apply audio mode and volume
+            when (config.videoAudioMode) {
+                com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode.MUTE ->
+                    videoPlayer?.volume = 0f
+                com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode.SYSTEM_VOLUME ->
+                    videoPlayer?.volume = 1f // System volume controls the output
+                com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode.CUSTOM_VOLUME ->
+                    videoPlayer?.volume = config.videoCustomVolume / 100f
+            }
+
+            // Apply loop setting for short videos
+            videoPlayer?.repeatMode = if (config.videoLoopShort) {
+                Player.REPEAT_MODE_ONE
+            } else {
+                Player.REPEAT_MODE_OFF
+            }
+
+            // Apply auto play setting
+            videoPlayer?.playWhenReady = config.videoAutoPlay
+
+            // Handle EXTRACT_STILL: seek to timestamp and pause
+            if (config.videoDisplayMode == com.vincentwetzel.androidscreensaver.data.model.VideoDisplayMode.EXTRACT_STILL) {
+                val timestampMs = when (config.videoStillTimestamp) {
+                    com.vincentwetzel.androidscreensaver.data.model.VideoStillTimestamp.BEGINNING -> 0L
+                    com.vincentwetzel.androidscreensaver.data.model.VideoStillTimestamp.MIDDLE -> {
+                        // Estimate middle — will be refined once we know duration
+                        0L
+                    }
+                    com.vincentwetzel.androidscreensaver.data.model.VideoStillTimestamp.END -> {
+                        // Seek near end — use a default near-max value
+                        300_000L
+                    }
+                    com.vincentwetzel.androidscreensaver.data.model.VideoStillTimestamp.CUSTOM -> 0L
+                }
+                videoPlayer?.seekTo(timestampMs)
+                videoPlayer?.playWhenReady = false // Pause for still
+                isPlayingVideo = false // Treat as still for advance purposes
+            }
+
+            // Handle PLAY_FIXED: set a timer to stop after fixed seconds
+            videoDurationJob?.cancel()
+            if (config.videoDisplayMode == com.vincentwetzel.androidscreensaver.data.model.VideoDisplayMode.PLAY_FIXED) {
+                val fixedMs = config.videoFixedPlaySeconds * 1000L
+                videoDurationJob = slideshowScope.launch {
+                    delay(fixedMs)
+                    if (isPlayingVideo) {
+                        android.util.Log.d(TAG, "Fixed duration reached ($fixedMs ms), advancing")
+                        advanceToNext()
+                    }
+                }
+            }
+
+            // Handle videoMaxDurationSeconds: set a hard cap
+            if (config.videoMaxDurationSeconds > 0 && config.videoDisplayMode != com.vincentwetzel.androidscreensaver.data.model.VideoDisplayMode.PLAY_FIXED) {
+                val maxMs = config.videoMaxDurationSeconds * 1000L
+                videoDurationJob?.cancel()
+                videoDurationJob = slideshowScope.launch {
+                    delay(maxMs)
+                    if (isPlayingVideo) {
+                        android.util.Log.d(TAG, "Max duration reached ($maxMs ms), advancing")
+                        advanceToNext()
+                    }
+                }
+            }
         } else {
             // Handle image display
             android.util.Log.d(TAG, "Loading image: uri=$uri, title=${photo.title}")
@@ -283,6 +377,20 @@ class SlideshowView @JvmOverloads constructor(
 
             // Hide video player, show image views
             playerView.visibility = GONE
+
+            // Apply match_orientation: use FIT_CENTER if photo orientation doesn't match device
+            if (slideshowManager.config.matchDeviceOrientation) {
+                val photoIsPortrait = (photo.height ?: 0) > (photo.width ?: 0)
+                val deviceIsPortrait = context.resources.configuration.orientation ==
+                    android.content.res.Configuration.ORIENTATION_PORTRAIT
+                targetView.scaleType = if (photoIsPortrait == deviceIsPortrait) {
+                    ImageView.ScaleType.CENTER_CROP
+                } else {
+                    ImageView.ScaleType.FIT_CENTER
+                }
+            } else {
+                targetView.scaleType = ImageView.ScaleType.CENTER_CROP
+            }
 
             targetView.load(uri) {
                 crossfade(false)
@@ -340,15 +448,24 @@ class SlideshowView @JvmOverloads constructor(
      * Advance to the next item in the slideshow
      */
     private fun advanceToNext() {
-        if (!isPlaying || photos.isEmpty()) return
+        if (!isPlaying || photos.isEmpty() || isAdvancing) return
+        isAdvancing = true
         currentIndex = (currentIndex + 1) % photos.size
         showPhoto(photos[currentIndex], animate = true)
+        // isAdvancing is reset in showPhoto when the next item is displayed
+        // For images: reset after transition starts
+        // For videos: reset after video starts playing (ExoPlayer handles its own end callback)
+        if (!isPlayingVideo) {
+            isAdvancing = false
+        }
     }
 
     /**
-     * Stop the video player
+     * Stop the video player and cancel any pending duration timers
      */
     private fun stopVideoPlayer() {
+        videoDurationJob?.cancel()
+        videoDurationJob = null
         if (isPlayingVideo) {
             videoPlayer?.stop()
             videoPlayer?.clearMediaItems()
@@ -367,10 +484,14 @@ class SlideshowView @JvmOverloads constructor(
                 slideshowManager.loadConfig()
 
                 // For videos, wait for them to finish (handled by ExoPlayer listener)
+                // The isPlayingVideo flag is set in showPhoto() when a video starts
                 if (isPlayingVideo) {
-                    delay(1000) // Check every second
+                    delay(500) // Poll every 500ms
                     continue
                 }
+
+                // Reset advancing guard if we're showing a still image
+                isAdvancing = false
 
                 val durationMs = slideshowManager.config.slideDurationSeconds * 1000L
                 delay(durationMs)

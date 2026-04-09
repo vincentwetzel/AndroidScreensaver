@@ -8,6 +8,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -16,6 +17,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.vincentwetzel.androidscreensaver.R
+import com.vincentwetzel.androidscreensaver.data.model.FolderError.Companion.userMessage
 import com.vincentwetzel.androidscreensaver.databinding.ActivityFolderBrowserBinding
 import com.vincentwetzel.androidscreensaver.viewmodel.GalleryViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -60,11 +62,37 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         setupButtons()
         observeViewModel()
 
+        // Handle system back button — navigate to previous folder, or finish if none
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val didNavigate = viewModel.navigateBack()
+                if (!didNavigate) {
+                    // No history left — finish and return to main menu
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
+
         // Check and request permissions before loading folders
         if (hasGalleryPermissions()) {
-            viewModel.loadFolders()
+            viewModel.clearNavigationBackStack()
+            val mediaFilter = getContentFilter()
+            viewModel.loadFolders(parentFolderId = null, forceRefresh = false, addToBackStack = false, mediaFilter = mediaFilter)
         } else {
             requestGalleryPermissions()
+        }
+    }
+
+    /**
+     * Get the current content filter setting and map it to a string for the repository.
+     */
+    private fun getContentFilter(): String? {
+        val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(this)
+        return when (config.mediaTypeFilter) {
+            com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "images"
+            com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY -> "videos"
+            else -> null // BOTH
         }
     }
 
@@ -90,22 +118,59 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         binding.toolbar.setNavigationOnClickListener {
-            if (viewModel.currentFolderId.value != null) {
-                viewModel.navigateBack()
-            } else {
+            val didNavigate = viewModel.navigateBack()
+            if (!didNavigate) {
+                // No history left — return to main menu
                 finish()
             }
         }
     }
 
     private fun setupRecyclerView() {
+        val mediaFilter = getContentFilter()
         adapter = FolderAdapter(
             onSelectionChanged = { selectedIds ->
+                // Auto-save selections immediately
+                com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSelectedFolders(
+                    this,
+                    com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY,
+                    selectedIds
+                )
                 updateSummary(selectedIds.size, viewModel.getPhotoCount())
             },
             onFolderClick = { folderId ->
                 viewModel.navigateToFolder(folderId)
-            }
+            },
+            onDeselectionChanged = { deselectedIds ->
+                // Auto-save deselections immediately
+                com.vincentwetzel.androidscreensaver.utils.SettingsManager.setDeselectedFolders(
+                    this,
+                    com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY,
+                    deselectedIds
+                )
+            },
+            onFolderChecked = { folderId, isChecked ->
+                // Cascade: fetch subfolder IDs and apply cascade
+                lifecycleScope.launch {
+                    val childIds = viewModel.getSubfolderIds(folderId).toSet()
+                    if (childIds.isNotEmpty()) {
+                        adapter.cascadeSelection(folderId, isChecked, childIds)
+                        // Re-persist selections and deselections after cascade
+                        com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSelectedFolders(
+                            this@GalleryFolderBrowserActivity,
+                            com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY,
+                            adapter.getSelectedFolders()
+                        )
+                        com.vincentwetzel.androidscreensaver.utils.SettingsManager.setDeselectedFolders(
+                            this@GalleryFolderBrowserActivity,
+                            com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY,
+                            adapter.getDeselectedFolders()
+                        )
+                        updateSummary(adapter.getSelectedFolders().size, viewModel.getPhotoCount())
+                    }
+                }
+            },
+            mediaFilter = mediaFilter
         )
 
         binding.recyclerFolders.layoutManager = LinearLayoutManager(this)
@@ -122,6 +187,13 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         )
         val savedFolderIds = savedFolders.map { it.id }.toSet()
         adapter.setSelectedFolders(savedFolderIds)
+
+        // Restore deselected folders
+        val deselectedIds = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getDeselectedFolders(
+            this,
+            com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
+        )
+        adapter.setDeselectedFolders(deselectedIds)
     }
 
     private fun setupButtons() {
@@ -131,25 +203,6 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
 
         binding.btnDeselectAll.setOnClickListener {
             adapter.deselectAll()
-        }
-
-        binding.btnCancel.setOnClickListener {
-            setResult(RESULT_CANCELED)
-            finish()
-        }
-
-        binding.btnSave.setOnClickListener {
-            val selectedFolders = adapter.getSelectedFolders()
-            val intent = intent.apply {
-                putStringArrayListExtra(RESULT_SELECTED_FOLDERS, ArrayList(selectedFolders))
-            }
-            setResult(RESULT_OK, intent)
-            finish()
-        }
-
-        binding.switchIncludeSubfolders.setOnCheckedChangeListener { _, isChecked ->
-            viewModel.setIncludeSubfolders(isChecked)
-            viewModel.loadFolders(forceRefresh = true)
         }
     }
 
@@ -165,6 +218,11 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                     adapter.submitList(folders)
                     // Restore selected folders after list is submitted
                     restoreSelectedFolders()
+                    // Set parent folder context for auto-checking subfolders
+                    adapter.setCurrentParentFolderId(viewModel.currentFolderId.value)
+                    // Update title to show current folder name
+                    val currentFolder = folders.find { it.id == viewModel.currentFolderId.value }
+                    supportActionBar?.title = currentFolder?.name ?: "Browse Folders"
                 }
                 binding.progressBar.visibility = View.GONE
             }
@@ -177,6 +235,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                 } else {
                     "Browse Folders"
                 }
+                adapter.setCurrentParentFolderId(folderId)
             }
         }
 
@@ -192,7 +251,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                     binding.progressBar.visibility = View.GONE
                     com.google.android.material.snackbar.Snackbar.make(
                         binding.root,
-                        it,
+                        it.userMessage(),
                         com.google.android.material.snackbar.Snackbar.LENGTH_LONG
                     ).show()
                     viewModel.clearError()
@@ -201,10 +260,13 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateSummary(folderCount: Int, photoCount: Int) {
-        binding.summaryText.text = getString(R.string.selected_folders_summary)
-            .replace("0 folders", "$folderCount folders")
-            .replace("0 photos", "$photoCount photos")
+    private fun updateSummary(folderCount: Int, itemCount: Int) {
+        val label = when (getContentFilter()) {
+            "images" -> "photos"
+            "videos" -> "videos"
+            else -> "items"
+        }
+        binding.summaryText.text = "$folderCount folders selected, $itemCount $label"
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {

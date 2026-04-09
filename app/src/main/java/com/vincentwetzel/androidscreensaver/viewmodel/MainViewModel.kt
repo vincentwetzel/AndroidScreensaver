@@ -5,10 +5,16 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDriveRepository
-import com.vincentwetzel.androidscreensaver.ui.main.SourceType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/**
+ * Source type for main screen cards
+ */
+enum class SourceCardType {
+    GALLERY, GOOGLE_DRIVE
+}
 
 /**
  * ViewModel for the main screen
@@ -19,8 +25,8 @@ class MainViewModel @Inject constructor(
     private val driveRepository: GoogleDriveRepository
 ) : ViewModel() {
 
-    private val _enabledSources = MutableLiveData<Set<SourceType>>()
-    val enabledSources: LiveData<Set<SourceType>> = _enabledSources
+    private val _enabledSources = MutableLiveData<Set<SourceCardType>>()
+    val enabledSources: LiveData<Set<SourceCardType>> = _enabledSources
 
     private val _isGoogleDriveAuthenticated = MutableLiveData<Boolean>()
     val isGoogleDriveAuthenticated: LiveData<Boolean> = _isGoogleDriveAuthenticated
@@ -59,13 +65,13 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    fun enableSource(source: SourceType) {
+    fun enableSource(source: SourceCardType) {
         val current = _enabledSources.value?.toMutableSet() ?: mutableSetOf()
         current.add(source)
         _enabledSources.value = current
     }
 
-    fun disableSource(source: SourceType) {
+    fun disableSource(source: SourceCardType) {
         val current = _enabledSources.value?.toMutableSet() ?: mutableSetOf()
         current.remove(source)
         _enabledSources.value = current
@@ -74,7 +80,7 @@ class MainViewModel @Inject constructor(
     fun onGoogleDriveAuthenticated(isAuthenticated: Boolean, accountName: String? = null) {
         _isGoogleDriveAuthenticated.value = isAuthenticated
         if (isAuthenticated) {
-            enableSource(SourceType.GOOGLE_DRIVE)
+            enableSource(SourceCardType.GOOGLE_DRIVE)
             _googleDriveAccountName.value = accountName
         } else {
             _googleDriveAccountName.value = null

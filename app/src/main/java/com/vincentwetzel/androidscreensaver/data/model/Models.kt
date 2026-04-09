@@ -330,7 +330,6 @@ data class SourceConfig(
     val sourceType: SourceType,
     val enabled: Boolean = false,
     val selectedFolders: List<SelectedFolder> = emptyList(),
-    val includeSubfolders: Boolean = true,
     val authState: SourceAuthState? = null,
     val lastSyncTime: Long? = null,
     val photoCount: Int = 0
@@ -345,7 +344,6 @@ data class SelectedFolder(
     val parentFolderId: String? = null,
     val path: String,
     val isSelected: Boolean = true,
-    val includeSubfolders: Boolean = true,
     val photoCount: Int = 0
 )
 

@@ -67,8 +67,8 @@
         <ListPreference
             app:key="content_filter"
             app:title="Content Filter"
-            app:summary="Images AND Videos"
-            app:defaultValue="both"
+            app:summary="Images Only"
+            app:defaultValue="images"
             app:entries="@array/content_filter_entries"
             app:entryValues="@array/content_filter_values"
             app:iconSpaceReserved="false" />

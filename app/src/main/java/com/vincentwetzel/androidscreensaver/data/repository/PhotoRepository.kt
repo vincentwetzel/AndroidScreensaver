@@ -21,9 +21,9 @@ interface PhotoRepository {
     suspend fun listFolders(parentFolderId: String?, forceRefresh: Boolean): List<PhotoFolder>
     
     /**
-     * List all photos in a folder
+     * List all photos in a folder, optionally excluding subfolders by ID
      */
-    suspend fun listPhotos(folderId: String): List<Photo>
+    suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String> = emptySet()): List<Photo>
     
     /**
      * Get photo metadata
@@ -49,6 +49,12 @@ interface PhotoRepository {
      * Get total photo count for a folder
      */
     suspend fun getFolderPhotoCount(folderId: String): Int
+
+    /**
+     * Get media count for a folder filtered by media type.
+     * @param mediaTypeFilter one of: "images", "videos", or null for both
+     */
+    suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: String?): Int
     
     /**
      * Sync photos from source

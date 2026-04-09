@@ -1,5 +1,6 @@
 package com.vincentwetzel.androidscreensaver.ui.main
 
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
@@ -12,6 +13,7 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -22,9 +24,14 @@ import com.vincentwetzel.androidscreensaver.databinding.ActivityMainTvBinding
 import com.vincentwetzel.androidscreensaver.ui.settings.SettingsActivity
 import com.vincentwetzel.androidscreensaver.ui.sources.FolderBrowserActivity
 import com.vincentwetzel.androidscreensaver.ui.sources.GalleryFolderBrowserActivity
+import kotlinx.coroutines.launch
 import com.vincentwetzel.androidscreensaver.ui.sources.GoogleDriveAuthActivity
 import com.vincentwetzel.androidscreensaver.viewmodel.MainViewModel
+import com.vincentwetzel.androidscreensaver.viewmodel.SourceCardType
+import com.vincentwetzel.androidscreensaver.data.repository.GalleryPhotoRepository
+import com.vincentwetzel.androidscreensaver.data.repository.GoogleDrivePhotoRepository
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * Main Activity - Entry point of the app
@@ -32,6 +39,9 @@ import dagger.hilt.android.AndroidEntryPoint
  */
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
+
+    @Inject lateinit var galleryPhotoRepository: GalleryPhotoRepository
+    @Inject lateinit var googleDrivePhotoRepository: GoogleDrivePhotoRepository
 
     private var binding: ActivityMainBinding? = null
     private var bindingTv: ActivityMainTvBinding? = null
@@ -52,6 +62,8 @@ class MainActivity : AppCompatActivity() {
             val accountName = result.data?.getStringExtra(GoogleDriveAuthActivity.EXTRA_ACCOUNT_NAME)
             viewModel.onGoogleDriveAuthenticated(true, accountName)
             refreshSourceCards()
+            // Pre-fetch folders now that auth succeeded
+            googleDrivePhotoRepository.prefetchRootFolders()
             showSnackbar("Google Drive connected!")
             openFolderBrowser()
         }
@@ -59,34 +71,16 @@ class MainActivity : AppCompatActivity() {
 
     private val folderLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val selectedFolders = result.data?.getStringArrayListExtra(FolderBrowserActivity.RESULT_SELECTED_FOLDERS)
-            selectedFolders?.let { folders ->
-                com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSelectedFolders(
-                    this,
-                    com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE,
-                    folders.toSet()
-                )
-            }
-            showSnackbar("${selectedFolders?.size ?: 0} folders selected")
-        }
+    ) {
+        // Selections are auto-saved in the folder browser
+        showSnackbar("Folders updated")
     }
 
     private val galleryFolderLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val selectedFolders = result.data?.getStringArrayListExtra(GalleryFolderBrowserActivity.RESULT_SELECTED_FOLDERS)
-            selectedFolders?.let { folders ->
-                com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSelectedFolders(
-                    this,
-                    com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY,
-                    folders.toSet()
-                )
-            }
-            showSnackbar("${selectedFolders?.size ?: 0} folders selected")
-        }
+    ) {
+        // Selections are auto-saved in the folder browser
+        showSnackbar("Folders updated")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -143,7 +137,7 @@ class MainActivity : AppCompatActivity() {
             // Gallery card
             val (galleryCard, galleryInfo) = createSourceCard(
                 "Gallery", getString(R.string.device_photos), R.drawable.ic_source_gallery,
-                padding, iconSize, switchScale, SourceType.GALLERY
+                padding, iconSize, switchScale, SourceCardType.GALLERY
             )
             c.addView(galleryCard)
             galleryCardInfo = galleryInfo
@@ -151,7 +145,7 @@ class MainActivity : AppCompatActivity() {
             // Google Drive card
             val (driveCard, driveInfo) = createSourceCard(
                 "Google Drive", getString(R.string.not_authenticated), R.drawable.ic_source_google_drive,
-                padding, iconSize, switchScale, SourceType.GOOGLE_DRIVE
+                padding, iconSize, switchScale, SourceCardType.GOOGLE_DRIVE
             )
             c.addView(driveCard)
             driveCardInfo = driveInfo
@@ -165,7 +159,7 @@ class MainActivity : AppCompatActivity() {
         padding: Int,
         iconSize: Int,
         switchScale: Float,
-        sourceType: SourceType
+        sourceType: SourceCardType
     ): Pair<MaterialCardView, CardInfo> {
         val card = MaterialCardView(this).apply {
             val margin = dpToPx(if (isTvLayout) 8 else 6)
@@ -207,6 +201,16 @@ class MainActivity : AppCompatActivity() {
             (layoutParams as LinearLayout.LayoutParams).marginEnd = dpToPx(16)
         }
 
+        val statusIndicator = View(this).apply {
+            val size = dpToPx(8)
+            layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                marginStart = dpToPx(8)
+                marginEnd = dpToPx(8)
+            }
+            setBackgroundResource(R.drawable.bg_status_indicator)
+            visibility = View.GONE // Hidden until status is known
+        }
+
         val textContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -233,8 +237,20 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        val photoCountText = TextView(this).apply {
+            text = ""
+            textSize = if (isTvLayout) 13f else 12f
+            if (isTvLayout) {
+                setTextColor(android.graphics.Color.parseColor("#80CBC4"))
+            } else {
+                setTextColor(android.graphics.Color.parseColor("#1976D2"))
+            }
+            visibility = View.GONE // Hidden until photo count is available
+        }
+
         textContainer.addView(title)
         textContainer.addView(statusText)
+        textContainer.addView(photoCountText)
 
         val switchView = MaterialSwitch(this).apply {
             if (switchScale > 1f) { scaleX = switchScale; scaleY = switchScale }
@@ -245,19 +261,20 @@ class MainActivity : AppCompatActivity() {
         }
 
         row.addView(icon)
+        row.addView(statusIndicator)
         row.addView(textContainer)
         row.addView(switchView)
         card.addView(row)
 
         card.setOnClickListener {
             when (sourceType) {
-                SourceType.GALLERY -> {
+                SourceCardType.GALLERY -> {
                     val isEnabled = com.vincentwetzel.androidscreensaver.utils.SettingsManager.isSourceEnabled(
                         this@MainActivity, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
                     )
                     if (isEnabled) openGalleryFolderBrowser()
                 }
-                SourceType.GOOGLE_DRIVE -> {
+                SourceCardType.GOOGLE_DRIVE -> {
                     if (viewModel.isGoogleDriveAuthenticated.value == true) openFolderBrowser()
                     else startGoogleDriveAuth()
                 }
@@ -265,31 +282,31 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val cardInfo = CardInfo(card, title, statusText, switchView)
+        val cardInfo = CardInfo(card, title, statusText, photoCountText, statusIndicator, switchView)
         return card to cardInfo
     }
 
-    private fun handleSourceToggle(sourceType: SourceType, isChecked: Boolean, switchView: MaterialSwitch) {
+    private fun handleSourceToggle(sourceType: SourceCardType, isChecked: Boolean, switchView: MaterialSwitch) {
         when (sourceType) {
-            SourceType.GALLERY -> {
+            SourceCardType.GALLERY -> {
                 if (isChecked) {
-                    viewModel.enableSource(SourceType.GALLERY)
+                    viewModel.enableSource(SourceCardType.GALLERY)
                     com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSourceEnabled(
                         this, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY, true
                     )
                     showSnackbar("Gallery enabled")
                 } else {
-                    viewModel.disableSource(SourceType.GALLERY)
+                    viewModel.disableSource(SourceCardType.GALLERY)
                     com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSourceEnabled(
                         this, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY, false
                     )
                     showSnackbar("Gallery disabled")
                 }
             }
-            SourceType.GOOGLE_DRIVE -> {
+            SourceCardType.GOOGLE_DRIVE -> {
                 if (isChecked) {
                     if (viewModel.isGoogleDriveAuthenticated.value == true) {
-                        viewModel.enableSource(SourceType.GOOGLE_DRIVE)
+                        viewModel.enableSource(SourceCardType.GOOGLE_DRIVE)
                         com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSourceEnabled(
                             this, com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE, true
                         )
@@ -299,7 +316,7 @@ class MainActivity : AppCompatActivity() {
                         switchView.isChecked = false
                     }
                 } else {
-                    viewModel.disableSource(SourceType.GOOGLE_DRIVE)
+                    viewModel.disableSource(SourceCardType.GOOGLE_DRIVE)
                     com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSourceEnabled(
                         this, com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE, false
                     )
@@ -318,6 +335,24 @@ class MainActivity : AppCompatActivity() {
             this, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
         )
         galleryCardInfo?.switchView?.isChecked = galleryEnabled
+        if (galleryEnabled) {
+            galleryCardInfo?.statusIndicator?.visibility = View.VISIBLE
+            setStatusIndicatorColor(galleryCardInfo?.statusIndicator, SourceStatus.CONNECTED)
+            // Pre-fetch Gallery folders in background for snappy UI when user opens folder browser
+            galleryPhotoRepository.prefetchRootFolders()
+            this@MainActivity.lifecycleScope.launch {
+                val photoCount = getPhotoCountForSource(SourceCardType.GALLERY)
+                val label = getContentFilterLabel()
+                galleryCardInfo?.let { card ->
+                    card.photoCountText.visibility = if (photoCount > 0) View.VISIBLE else View.GONE
+                    card.photoCountText.text = if (photoCount > 0) "$photoCount $label available" else ""
+                }
+            }
+        } else {
+            galleryCardInfo?.statusIndicator?.visibility = View.GONE
+            galleryCardInfo?.photoCountText?.visibility = View.GONE
+            galleryCardInfo?.photoCountText?.text = ""
+        }
 
         // Google Drive
         val driveEnabled = com.vincentwetzel.androidscreensaver.utils.SettingsManager.isSourceEnabled(
@@ -326,14 +361,102 @@ class MainActivity : AppCompatActivity() {
         driveCardInfo?.let { card ->
             card.switchView.isChecked = driveEnabled
             val accountName = viewModel.googleDriveAccountName.value
-            card.statusText.text = if (viewModel.isGoogleDriveAuthenticated.value == true) {
-                accountName?.let { "Signed in as $it" } ?: getString(R.string.authenticated)
+            val isAuthenticated = viewModel.isGoogleDriveAuthenticated.value == true
+
+            if (isAuthenticated) {
+                card.statusText.text = accountName?.let { "Signed in as $it" } ?: getString(R.string.authenticated)
+                card.statusIndicator.visibility = View.VISIBLE
+                setStatusIndicatorColor(card.statusIndicator, SourceStatus.CONNECTED)
             } else {
-                getString(R.string.not_authenticated)
+                card.statusText.text = getString(R.string.not_authenticated)
+                card.statusIndicator.visibility = View.VISIBLE
+                setStatusIndicatorColor(card.statusIndicator, SourceStatus.ERROR)
+            }
+
+            if (driveEnabled && isAuthenticated) {
+                // Pre-fetch Drive folders in background for snappy UI when user opens folder browser
+                googleDrivePhotoRepository.prefetchRootFolders()
+                this@MainActivity.lifecycleScope.launch {
+                    val photoCount = getPhotoCountForSource(SourceCardType.GOOGLE_DRIVE)
+                    val label = getContentFilterLabel()
+                    card.photoCountText.visibility = if (photoCount > 0) View.VISIBLE else View.GONE
+                    card.photoCountText.text = if (photoCount > 0) "$photoCount $label available" else ""
+                }
+            } else {
+                card.photoCountText.visibility = View.GONE
+                card.photoCountText.text = ""
             }
         }
 
         isRestoringToggleState = false
+    }
+
+    private enum class SourceStatus {
+        CONNECTED, SYNCING, ERROR
+    }
+
+    private fun setStatusIndicatorColor(indicator: View?, status: SourceStatus) {
+        indicator?.let {
+            val colorRes = when (status) {
+                SourceStatus.CONNECTED -> R.color.status_connected
+                SourceStatus.SYNCING -> R.color.status_syncing
+                SourceStatus.ERROR -> R.color.status_error
+            }
+            val color = getColor(colorRes)
+            it.background?.setTint(color)
+        }
+    }
+
+    private suspend fun getPhotoCountForSource(source: SourceCardType): Int {
+        return try {
+            val selectedFolders = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSelectedFolders(
+                this,
+                when (source) {
+                    SourceCardType.GALLERY -> com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
+                    SourceCardType.GOOGLE_DRIVE -> com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE
+                }
+            )
+
+            if (selectedFolders.isEmpty()) return 0
+
+            // Get the current content filter to show accurate counts
+            val mediaFilter = getContentFilterFilter()
+
+            when (source) {
+                SourceCardType.GALLERY -> {
+                    selectedFolders.sumOf { folder ->
+                        try {
+                            galleryPhotoRepository.getFilteredFolderMediaCount(folder.id, mediaFilter)
+                        } catch (e: Exception) {
+                            0
+                        }
+                    }
+                }
+                SourceCardType.GOOGLE_DRIVE -> {
+                    selectedFolders.sumOf { folder ->
+                        try {
+                            googleDrivePhotoRepository.getFilteredFolderMediaCount(folder.id, mediaFilter)
+                        } catch (e: Exception) {
+                            0
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            0
+        }
+    }
+
+    /**
+     * Get the content filter as a string for the repository: "images", "videos", or null for both
+     */
+    private fun getContentFilterFilter(): String? {
+        val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(this)
+        return when (config.mediaTypeFilter) {
+            com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "images"
+            com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY -> "videos"
+            else -> null // BOTH
+        }
     }
 
     private fun showAddSourcesDialog() {
@@ -344,9 +467,9 @@ class MainActivity : AppCompatActivity() {
             this, com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE
         )
 
-        val sources = mutableListOf<Pair<String, SourceType>>()
-        if (!galleryEnabled) sources.add("Gallery" to SourceType.GALLERY)
-        if (!driveEnabled) sources.add("Google Drive" to SourceType.GOOGLE_DRIVE)
+        val sources = mutableListOf<Pair<String, SourceCardType>>()
+        if (!galleryEnabled) sources.add("Gallery" to SourceCardType.GALLERY)
+        if (!driveEnabled) sources.add("Google Drive" to SourceCardType.GOOGLE_DRIVE)
 
         if (sources.isEmpty()) {
             showSnackbar("All available sources are already added")
@@ -368,17 +491,17 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun handleAddSource(sourceType: SourceType) {
+    private fun handleAddSource(sourceType: SourceCardType) {
         when (sourceType) {
-            SourceType.GALLERY -> {
-                viewModel.enableSource(SourceType.GALLERY)
+            SourceCardType.GALLERY -> {
+                viewModel.enableSource(SourceCardType.GALLERY)
                 com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSourceEnabled(
                     this, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY, true
                 )
                 refreshSourceCards()
                 showSnackbar("Gallery enabled")
             }
-            SourceType.GOOGLE_DRIVE -> {
+            SourceCardType.GOOGLE_DRIVE -> {
                 startGoogleDriveAuth()
             }
             else -> {}
@@ -389,6 +512,18 @@ class MainActivity : AppCompatActivity() {
         val headerView = if (isTvLayout) bindingTv?.tvHeader else binding?.tvHeader
         headerView?.animate()?.alpha(1f)?.translationY(0f)?.setDuration(500)
             ?.setInterpolator(android.view.animation.DecelerateInterpolator())?.start()
+    }
+
+    /**
+     * Get the content filter label based on settings: "photos", "videos", or "items"
+     */
+    private fun getContentFilterLabel(): String {
+        val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(this)
+        return when (config.mediaTypeFilter) {
+            com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "photos"
+            com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY -> "videos"
+            else -> "items"
+        }
     }
 
     private fun observeViewModel() {
@@ -514,6 +649,8 @@ class MainActivity : AppCompatActivity() {
         val card: MaterialCardView,
         val titleView: TextView,
         val statusText: TextView,
+        val photoCountText: TextView,
+        val statusIndicator: View,
         val switchView: MaterialSwitch
     )
 }

@@ -13,12 +13,13 @@ Open the app and toggle ON the sources you want to use:
 
 After enabling a source, tap it to browse folders:
 
-- **Check boxes** next to folders you want to include
+- **Check boxes** next to folders you want to include (selections are saved automatically)
 - **Tap a folder name** to open it and see subfolders
 - Use the **back arrow** in the toolbar to go up one level
 - Toggle **"Include subfolders"** to also include photos in nested folders
 - **Pull down** to refresh and detect new/removed folders from the source
-- Tap **Save** when done
+- **Select All / Deselect All** buttons for quick selection
+- Selections are saved **immediately** — no Save/Cancel buttons needed
 
 ### 3. Activate the Screensaver
 
@@ -38,12 +39,39 @@ If the system sends you back to **"Colors"**, update to a build that includes th
 ## Screensaver Settings
 
 Within the app, you can customize:
+
+**Media & Content:**
+- Media order (shuffle, date, name sorting)
+- Content filter (Images Only, Videos Only, or Both)
+- Match device orientation (shows letterboxed photos when orientation differs)
+
+**Slideshow:**
 - Slide duration (how long each photo is shown)
-- Shuffle (random order)
-- Transition effects (fade, slide, etc.)
-- Display effects (crop-to-fit, scale-to-fit, zoom, pan)
+- Video playback settings
+
+**Display & Transitions:**
+- Display effects (crop-to-fit, scale-to-fit, zoom, pan, focus)
+- Transition effects (fade, cross fade, wipe, slide, swap, cube, doorway, radial, etc.)
+- Transition duration
+
+**Decorations:**
+- Date, clock, and weather overlay toggles
+
+**Display & Power:**
+- Screen rotation (portrait, landscape, or system default)
+- Keep screen on (prevent screen dimming)
+
+**Sync & Network:**
+- Wi-Fi only (only fetch cloud sources on Wi-Fi)
+- Network timeout duration
+
+**Appearance:**
 - Background color
-- Screen orientation
+- Cache limit (preset or custom MB value)
+- Clear cache
+
+**Advanced:**
+- Exit trigger (touch, remote button, shake, or voice command)
 
 These are accessed via **Menu → Settings**.
 
