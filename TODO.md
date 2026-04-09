@@ -107,6 +107,7 @@
 - ✅ **Deselected folder persistence**: Unchecking a subfolder that was cascade-selected properly removes it from `selectedFolderIds` and adds to `deselectedFolderIds`, both persisted to DataStore and respected by the slideshow.
 - ✅ **Gallery content filter counts**: `getFilteredFolderMediaCount()` now queries the correct MediaStore table (`Images.Media`, `Videos.Media`, or `Files`) instead of filtering by media_type column which was unreliable.
 - ✅ **Google Drive content filter counts**: `getFilteredFolderMediaCount()` and `getFolderPhotoCount()` now paginate through all results (was capped at 1 due to `setPageSize(1)`).
+- ✅ **All settings auto-save**: Removed manual Save buttons from Video Playback, Photo Info, Schedule, and Decoration settings screens. All toggles, sliders, spinners, and radio buttons now persist to DataStore immediately on change.
 
 ### In Progress
 - (none)

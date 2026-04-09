@@ -6,7 +6,6 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.tabs.TabLayout
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.ClockDecorationConfig
@@ -54,7 +53,6 @@ class DecorationSettingsActivity : AppCompatActivity() {
         setupDateTab()
         setupClockTab()
         setupWeatherTab()
-        setupSaveButton()
     }
 
     private fun loadCurrentSettings() {
@@ -93,7 +91,7 @@ class DecorationSettingsActivity : AppCompatActivity() {
     }
 
     private fun setupDateTab() {
-        // Position
+        // Position — auto-save
         setupSpinner(binding.contentDate.spinnerPosition, arrayOf("Top Left", "Top Right", "Bottom Left", "Bottom Right", "Center"))
         binding.contentDate.spinnerPosition.setSelection(when (dateConfig.position) {
             ClockPosition.TOP_LEFT -> 0
@@ -102,8 +100,14 @@ class DecorationSettingsActivity : AppCompatActivity() {
             ClockPosition.BOTTOM_RIGHT -> 3
             ClockPosition.CENTER -> 4
         })
+        binding.contentDate.spinnerPosition.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Date format
+        // Date format — auto-save
         val formats = arrayOf("Full Date", "Short Date", "Month Day", "Numeric Date", "Abbreviated", "Custom")
         setupSpinner(binding.contentDate.spinnerDateFormat, formats)
         binding.contentDate.spinnerDateFormat.setSelection(when (dateConfig.dateFormat) {
@@ -114,28 +118,53 @@ class DecorationSettingsActivity : AppCompatActivity() {
             DateFormat.ABBREVIATE_MONTH -> 4
             else -> 5 // CUSTOM
         })
+        binding.contentDate.spinnerDateFormat.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Font size
+        // Font size — auto-save
         setupSpinner(binding.contentDate.spinnerFontSize, arrayOf("Small", "Medium", "Large"))
         binding.contentDate.spinnerFontSize.setSelection(when (dateConfig.fontSize) {
             ClockSize.SMALL -> 0
             ClockSize.MEDIUM -> 1
             ClockSize.LARGE -> 2
         })
+        binding.contentDate.spinnerFontSize.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Background
+        // Background — auto-save
         setupSpinner(binding.contentDate.spinnerBackground, arrayOf("None", "Semi-Transparent", "Solid"))
         binding.contentDate.spinnerBackground.setSelection(when (dateConfig.background) {
             DecorationBackground.NONE -> 0
             DecorationBackground.SEMI_TRANSPARENT -> 1
             DecorationBackground.SOLID -> 2
         })
+        binding.contentDate.spinnerBackground.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Animation
+        // Animation — auto-save
         setupSpinner(binding.contentDate.spinnerAnimation, arrayOf("Static", "Pulse Softly"))
         binding.contentDate.spinnerAnimation.setSelection(if (dateConfig.animation == DecorationAnimation.PULSE_SOFTLY) 1 else 0)
+        binding.contentDate.spinnerAnimation.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                binding.contentDate.layoutPulseSpeed.visibility = if (position == 1) View.VISIBLE else View.GONE
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Pulse speed (only visible if animation is pulse)
+        // Pulse speed — auto-save
         binding.contentDate.layoutPulseSpeed.visibility = if (dateConfig.animation == DecorationAnimation.PULSE_SOFTLY) View.VISIBLE else View.GONE
         setupSpinner(binding.contentDate.spinnerPulseSpeed, arrayOf("Slow", "Medium", "Fast"))
         binding.contentDate.spinnerPulseSpeed.setSelection(when (dateConfig.pulseSpeed) {
@@ -143,23 +172,27 @@ class DecorationSettingsActivity : AppCompatActivity() {
             PulseSpeed.MEDIUM -> 1
             PulseSpeed.FAST -> 2
         })
-
-        // Opacity sliders
-        binding.contentDate.sliderOpacity.value = dateConfig.opacity.toFloat()
-        binding.contentDate.sliderPulseMinOpacity.value = dateConfig.pulseMinOpacity.toFloat()
-        binding.contentDate.sliderPulseMaxOpacity.value = dateConfig.pulseMaxOpacity.toFloat()
-
-        // Animation change listener
-        binding.contentDate.spinnerAnimation.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+        binding.contentDate.spinnerPulseSpeed.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                binding.contentDate.layoutPulseSpeed.visibility = if (position == 1) View.VISIBLE else View.GONE
+                saveCurrentSettings()
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Opacity sliders — auto-save
+        binding.contentDate.sliderOpacity.addOnChangeListener { _, _, _ ->
+            saveCurrentSettings()
+        }
+        binding.contentDate.sliderPulseMinOpacity.addOnChangeListener { _, _, _ ->
+            saveCurrentSettings()
+        }
+        binding.contentDate.sliderPulseMaxOpacity.addOnChangeListener { _, _, _ ->
+            saveCurrentSettings()
         }
     }
 
     private fun setupClockTab() {
-        // Position
+        // Position — auto-save
         setupSpinner(binding.contentClock.spinnerPosition, arrayOf("Top Left", "Top Right", "Bottom Left", "Bottom Right", "Center"))
         binding.contentClock.spinnerPosition.setSelection(when (clockConfig.position) {
             ClockPosition.TOP_LEFT -> 0
@@ -168,35 +201,69 @@ class DecorationSettingsActivity : AppCompatActivity() {
             ClockPosition.BOTTOM_RIGHT -> 3
             ClockPosition.CENTER -> 4
         })
+        binding.contentClock.spinnerPosition.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Clock format
+        // Clock format — auto-save
         setupSpinner(binding.contentClock.spinnerFormat, arrayOf("12-Hour", "24-Hour"))
         binding.contentClock.spinnerFormat.setSelection(if (clockConfig.clockFormat == ClockFormat.HOUR_24) 1 else 0)
+        binding.contentClock.spinnerFormat.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Show seconds
+        // Show seconds — auto-save
         binding.contentClock.switchShowSeconds.isChecked = clockConfig.showSeconds
+        binding.contentClock.switchShowSeconds.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+        }
 
-        // Font size
+        // Font size — auto-save
         setupSpinner(binding.contentClock.spinnerFontSize, arrayOf("Small", "Medium", "Large"))
         binding.contentClock.spinnerFontSize.setSelection(when (clockConfig.fontSize) {
             ClockSize.SMALL -> 0
             ClockSize.MEDIUM -> 1
             ClockSize.LARGE -> 2
         })
+        binding.contentClock.spinnerFontSize.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Background
+        // Background — auto-save
         setupSpinner(binding.contentClock.spinnerBackground, arrayOf("None", "Semi-Transparent", "Solid"))
         binding.contentClock.spinnerBackground.setSelection(when (clockConfig.background) {
             DecorationBackground.NONE -> 0
             DecorationBackground.SEMI_TRANSPARENT -> 1
             DecorationBackground.SOLID -> 2
         })
+        binding.contentClock.spinnerBackground.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Animation
+        // Animation — auto-save
         setupSpinner(binding.contentClock.spinnerAnimation, arrayOf("Static", "Pulse Softly"))
         binding.contentClock.spinnerAnimation.setSelection(if (clockConfig.animation == DecorationAnimation.PULSE_SOFTLY) 1 else 0)
+        binding.contentClock.spinnerAnimation.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                binding.contentClock.layoutPulseSpeed.visibility = if (position == 1) View.VISIBLE else View.GONE
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Pulse speed
+        // Pulse speed — auto-save
         binding.contentClock.layoutPulseSpeed.visibility = if (clockConfig.animation == DecorationAnimation.PULSE_SOFTLY) View.VISIBLE else View.GONE
         setupSpinner(binding.contentClock.spinnerPulseSpeed, arrayOf("Slow", "Medium", "Fast"))
         binding.contentClock.spinnerPulseSpeed.setSelection(when (clockConfig.pulseSpeed) {
@@ -204,23 +271,27 @@ class DecorationSettingsActivity : AppCompatActivity() {
             PulseSpeed.MEDIUM -> 1
             PulseSpeed.FAST -> 2
         })
-
-        // Opacity sliders
-        binding.contentClock.sliderOpacity.value = clockConfig.opacity.toFloat()
-        binding.contentClock.sliderPulseMinOpacity.value = clockConfig.pulseMinOpacity.toFloat()
-        binding.contentClock.sliderPulseMaxOpacity.value = clockConfig.pulseMaxOpacity.toFloat()
-
-        // Animation change listener
-        binding.contentClock.spinnerAnimation.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+        binding.contentClock.spinnerPulseSpeed.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                binding.contentClock.layoutPulseSpeed.visibility = if (position == 1) View.VISIBLE else View.GONE
+                saveCurrentSettings()
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Opacity sliders — auto-save
+        binding.contentClock.sliderOpacity.addOnChangeListener { _, _, _ ->
+            saveCurrentSettings()
+        }
+        binding.contentClock.sliderPulseMinOpacity.addOnChangeListener { _, _, _ ->
+            saveCurrentSettings()
+        }
+        binding.contentClock.sliderPulseMaxOpacity.addOnChangeListener { _, _, _ ->
+            saveCurrentSettings()
         }
     }
 
     private fun setupWeatherTab() {
-        // Position
+        // Position — auto-save
         setupSpinner(binding.contentWeather.spinnerPosition, arrayOf("Top Left", "Top Right", "Bottom Left", "Bottom Right", "Center"))
         binding.contentWeather.spinnerPosition.setSelection(when (weatherConfig.position) {
             ClockPosition.TOP_LEFT -> 0
@@ -229,48 +300,85 @@ class DecorationSettingsActivity : AppCompatActivity() {
             ClockPosition.BOTTOM_RIGHT -> 3
             ClockPosition.CENTER -> 4
         })
-
-        // Use device location
-        binding.contentWeather.switchUseDeviceLocation.isChecked = weatherConfig.useDeviceLocation
-        binding.contentWeather.layoutManualLocation.visibility = if (weatherConfig.useDeviceLocation) View.GONE else View.VISIBLE
-
-        binding.contentWeather.switchUseDeviceLocation.setOnCheckedChangeListener { _, isChecked ->
-            binding.contentWeather.layoutManualLocation.visibility = if (isChecked) View.GONE else View.VISIBLE
+        binding.contentWeather.spinnerPosition.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
-        // Temperature unit
+        // Use device location — auto-save
+        binding.contentWeather.switchUseDeviceLocation.isChecked = weatherConfig.useDeviceLocation
+        binding.contentWeather.layoutManualLocation.visibility = if (weatherConfig.useDeviceLocation) View.GONE else View.VISIBLE
+        binding.contentWeather.switchUseDeviceLocation.setOnCheckedChangeListener { _, isChecked ->
+            binding.contentWeather.layoutManualLocation.visibility = if (isChecked) View.GONE else View.VISIBLE
+            saveCurrentSettings()
+        }
+
+        // Temperature unit — auto-save
         setupSpinner(binding.contentWeather.spinnerTempUnit, arrayOf("Fahrenheit", "Celsius"))
         binding.contentWeather.spinnerTempUnit.setSelection(if (weatherConfig.temperatureUnit == TemperatureUnit.CELSIUS) 1 else 0)
+        binding.contentWeather.spinnerTempUnit.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Icon style
+        // Icon style — auto-save
         setupSpinner(binding.contentWeather.spinnerIconStyle, arrayOf("Minimal", "Detailed", "Animated"))
         binding.contentWeather.spinnerIconStyle.setSelection(when (weatherConfig.iconStyle) {
             WeatherIconStyle.MINIMAL -> 0
             WeatherIconStyle.DETAILED -> 1
             WeatherIconStyle.ANIMATED -> 2
         })
+        binding.contentWeather.spinnerIconStyle.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Widget background
+        // Widget background — auto-save
         setupSpinner(binding.contentWeather.spinnerWidgetBackground, arrayOf("Transparent", "Frosted Glass", "Solid"))
         binding.contentWeather.spinnerWidgetBackground.setSelection(when (weatherConfig.widgetBackground) {
             WeatherWidgetBackground.TRANSPARENT -> 0
             WeatherWidgetBackground.FROSTED_GLASS -> 1
             WeatherWidgetBackground.SOLID -> 2
         })
+        binding.contentWeather.spinnerWidgetBackground.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Font size
+        // Font size — auto-save
         setupSpinner(binding.contentWeather.spinnerFontSize, arrayOf("Small", "Medium", "Large"))
         binding.contentWeather.spinnerFontSize.setSelection(when (weatherConfig.fontSize) {
             ClockSize.SMALL -> 0
             ClockSize.MEDIUM -> 1
             ClockSize.LARGE -> 2
         })
+        binding.contentWeather.spinnerFontSize.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Animation
+        // Animation — auto-save
         setupSpinner(binding.contentWeather.spinnerAnimation, arrayOf("Static", "Pulse Softly"))
         binding.contentWeather.spinnerAnimation.setSelection(if (weatherConfig.animation == DecorationAnimation.PULSE_SOFTLY) 1 else 0)
+        binding.contentWeather.spinnerAnimation.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                binding.contentWeather.layoutPulseSpeed.visibility = if (position == 1) View.VISIBLE else View.GONE
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
-        // Pulse speed
+        // Pulse speed — auto-save
         binding.contentWeather.layoutPulseSpeed.visibility = if (weatherConfig.animation == DecorationAnimation.PULSE_SOFTLY) View.VISIBLE else View.GONE
         setupSpinner(binding.contentWeather.spinnerPulseSpeed, arrayOf("Slow", "Medium", "Fast"))
         binding.contentWeather.spinnerPulseSpeed.setSelection(when (weatherConfig.pulseSpeed) {
@@ -278,18 +386,22 @@ class DecorationSettingsActivity : AppCompatActivity() {
             PulseSpeed.MEDIUM -> 1
             PulseSpeed.FAST -> 2
         })
-
-        // Opacity sliders
-        binding.contentWeather.sliderOpacity.value = weatherConfig.opacity.toFloat()
-        binding.contentWeather.sliderPulseMinOpacity.value = weatherConfig.pulseMinOpacity.toFloat()
-        binding.contentWeather.sliderPulseMaxOpacity.value = weatherConfig.pulseMaxOpacity.toFloat()
-
-        // Animation change listener
-        binding.contentWeather.spinnerAnimation.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+        binding.contentWeather.spinnerPulseSpeed.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                binding.contentWeather.layoutPulseSpeed.visibility = if (position == 1) View.VISIBLE else View.GONE
+                saveCurrentSettings()
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Opacity sliders — auto-save
+        binding.contentWeather.sliderOpacity.addOnChangeListener { _, _, _ ->
+            saveCurrentSettings()
+        }
+        binding.contentWeather.sliderPulseMinOpacity.addOnChangeListener { _, _, _ ->
+            saveCurrentSettings()
+        }
+        binding.contentWeather.sliderPulseMaxOpacity.addOnChangeListener { _, _, _ ->
+            saveCurrentSettings()
         }
     }
 
@@ -299,13 +411,10 @@ class DecorationSettingsActivity : AppCompatActivity() {
         spinner.adapter = adapter
     }
 
-    private fun setupSaveButton() {
-        binding.btnSave.setOnClickListener {
-            saveSettings()
-        }
-    }
-
-    private fun saveSettings() {
+    /**
+     * Read current UI values and persist to DataStore
+     */
+    private fun saveCurrentSettings() {
         // Save date config
         val newDateConfig = if (dateConfig.enabled) {
             DecorationConfig(
@@ -456,9 +565,6 @@ class DecorationSettingsActivity : AppCompatActivity() {
                 weatherDecoration = newWeatherConfig
             )
         )
-
-        Snackbar.make(binding.root, "Decoration settings saved!", Snackbar.LENGTH_SHORT).show()
-        finish()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {

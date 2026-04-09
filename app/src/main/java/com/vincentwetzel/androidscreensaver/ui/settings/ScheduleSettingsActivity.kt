@@ -4,7 +4,6 @@ import android.app.TimePickerDialog
 import android.os.Bundle
 import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.tabs.TabLayout
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.DayOfWeek
@@ -88,6 +87,7 @@ class ScheduleSettingsActivity : AppCompatActivity() {
                     selectedHour = hour
                     selectedMinute = minute
                     updateTimeButton()
+                    saveCurrentSettings()
                 },
                 selectedHour,
                 selectedMinute,
@@ -95,7 +95,7 @@ class ScheduleSettingsActivity : AppCompatActivity() {
             ).show()
         }
 
-        // Quick presets
+        // Quick presets — auto-save
         binding.btnWeekdays.setOnClickListener {
             selectedDays.clear()
             selectedDays.addAll(listOf(
@@ -103,21 +103,24 @@ class ScheduleSettingsActivity : AppCompatActivity() {
                 DayOfWeek.THURSDAY, DayOfWeek.FRIDAY
             ))
             updateDayCheckboxes()
+            saveCurrentSettings()
         }
 
         binding.btnWeekends.setOnClickListener {
             selectedDays.clear()
             selectedDays.addAll(listOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY))
             updateDayCheckboxes()
+            saveCurrentSettings()
         }
 
         binding.btnEveryday.setOnClickListener {
             selectedDays.clear()
             selectedDays.addAll(DayOfWeek.values().toList())
             updateDayCheckboxes()
+            saveCurrentSettings()
         }
 
-        // Day checkboxes
+        // Day checkboxes — auto-save
         mapOf(
             binding.cbMon to DayOfWeek.MONDAY,
             binding.cbTue to DayOfWeek.TUESDAY,
@@ -133,34 +136,28 @@ class ScheduleSettingsActivity : AppCompatActivity() {
                 } else {
                     selectedDays.remove(day)
                 }
+                saveCurrentSettings()
             }
         }
 
-        // Save
-        binding.btnSave.setOnClickListener {
-            saveSettings()
+        // Toggle switches — auto-save
+        binding.switchEnabled.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+        }
+
+        binding.switchRepeat.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+        }
+
+        binding.switchCharging.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
         }
     }
 
-    private fun updateTimeButton() {
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.HOUR_OF_DAY, selectedHour)
-        cal.set(Calendar.MINUTE, selectedMinute)
-        val format = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
-        binding.btnTime.text = format.format(cal.time)
-    }
-
-    private fun updateDayCheckboxes() {
-        binding.cbMon.isChecked = DayOfWeek.MONDAY in selectedDays
-        binding.cbTue.isChecked = DayOfWeek.TUESDAY in selectedDays
-        binding.cbWed.isChecked = DayOfWeek.WEDNESDAY in selectedDays
-        binding.cbThu.isChecked = DayOfWeek.THURSDAY in selectedDays
-        binding.cbFri.isChecked = DayOfWeek.FRIDAY in selectedDays
-        binding.cbSat.isChecked = DayOfWeek.SATURDAY in selectedDays
-        binding.cbSun.isChecked = DayOfWeek.SUNDAY in selectedDays
-    }
-
-    private fun saveSettings() {
+    /**
+     * Read current UI values and persist to DataStore
+     */
+    private fun saveCurrentSettings() {
         val config = SettingsManager.getSlideshowConfig(this)
 
         val newSchedule = ScheduleConfig(
@@ -188,13 +185,24 @@ class ScheduleSettingsActivity : AppCompatActivity() {
         }
 
         SettingsManager.saveSlideshowConfig(this, newConfig)
+    }
 
-        Snackbar.make(
-            binding.root,
-            "${if (isAutostart) "Autostart" else "Autostop"} schedule saved!",
-            Snackbar.LENGTH_SHORT
-        ).show()
-        finish()
+    private fun updateTimeButton() {
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.HOUR_OF_DAY, selectedHour)
+        cal.set(Calendar.MINUTE, selectedMinute)
+        val format = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+        binding.btnTime.text = format.format(cal.time)
+    }
+
+    private fun updateDayCheckboxes() {
+        binding.cbMon.isChecked = DayOfWeek.MONDAY in selectedDays
+        binding.cbTue.isChecked = DayOfWeek.TUESDAY in selectedDays
+        binding.cbWed.isChecked = DayOfWeek.WEDNESDAY in selectedDays
+        binding.cbThu.isChecked = DayOfWeek.THURSDAY in selectedDays
+        binding.cbFri.isChecked = DayOfWeek.FRIDAY in selectedDays
+        binding.cbSat.isChecked = DayOfWeek.SATURDAY in selectedDays
+        binding.cbSun.isChecked = DayOfWeek.SUNDAY in selectedDays
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {

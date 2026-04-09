@@ -62,12 +62,6 @@
 
     </androidx.core.widget.NestedScrollView>
 
-    <!-- Save Button -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_save"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/save"
-        android:layout_margin="16dp" />
+    <!-- No save button needed - all settings auto-save -->
 
 </LinearLayout>

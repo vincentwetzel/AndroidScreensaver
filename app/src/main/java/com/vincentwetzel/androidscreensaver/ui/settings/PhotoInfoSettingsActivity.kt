@@ -6,7 +6,6 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.snackbar.Snackbar
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoBackground
 import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoDateFormat
@@ -183,21 +182,118 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
         // Master toggle
         binding.switchEnabled.setOnCheckedChangeListener { _, isChecked ->
             updateFieldVisibility(isChecked)
+            saveCurrentSettings()
         }
 
         // Filename options
         binding.switchFilename.setOnCheckedChangeListener { _, isChecked ->
             binding.switchFilenameExt.visibility = if (isChecked) View.VISIBLE else View.GONE
+            saveCurrentSettings()
+        }
+
+        binding.switchFilenameExt.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
         }
 
         // Folder options
         binding.switchFolder.setOnCheckedChangeListener { _, isChecked ->
             binding.switchFolderPath.visibility = if (isChecked) View.VISIBLE else View.GONE
+            saveCurrentSettings()
         }
 
-        // Save button
-        binding.btnSave.setOnClickListener {
-            saveSettings()
+        binding.switchFolderPath.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+        }
+
+        // Other field toggles — auto-save
+        binding.switchDate.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+        }
+
+        binding.switchSource.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+        }
+
+        binding.switchDescription.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+        }
+
+        binding.switchDimensions.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+        }
+
+        binding.switchFilesize.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+        }
+
+        // Fade duration spinner — auto-save
+        binding.spinnerFadeDuration.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Fade animation spinner — auto-save
+        binding.spinnerFadeAnimation.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Position spinner — auto-save
+        binding.spinnerPosition.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Layout spinner — auto-save
+        binding.spinnerLayout.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Separator spinner — auto-save
+        binding.spinnerSeparator.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Background spinner — auto-save
+        binding.spinnerBackground.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Opacity sliders — auto-save
+        binding.sliderBgOpacity.addOnChangeListener { _, _, _ ->
+            saveCurrentSettings()
+        }
+
+        binding.sliderTextOpacity.addOnChangeListener { _, _, _ ->
+            saveCurrentSettings()
+        }
+
+        // Text shadow — auto-save
+        binding.switchTextShadow.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+        }
+
+        // Shadow intensity spinner — auto-save
+        binding.spinnerShadowIntensity.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
     }
 
@@ -212,7 +308,10 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
         binding.switchFilesize.visibility = visibility
     }
 
-    private fun saveSettings() {
+    /**
+     * Read current UI values and persist to DataStore
+     */
+    private fun saveCurrentSettings() {
         val newConfig = currentConfig.copy(
             enabled = binding.switchEnabled.isChecked,
             showFileName = binding.switchFilename.isChecked,
@@ -289,9 +388,6 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
 
         val config = SettingsManager.getSlideshowConfig(this)
         SettingsManager.saveSlideshowConfig(this, config.copy(photoInfoConfig = newConfig))
-
-        Snackbar.make(binding.root, "Photo info settings saved!", Snackbar.LENGTH_SHORT).show()
-        finish()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {

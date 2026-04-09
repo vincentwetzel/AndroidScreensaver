@@ -8,7 +8,6 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.slider.Slider
-import com.google.android.material.snackbar.Snackbar
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode
 import com.vincentwetzel.androidscreensaver.data.model.VideoDisplayMode
@@ -165,13 +164,6 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
                 saveCurrentSettings()
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
-
-        // Save button (still available as explicit confirmation)
-        binding.btnSave.setOnClickListener {
-            saveCurrentSettings()
-            Snackbar.make(binding.root, "Settings saved!", Snackbar.LENGTH_SHORT).show()
-            finish()
         }
     }
 
