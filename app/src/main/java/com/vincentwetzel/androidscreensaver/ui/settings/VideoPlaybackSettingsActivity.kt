@@ -116,28 +116,69 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        // Audio mode radio buttons
+        // Audio mode radio buttons — auto-save
         binding.radioAudio.setOnCheckedChangeListener { _, checkedId ->
             binding.sliderVolume.isEnabled = checkedId == R.id.radio_custom_volume
             when (checkedId) {
                 R.id.radio_mute -> binding.sliderVolume.value = 0f
                 R.id.radio_custom_volume -> binding.sliderVolume.value = 75f
             }
+            saveCurrentSettings()
         }
 
-        // Display mode radio buttons
+        // Volume slider — auto-save
+        binding.sliderVolume.addOnChangeListener { _, _, _ ->
+            saveCurrentSettings()
+        }
+
+        // Playback toggles — auto-save
+        binding.switchAutoplay.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+        }
+
+        binding.switchLoopShort.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+        }
+
+        binding.switchControls.setOnCheckedChangeListener { _, _ ->
+            saveCurrentSettings()
+        }
+
+        // Max duration spinner — auto-save
+        binding.spinnerMaxDuration.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Display mode radio buttons — auto-save
         binding.radioDisplayMode.setOnCheckedChangeListener { _, checkedId ->
             binding.layoutStillTimestamp.visibility =
                 if (checkedId == R.id.radio_still_frame) View.VISIBLE else View.GONE
+            saveCurrentSettings()
         }
 
-        // Save button
+        // Still timestamp spinner — auto-save
+        binding.spinnerStillTimestamp.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                saveCurrentSettings()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Save button (still available as explicit confirmation)
         binding.btnSave.setOnClickListener {
-            saveSettings()
+            saveCurrentSettings()
+            Snackbar.make(binding.root, "Settings saved!", Snackbar.LENGTH_SHORT).show()
+            finish()
         }
     }
 
-    private fun saveSettings() {
+    /**
+     * Read current UI values and persist to DataStore
+     */
+    private fun saveCurrentSettings() {
         val videoAudioMode = when (binding.radioAudio.checkedRadioButtonId) {
             R.id.radio_mute -> VideoAudioMode.MUTE
             R.id.radio_system_volume -> VideoAudioMode.SYSTEM_VOLUME
@@ -170,17 +211,6 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
             else -> VideoStillTimestamp.BEGINNING
         }
 
-        Log.d(TAG, "=== SAVING settings to DataStore ===")
-        Log.d(TAG, "  videoAudioMode=$videoAudioMode")
-        Log.d(TAG, "  videoCustomVolume=$videoCustomVolume")
-        Log.d(TAG, "  videoMaxDurationSeconds=$videoMaxDurationSeconds")
-        Log.d(TAG, "  videoAutoPlay=$videoAutoPlay")
-        Log.d(TAG, "  videoLoopShort=$videoLoopShort")
-        Log.d(TAG, "  videoShowControls=$videoShowControls")
-        Log.d(TAG, "  videoDisplayMode=$videoDisplayMode")
-        Log.d(TAG, "  videoFixedPlaySeconds=${SettingsManager.getSlideshowConfig(this).videoFixedPlaySeconds}")
-        Log.d(TAG, "  videoStillTimestamp=$videoStillTimestamp")
-
         val config = SettingsManager.getSlideshowConfig(this).copy(
             videoAudioMode = videoAudioMode,
             videoCustomVolume = videoCustomVolume,
@@ -193,38 +223,6 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
         )
 
         SettingsManager.saveSlideshowConfig(this, config)
-
-        // Verify: re-read immediately
-        val verifyConfig = SettingsManager.getSlideshowConfig(this)
-        Log.d(TAG, "=== VERIFIED readback from DataStore ===")
-        Log.d(TAG, "  audioMode=${verifyConfig.videoAudioMode} (saved: $videoAudioMode)")
-        Log.d(TAG, "  volume=${verifyConfig.videoCustomVolume} (saved: $videoCustomVolume)")
-        Log.d(TAG, "  maxDuration=${verifyConfig.videoMaxDurationSeconds} (saved: $videoMaxDurationSeconds)")
-        Log.d(TAG, "  autoPlay=${verifyConfig.videoAutoPlay} (saved: $videoAutoPlay)")
-        Log.d(TAG, "  loopShort=${verifyConfig.videoLoopShort} (saved: $videoLoopShort)")
-        Log.d(TAG, "  showControls=${verifyConfig.videoShowControls} (saved: $videoShowControls)")
-        Log.d(TAG, "  displayMode=${verifyConfig.videoDisplayMode} (saved: $videoDisplayMode)")
-        Log.d(TAG, "  stillTimestamp=${verifyConfig.videoStillTimestamp} (saved: $videoStillTimestamp)")
-
-        val mismatched = listOfNotNull(
-            if (verifyConfig.videoAudioMode != videoAudioMode) "audioMode" else null,
-            if (verifyConfig.videoCustomVolume != videoCustomVolume) "volume" else null,
-            if (verifyConfig.videoMaxDurationSeconds != videoMaxDurationSeconds) "maxDuration" else null,
-            if (verifyConfig.videoAutoPlay != videoAutoPlay) "autoPlay" else null,
-            if (verifyConfig.videoLoopShort != videoLoopShort) "loopShort" else null,
-            if (verifyConfig.videoShowControls != videoShowControls) "showControls" else null,
-            if (verifyConfig.videoDisplayMode != videoDisplayMode) "displayMode" else null,
-            if (verifyConfig.videoStillTimestamp != videoStillTimestamp) "stillTimestamp" else null,
-        )
-        if (mismatched.isNotEmpty()) {
-            Log.e(TAG, "MISMATCH on: ${mismatched.joinToString(", ")}")
-            Snackbar.make(binding.root, "Warning: some settings did not save!", Snackbar.LENGTH_LONG).show()
-        } else {
-            Log.d(TAG, "All settings verified OK")
-            Snackbar.make(binding.root, "Settings saved!", Snackbar.LENGTH_SHORT).show()
-        }
-
-        finish()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
