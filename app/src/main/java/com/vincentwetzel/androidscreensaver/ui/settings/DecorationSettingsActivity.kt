@@ -179,7 +179,10 @@ class DecorationSettingsActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
-        // Opacity sliders — auto-save
+        // Opacity sliders — initialize from saved config and auto-save
+        binding.contentDate.sliderOpacity.value = dateConfig.opacity.toFloat()
+        binding.contentDate.sliderPulseMinOpacity.value = dateConfig.pulseMinOpacity.toFloat()
+        binding.contentDate.sliderPulseMaxOpacity.value = dateConfig.pulseMaxOpacity.toFloat()
         binding.contentDate.sliderOpacity.addOnChangeListener { _, _, _ ->
             saveCurrentSettings()
         }
@@ -278,7 +281,10 @@ class DecorationSettingsActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
-        // Opacity sliders — auto-save
+        // Opacity sliders — initialize from saved config and auto-save
+        binding.contentClock.sliderOpacity.value = clockConfig.opacity.toFloat()
+        binding.contentClock.sliderPulseMinOpacity.value = clockConfig.pulseMinOpacity.toFloat()
+        binding.contentClock.sliderPulseMaxOpacity.value = clockConfig.pulseMaxOpacity.toFloat()
         binding.contentClock.sliderOpacity.addOnChangeListener { _, _, _ ->
             saveCurrentSettings()
         }
@@ -393,7 +399,10 @@ class DecorationSettingsActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
-        // Opacity sliders — auto-save
+        // Opacity sliders — initialize from saved config and auto-save
+        binding.contentWeather.sliderOpacity.value = weatherConfig.opacity.toFloat()
+        binding.contentWeather.sliderPulseMinOpacity.value = weatherConfig.pulseMinOpacity.toFloat()
+        binding.contentWeather.sliderPulseMaxOpacity.value = weatherConfig.pulseMaxOpacity.toFloat()
         binding.contentWeather.sliderOpacity.addOnChangeListener { _, _, _ ->
             saveCurrentSettings()
         }

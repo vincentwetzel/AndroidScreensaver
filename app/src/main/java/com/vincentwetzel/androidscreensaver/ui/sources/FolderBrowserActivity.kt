@@ -98,7 +98,7 @@ class FolderBrowserActivity : AppCompatActivity() {
                     com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE,
                     selectedIds
                 )
-                updateSummary(selectedIds.size, viewModel.getPhotoCount())
+                updateSummary(selectedIds.size, adapter.getPhotoCount())
             },
             onFolderClick = { folderId ->
                 viewModel.navigateToFolder(folderId)
@@ -128,7 +128,7 @@ class FolderBrowserActivity : AppCompatActivity() {
                             com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE,
                             adapter.getDeselectedFolders()
                         )
-                        updateSummary(adapter.getSelectedFolders().size, viewModel.getPhotoCount())
+                        updateSummary(adapter.getSelectedFolders().size, adapter.getPhotoCount())
                     }
                 }
             },

@@ -55,7 +55,7 @@
             android:enabled="false"
             android:layout_marginBottom="16dp" />
 
-        <!-- Playback Behavior Section -->
+        <!-- Playback Behavior -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -64,27 +64,25 @@
             android:layout_marginBottom="8dp" />
 
         <com.google.android.material.switchmaterial.SwitchMaterial
-            android:id="@+id/switch_autoplay"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Auto-play videos"
-            android:checked="true"
-            android:layout_marginBottom="8dp" />
-
-        <com.google.android.material.switchmaterial.SwitchMaterial
-            android:id="@+id/switch_loop_short"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Loop short videos"
-            android:checked="true"
-            android:layout_marginBottom="8dp" />
-
-        <com.google.android.material.switchmaterial.SwitchMaterial
             android:id="@+id/switch_controls"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Show playback controls"
             android:checked="false"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Max Video Duration -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Min Video Duration"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            android:layout_marginBottom="8dp" />
+
+        <Spinner
+            android:id="@+id/spinner_min_duration"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:layout_marginBottom="16dp" />
 
         <!-- Max Video Duration -->
@@ -100,63 +98,6 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp" />
-
-        <!-- Video Display Mode Section -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Video Display Mode"
-            android:textAppearance="?attr/textAppearanceTitleMedium"
-            android:layout_marginBottom="8dp" />
-
-        <RadioGroup
-            android:id="@+id/radio_display_mode"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp">
-
-            <RadioButton
-                android:id="@+id/radio_play_full"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Play full duration" />
-
-            <RadioButton
-                android:id="@+id/radio_play_fixed"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Play fixed time" />
-
-            <RadioButton
-                android:id="@+id/radio_still_frame"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Extract still frame" />
-
-        </RadioGroup>
-
-        <!-- Still Timestamp (conditional) -->
-        <LinearLayout
-            android:id="@+id/layout_still_timestamp"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone"
-            android:layout_marginBottom="16dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Still Frame Timestamp"
-                android:textAppearance="?attr/textAppearanceTitleSmall"
-                android:layout_marginBottom="8dp" />
-
-            <Spinner
-                android:id="@+id/spinner_still_timestamp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-
-        </LinearLayout>
 
         <!-- No save button needed - all settings auto-save -->
 

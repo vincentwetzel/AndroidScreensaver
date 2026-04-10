@@ -50,6 +50,7 @@ object SettingsManager {
         val VIDEO_AUDIO_MODE = stringPreferencesKey("video_audio_mode")
         val VIDEO_CUSTOM_VOLUME = intPreferencesKey("video_custom_volume")
         val VIDEO_MAX_DURATION = intPreferencesKey("video_max_duration_seconds")
+        val VIDEO_MIN_DURATION = intPreferencesKey("video_min_duration_seconds")
         val VIDEO_AUTO_PLAY = booleanPreferencesKey("video_auto_play")
         val VIDEO_SHOW_CONTROLS = booleanPreferencesKey("video_show_controls")
         val VIDEO_LOOP_SHORT = booleanPreferencesKey("video_loop_short")
@@ -152,6 +153,7 @@ object SettingsManager {
                     preferences[PreferencesKeys.VIDEO_AUDIO_MODE] ?: VideoAudioMode.SYSTEM_VOLUME.name
                 ) ?: VideoAudioMode.SYSTEM_VOLUME,
                 videoCustomVolume = preferences[PreferencesKeys.VIDEO_CUSTOM_VOLUME] ?: 75,
+                videoMinDurationSeconds = preferences[PreferencesKeys.VIDEO_MIN_DURATION] ?: 0,
                 videoMaxDurationSeconds = preferences[PreferencesKeys.VIDEO_MAX_DURATION] ?: 120,
                 videoAutoPlay = preferences[PreferencesKeys.VIDEO_AUTO_PLAY] ?: true,
                 videoShowControls = preferences[PreferencesKeys.VIDEO_SHOW_CONTROLS] ?: false,
@@ -216,6 +218,7 @@ object SettingsManager {
                 // Video playback
                 preferences[PreferencesKeys.VIDEO_AUDIO_MODE] = config.videoAudioMode.name
                 preferences[PreferencesKeys.VIDEO_CUSTOM_VOLUME] = config.videoCustomVolume
+                preferences[PreferencesKeys.VIDEO_MIN_DURATION] = config.videoMinDurationSeconds
                 preferences[PreferencesKeys.VIDEO_MAX_DURATION] = config.videoMaxDurationSeconds
                 preferences[PreferencesKeys.VIDEO_AUTO_PLAY] = config.videoAutoPlay
                 preferences[PreferencesKeys.VIDEO_SHOW_CONTROLS] = config.videoShowControls

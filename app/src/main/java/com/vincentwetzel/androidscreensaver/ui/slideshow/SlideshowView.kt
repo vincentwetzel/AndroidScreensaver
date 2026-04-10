@@ -5,6 +5,7 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
 import android.content.Context
 import android.graphics.Color
+import android.media.AudioManager
 import android.net.Uri
 import android.util.AttributeSet
 import android.view.Gravity
@@ -68,6 +69,10 @@ class SlideshowView @JvmOverloads constructor(
     private var slideJob: Job? = null
     private var isAdvancing = false // Prevent double-advance (video end + auto-advance racing)
     private var videoDurationJob: Job? = null // Cancelable job for video duration timers
+
+    // Audio volume management
+    private var savedSystemVolume: Int = -1 // Stores original system volume when overridden
+    private var isVolumeOverridden: Boolean = false // Whether we've modified system volume
 
     // Callbacks
     var onSlideshowStarted: ((List<Photo>) -> Unit)? = null
@@ -306,15 +311,19 @@ class SlideshowView @JvmOverloads constructor(
             videoPlayer?.setMediaItem(mediaItem)
             videoPlayer?.prepare()
 
-            // Apply audio mode and volume
-            when (config.videoAudioMode) {
-                com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode.MUTE ->
-                    videoPlayer?.volume = 0f
-                com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode.SYSTEM_VOLUME ->
-                    videoPlayer?.volume = 1f // System volume controls the output
-                com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode.CUSTOM_VOLUME ->
-                    videoPlayer?.volume = config.videoCustomVolume / 100f
+            // Check minimum duration — skip video if it's too short
+            if (config.videoMinDurationSeconds > 0) {
+                val videoDurationMs = videoPlayer?.duration ?: 0L
+                val minDurationMs = config.videoMinDurationSeconds * 1000L
+                if (videoDurationMs < minDurationMs && videoDurationMs > 0) {
+                    android.util.Log.d(TAG, "Skipping short video: duration=${videoDurationMs}ms < min=${minDurationMs}ms")
+                    advanceToNext()
+                    return
+                }
             }
+
+            // Apply audio mode and volume
+            applyAudioMode(config)
 
             // Apply loop setting for short videos
             videoPlayer?.repeatMode = if (config.videoLoopShort) {
@@ -326,40 +335,8 @@ class SlideshowView @JvmOverloads constructor(
             // Apply auto play setting
             videoPlayer?.playWhenReady = config.videoAutoPlay
 
-            // Handle EXTRACT_STILL: seek to timestamp and pause
-            if (config.videoDisplayMode == com.vincentwetzel.androidscreensaver.data.model.VideoDisplayMode.EXTRACT_STILL) {
-                val timestampMs = when (config.videoStillTimestamp) {
-                    com.vincentwetzel.androidscreensaver.data.model.VideoStillTimestamp.BEGINNING -> 0L
-                    com.vincentwetzel.androidscreensaver.data.model.VideoStillTimestamp.MIDDLE -> {
-                        // Estimate middle — will be refined once we know duration
-                        0L
-                    }
-                    com.vincentwetzel.androidscreensaver.data.model.VideoStillTimestamp.END -> {
-                        // Seek near end — use a default near-max value
-                        300_000L
-                    }
-                    com.vincentwetzel.androidscreensaver.data.model.VideoStillTimestamp.CUSTOM -> 0L
-                }
-                videoPlayer?.seekTo(timestampMs)
-                videoPlayer?.playWhenReady = false // Pause for still
-                isPlayingVideo = false // Treat as still for advance purposes
-            }
-
-            // Handle PLAY_FIXED: set a timer to stop after fixed seconds
-            videoDurationJob?.cancel()
-            if (config.videoDisplayMode == com.vincentwetzel.androidscreensaver.data.model.VideoDisplayMode.PLAY_FIXED) {
-                val fixedMs = config.videoFixedPlaySeconds * 1000L
-                videoDurationJob = slideshowScope.launch {
-                    delay(fixedMs)
-                    if (isPlayingVideo) {
-                        android.util.Log.d(TAG, "Fixed duration reached ($fixedMs ms), advancing")
-                        advanceToNext()
-                    }
-                }
-            }
-
             // Handle videoMaxDurationSeconds: set a hard cap
-            if (config.videoMaxDurationSeconds > 0 && config.videoDisplayMode != com.vincentwetzel.androidscreensaver.data.model.VideoDisplayMode.PLAY_FIXED) {
+            if (config.videoMaxDurationSeconds > 0) {
                 val maxMs = config.videoMaxDurationSeconds * 1000L
                 videoDurationJob?.cancel()
                 videoDurationJob = slideshowScope.launch {
@@ -461,9 +438,73 @@ class SlideshowView @JvmOverloads constructor(
     }
 
     /**
+     * Apply audio mode settings. For CUSTOM_VOLUME, temporarily overrides system volume.
+     */
+    private fun applyAudioMode(config: com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig) {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+        // First, restore any previously overridden system volume
+        restoreSystemVolume(audioManager)
+
+        when (config.videoAudioMode) {
+            com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode.MUTE -> {
+                // Mute: set player volume to 0
+                videoPlayer?.volume = 0f
+                android.util.Log.d(TAG, "Audio: MUTED (player volume=0)")
+            }
+            com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode.SYSTEM_VOLUME -> {
+                // System volume: set player volume to 1.0 (full), let system control output
+                videoPlayer?.volume = 1f
+                android.util.Log.d(TAG, "Audio: SYSTEM VOLUME (player volume=1.0)")
+            }
+            com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode.CUSTOM_VOLUME -> {
+                // Custom volume: calculate target system volume level and override it
+                val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                val targetVolume = (maxVolume * config.videoCustomVolume / 100f).toInt().coerceIn(0, maxVolume)
+
+                // Save current system volume
+                savedSystemVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+
+                // Set system volume to custom level
+                audioManager.setStreamVolume(
+                    AudioManager.STREAM_MUSIC,
+                    targetVolume,
+                    0 // No flags - don't show volume UI or play sound
+                )
+                isVolumeOverridden = true
+
+                // Set player volume to full (we're controlling via system volume)
+                videoPlayer?.volume = 1f
+
+                android.util.Log.d(TAG, "Audio: CUSTOM VOLUME - system volume set to $targetVolume/$maxVolume (${config.videoCustomVolume}%), player volume=1.0, saved original=$savedSystemVolume")
+            }
+        }
+    }
+
+    /**
+     * Restore system volume to the saved value if we had overridden it
+     */
+    private fun restoreSystemVolume(audioManager: AudioManager? = null) {
+        if (!isVolumeOverridden || savedSystemVolume < 0) return
+
+        val am = audioManager ?: context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        am.setStreamVolume(
+            AudioManager.STREAM_MUSIC,
+            savedSystemVolume,
+            0
+        )
+        android.util.Log.d(TAG, "Audio: Restored system volume to $savedSystemVolume")
+        savedSystemVolume = -1
+        isVolumeOverridden = false
+    }
+
+    /**
      * Stop the video player and cancel any pending duration timers
      */
     private fun stopVideoPlayer() {
+        // Restore system volume if we had overridden it
+        restoreSystemVolume()
+
         videoDurationJob?.cancel()
         videoDurationJob = null
         if (isPlayingVideo) {

@@ -45,6 +45,7 @@ class ScheduleSettingsActivity : AppCompatActivity() {
             override fun onTabSelected(tab: TabLayout.Tab?) {
                 isAutostart = tab?.position == 0
                 updateDescription()
+                loadCurrentSettings()
             }
             override fun onTabUnselected(tab: TabLayout.Tab?) {}
             override fun onTabReselected(tab: TabLayout.Tab?) {}

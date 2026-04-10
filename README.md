@@ -15,11 +15,18 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
   - Multiple transition effects with crossfade animation
   - Display effects (crop-to-fit, scale-to-fit, zoom, pan)
   - Photo ordering (date, name, size)
-  - Content filter (Images Only, Videos Only, or Both)
+  - Content Type filter (Images Only, Videos Only, or Both)
   - Background color, screen rotation, keep-screen-on settings
   - Match device orientation (FIT_CENTER for mismatched photos)
   - Wi-Fi only mode for cloud sources
   - Touch exit trigger to dismiss screensaver
+
+- **Video Playback**
+  - Videos play with ExoPlayer (Media3) and auto-advance when finished
+  - Audio modes: Mute, System Volume, or Custom Volume (absolute device volume)
+  - Min/Max video duration to exclude short or overly long videos
+  - Short videos loop automatically
+  - Optional playback controls
 
 - **Testing & Debugging**
   - **TEST button** — Instantly preview the screensaver without waiting for screen timeout

@@ -136,7 +136,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                     com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY,
                     selectedIds
                 )
-                updateSummary(selectedIds.size, viewModel.getPhotoCount())
+                updateSummary(selectedIds.size, adapter.getPhotoCount())
             },
             onFolderClick = { folderId ->
                 viewModel.navigateToFolder(folderId)
@@ -166,7 +166,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                             com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY,
                             adapter.getDeselectedFolders()
                         )
-                        updateSummary(adapter.getSelectedFolders().size, viewModel.getPhotoCount())
+                        updateSummary(adapter.getSelectedFolders().size, adapter.getPhotoCount())
                     }
                 }
             },

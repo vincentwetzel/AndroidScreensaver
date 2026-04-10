@@ -42,17 +42,17 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
     }
 
     private fun setupSpinners() {
+        // Min duration spinner
+        val minDurations = arrayOf("No minimum", "5 seconds", "10 seconds", "15 seconds", "30 seconds", "1 minute")
+        val minDurationAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, minDurations)
+        minDurationAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spinnerMinDuration.adapter = minDurationAdapter
+
         // Max duration spinner
         val maxDurations = arrayOf("10 seconds", "30 seconds", "1 minute", "2 minutes", "5 minutes", "No limit")
         val maxDurationAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, maxDurations)
         maxDurationAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         binding.spinnerMaxDuration.adapter = maxDurationAdapter
-
-        // Still timestamp spinner
-        val stillTimestamps = arrayOf("Beginning", "Middle", "End", "Custom")
-        val stillAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, stillTimestamps)
-        stillAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        binding.spinnerStillTimestamp.adapter = stillAdapter
     }
 
     private fun loadCurrentSettings() {
@@ -78,10 +78,20 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
         binding.sliderVolume.isEnabled = config.videoAudioMode == VideoAudioMode.CUSTOM_VOLUME
         binding.sliderVolume.value = config.videoCustomVolume.toFloat()
 
-        // Playback toggles
-        binding.switchAutoplay.isChecked = config.videoAutoPlay
-        binding.switchLoopShort.isChecked = config.videoLoopShort
+        // Playback controls toggle
         binding.switchControls.isChecked = config.videoShowControls
+
+        // Min duration
+        val minDurationIndex = when (config.videoMinDurationSeconds) {
+            0 -> 0
+            5 -> 1
+            10 -> 2
+            15 -> 3
+            30 -> 4
+            60 -> 5
+            else -> 0
+        }
+        binding.spinnerMinDuration.setSelection(minDurationIndex)
 
         // Max duration
         val maxDurationIndex = when (config.videoMaxDurationSeconds) {
@@ -93,25 +103,6 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
             else -> 5
         }
         binding.spinnerMaxDuration.setSelection(maxDurationIndex)
-
-        // Display mode
-        when (config.videoDisplayMode) {
-            VideoDisplayMode.PLAY_FULL -> binding.radioPlayFull.isChecked = true
-            VideoDisplayMode.PLAY_FIXED -> binding.radioPlayFixed.isChecked = true
-            VideoDisplayMode.EXTRACT_STILL -> binding.radioStillFrame.isChecked = true
-        }
-
-        binding.layoutStillTimestamp.visibility =
-            if (config.videoDisplayMode == VideoDisplayMode.EXTRACT_STILL) View.VISIBLE else View.GONE
-
-        // Still timestamp
-        val stillIndex = when (config.videoStillTimestamp) {
-            VideoStillTimestamp.BEGINNING -> 0
-            VideoStillTimestamp.MIDDLE -> 1
-            VideoStillTimestamp.END -> 2
-            VideoStillTimestamp.CUSTOM -> 3
-        }
-        binding.spinnerStillTimestamp.setSelection(stillIndex)
     }
 
     private fun setupListeners() {
@@ -122,44 +113,34 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
                 R.id.radio_mute -> binding.sliderVolume.value = 0f
                 R.id.radio_custom_volume -> binding.sliderVolume.value = 75f
             }
+            // Save after slider value is set - the slider's listener will also fire
+            // but that's fine since both will save the same value
             saveCurrentSettings()
         }
 
-        // Volume slider — auto-save
-        binding.sliderVolume.addOnChangeListener { _, _, _ ->
-            saveCurrentSettings()
-        }
+        // Volume slider — auto-save (use value change end to avoid excessive saves)
+        binding.sliderVolume.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                saveCurrentSettings()
+            }
+        })
 
-        // Playback toggles — auto-save
-        binding.switchAutoplay.setOnCheckedChangeListener { _, _ ->
-            saveCurrentSettings()
-        }
-
-        binding.switchLoopShort.setOnCheckedChangeListener { _, _ ->
-            saveCurrentSettings()
-        }
-
+        // Playback controls toggle — auto-save
         binding.switchControls.setOnCheckedChangeListener { _, _ ->
             saveCurrentSettings()
         }
 
-        // Max duration spinner — auto-save
-        binding.spinnerMaxDuration.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+        // Min duration spinner — auto-save
+        binding.spinnerMinDuration.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 saveCurrentSettings()
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
-        // Display mode radio buttons — auto-save
-        binding.radioDisplayMode.setOnCheckedChangeListener { _, checkedId ->
-            binding.layoutStillTimestamp.visibility =
-                if (checkedId == R.id.radio_still_frame) View.VISIBLE else View.GONE
-            saveCurrentSettings()
-        }
-
-        // Still timestamp spinner — auto-save
-        binding.spinnerStillTimestamp.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+        // Max duration spinner — auto-save
+        binding.spinnerMaxDuration.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 saveCurrentSettings()
             }
@@ -178,9 +159,16 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
             else -> VideoAudioMode.SYSTEM_VOLUME
         }
         val videoCustomVolume = binding.sliderVolume.value.toInt()
-        val videoAutoPlay = binding.switchAutoplay.isChecked
-        val videoLoopShort = binding.switchLoopShort.isChecked
         val videoShowControls = binding.switchControls.isChecked
+        val videoMinDurationSeconds = when (binding.spinnerMinDuration.selectedItemPosition) {
+            0 -> 0
+            1 -> 5
+            2 -> 10
+            3 -> 15
+            4 -> 30
+            5 -> 60
+            else -> 0
+        }
         val videoMaxDurationSeconds = when (binding.spinnerMaxDuration.selectedItemPosition) {
             0 -> 10
             1 -> 30
@@ -189,32 +177,28 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
             4 -> 300
             else -> Int.MAX_VALUE
         }
-        val videoDisplayMode = when (binding.radioDisplayMode.checkedRadioButtonId) {
-            R.id.radio_play_full -> VideoDisplayMode.PLAY_FULL
-            R.id.radio_play_fixed -> VideoDisplayMode.PLAY_FIXED
-            R.id.radio_still_frame -> VideoDisplayMode.EXTRACT_STILL
-            else -> VideoDisplayMode.PLAY_FULL
-        }
-        val videoStillTimestamp = when (binding.spinnerStillTimestamp.selectedItemPosition) {
-            0 -> VideoStillTimestamp.BEGINNING
-            1 -> VideoStillTimestamp.MIDDLE
-            2 -> VideoStillTimestamp.END
-            3 -> VideoStillTimestamp.CUSTOM
-            else -> VideoStillTimestamp.BEGINNING
-        }
+
+        Log.d(TAG, "=== SAVING settings ===")
+        Log.d(TAG, "  videoAudioMode=$videoAudioMode")
+        Log.d(TAG, "  videoCustomVolume=$videoCustomVolume")
 
         val config = SettingsManager.getSlideshowConfig(this).copy(
             videoAudioMode = videoAudioMode,
             videoCustomVolume = videoCustomVolume,
-            videoAutoPlay = videoAutoPlay,
-            videoLoopShort = videoLoopShort,
+            videoAutoPlay = true, // Always autoplay
+            videoLoopShort = true, // Always loop short videos
             videoShowControls = videoShowControls,
+            videoMinDurationSeconds = videoMinDurationSeconds,
             videoMaxDurationSeconds = videoMaxDurationSeconds,
-            videoDisplayMode = videoDisplayMode,
-            videoStillTimestamp = videoStillTimestamp,
+            videoDisplayMode = VideoDisplayMode.PLAY_FULL, // Always play full
+            videoStillTimestamp = VideoStillTimestamp.BEGINNING,
         )
 
         SettingsManager.saveSlideshowConfig(this, config)
+        
+        // Verify save by reading back
+        val verifyConfig = SettingsManager.getSlideshowConfig(this)
+        Log.d(TAG, "  VERIFIED: videoAudioMode=${verifyConfig.videoAudioMode}, videoCustomVolume=${verifyConfig.videoCustomVolume}")
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {

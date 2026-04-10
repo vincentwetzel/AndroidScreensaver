@@ -19,8 +19,11 @@
 ### Settings Fragment
 - [x] **`clear_cache`**: Now clears Coil memory and disk cache
 - [x] **`start_by_timer`**: Wired `OnPreferenceChangeListener` with DataStore persistence
-- [x] **All 9 video playback settings**: Persisted via PreferencesKeys and consumed in SlideshowView (audio mode, volume, max duration, auto-play, controls, loop short, display mode, fixed seconds, still timestamp)
+- [x] **All video playback settings fully wired**: Audio mode, custom volume, max/min duration, and controls persist to DataStore and are consumed in SlideshowView
+- [x] **Settings summaries refresh on resume**: Main Settings screen refreshes all preference summaries from DataStore when returning from sub-screens. Navigation preferences now show current state.
 - [x] **`decoration_customize` handler**: Created `DecorationSettingsActivity` with tabbed UI for date/clock/weather customization
+- [x] **Decoration opacity sliders**: All 9 sliders now initialize from saved config instead of showing XML defaults
+- [x] **Schedule tab switching**: Autostop tab now correctly loads its own settings when selected
 
 ## Enhancements — Active Components
 - [x] **Gallery photo preloading**: `SlideshowManager.preloadPhoto()` now routes correctly for Gallery (content:// URIs), Google Drive cached (file:// URIs), and remote URLs
@@ -108,14 +111,18 @@
 - ✅ **Gallery content filter counts**: `getFilteredFolderMediaCount()` now queries the correct MediaStore table (`Images.Media`, `Videos.Media`, or `Files`) instead of filtering by media_type column which was unreliable.
 - ✅ **Google Drive content filter counts**: `getFilteredFolderMediaCount()` and `getFolderPhotoCount()` now paginate through all results (was capped at 1 due to `setPageSize(1)`).
 - ✅ **All settings auto-save**: Removed manual Save buttons from Video Playback, Photo Info, Schedule, and Decoration settings screens. All toggles, sliders, spinners, and radio buttons now persist to DataStore immediately on change.
+- ✅ **Settings summaries refresh on resume**: Main Settings screen now calls `syncSettingsFromDataStore()` in `onResume()` so all summaries reflect current values when returning from sub-screens.
+- ✅ **Navigation preference summaries**: Video Playback, Schedule, Photo Info, and Decoration preferences now display current state (e.g., "Muted", "Custom volume (75%)", "Enabled at 8:00 PM").
+- ✅ **Custom volume uses AudioManager**: "Use Custom Volume" now sets actual device volume via `AudioManager` instead of just a player volume multiplier. Original volume is restored on video end.
+- ✅ **Min Video Duration setting**: New spinner lets users exclude videos shorter than a threshold (5s, 10s, 15s, 30s, 1min). Short videos are auto-skipped in slideshow.
+- ✅ **Video playback settings simplified**: Removed autoplay/loop toggles (always on). Removed display mode options (always plays full). Content Type renamed from Content Filter.
+- ✅ **Folder browser summary counts fixed**: Both Gallery and Drive folder browsers now correctly sum only selected folders' counts using `adapter.getPhotoCount()` instead of `viewModel.getPhotoCount()`.
 
 ### In Progress
 - (none)
 
 ### Planned
 - ⏳ Dropbox, Google Photos, OneDrive, local network sources
-- ⏳ Photo preloading and caching (SlideshowManager.preloadPhoto for Gallery)
-- ⏳ Video playback settings wired to ExoPlayer
-- ⏳ Weather/clock/photo-info overlays
+- ⏳ Weather/clock/photo-info overlays during slideshow
 - ⏳ Schedule-based source enabling
 - ⏳ Unit and instrumentation tests

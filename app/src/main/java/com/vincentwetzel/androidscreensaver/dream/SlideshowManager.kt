@@ -45,6 +45,7 @@ class SlideshowManager @Inject constructor(
      */
     fun loadConfig() {
         config = SettingsManager.getSlideshowConfig(context)
+        android.util.Log.d(TAG, "Config loaded: videoAudioMode=${config.videoAudioMode}, videoCustomVolume=${config.videoCustomVolume}")
     }
 
     /**

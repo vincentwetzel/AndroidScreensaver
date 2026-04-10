@@ -45,6 +45,13 @@ class SettingsFragment : PreferenceFragmentCompat() {
         syncSettingsFromDataStore()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Refresh all preference summaries from DataStore when returning from sub-screens
+        syncSettingsFromDataStore()
+        updateNavigationPreferenceSummaries()
+    }
+
     private fun setupPreferences() {
         // Google Drive source preference
         findPreference<Preference>("source_google_drive")?.setOnPreferenceClickListener {
@@ -523,6 +530,92 @@ class SettingsFragment : PreferenceFragmentCompat() {
         findPreference<SwitchPreferenceCompat>("decoration_date")?.isChecked = config.dateDecoration != null
         findPreference<SwitchPreferenceCompat>("decoration_clock")?.isChecked = config.clockDecoration != null
         findPreference<SwitchPreferenceCompat>("decoration_weather")?.isChecked = config.weatherDecoration != null
+    }
+
+    /**
+     * Update summaries for navigation preferences that launch sub-screens
+     * These show the current setting value (e.g., "Muted", "Enabled")
+     */
+    private fun updateNavigationPreferenceSummaries() {
+        // Video playback - show audio mode
+        findPreference<Preference>("video_playback")?.let { pref ->
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            val audioSummary = when (config.videoAudioMode) {
+                com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode.MUTE -> "Muted"
+                com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode.SYSTEM_VOLUME -> "System volume"
+                com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode.CUSTOM_VOLUME -> "Custom volume (${config.videoCustomVolume}%)"
+            }
+            pref.summary = audioSummary
+        }
+
+        // Autostart schedule - show enabled/disabled and time
+        findPreference<Preference>("autostart")?.let { pref ->
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            val schedule = config.autostartSchedules.firstOrNull()
+            pref.summary = if (schedule != null && schedule.enabled) {
+                val timeStr = formatTime(schedule.timeHour, schedule.timeMinute)
+                "Enabled at $timeStr"
+            } else {
+                "Disabled"
+            }
+        }
+
+        // Autostop schedule - show enabled/disabled and time
+        findPreference<Preference>("autostop")?.let { pref ->
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            val schedule = config.autostopSchedules.firstOrNull()
+            pref.summary = if (schedule != null && schedule.enabled) {
+                val timeStr = formatTime(schedule.timeHour, schedule.timeMinute)
+                "Enabled at $timeStr"
+            } else {
+                "Disabled"
+            }
+        }
+
+        // Customize photo info - show enabled/disabled
+        findPreference<Preference>("photo_info_customize")?.let { pref ->
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            pref.summary = if (config.photoInfoConfig.enabled) {
+                val fieldCount = listOf(
+                    config.photoInfoConfig.showFileName,
+                    config.photoInfoConfig.showFolderName,
+                    config.photoInfoConfig.showDateTaken,
+                    config.photoInfoConfig.showSourceName,
+                    config.photoInfoConfig.showDescription,
+                    config.photoInfoConfig.showDimensions,
+                    config.photoInfoConfig.showFileSize
+                ).count { it }
+                "Enabled - $fieldCount fields"
+            } else {
+                "Disabled"
+            }
+        }
+
+        // Customize decorations - show which decorations are enabled
+        findPreference<Preference>("decoration_customize")?.let { pref ->
+            val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(requireContext())
+            val enabledDecorations = mutableListOf<String>()
+            if (config.dateDecoration != null) enabledDecorations.add("Date")
+            if (config.clockDecoration != null) enabledDecorations.add("Clock")
+            if (config.weatherDecoration != null) enabledDecorations.add("Weather")
+            
+            pref.summary = if (enabledDecorations.isNotEmpty()) {
+                enabledDecorations.joinToString(", ")
+            } else {
+                "Disabled"
+            }
+        }
+    }
+
+    /**
+     * Format hour and minute to human-readable time (e.g., "8:00 PM")
+     */
+    private fun formatTime(hour: Int, minute: Int): String {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.HOUR_OF_DAY, hour)
+        cal.set(java.util.Calendar.MINUTE, minute)
+        val format = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+        return format.format(cal.time)
     }
 
     private fun showAboutDialog() {

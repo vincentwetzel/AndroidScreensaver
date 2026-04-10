@@ -75,6 +75,7 @@ data class SlideshowConfig(
     // Video playback
     val videoAudioMode: VideoAudioMode = VideoAudioMode.SYSTEM_VOLUME,
     val videoCustomVolume: Int = 75,
+    val videoMinDurationSeconds: Int = 0, // 0 = no minimum
     val videoMaxDurationSeconds: Int = 120,
     val videoAutoPlay: Boolean = true,
     val videoShowControls: Boolean = false,

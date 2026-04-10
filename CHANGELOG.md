@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.9.0
+
+### Added
+- **Min Video Duration setting** — Exclude short videos from the slideshow. Options: No minimum, 5s, 10s, 15s, 30s, 1 minute. Videos shorter than the threshold are automatically skipped.
+- **Custom volume now uses absolute system volume** — "Use Custom Volume" now sets the actual device volume via `AudioManager` instead of just applying a player volume multiplier. Original system volume is restored when video ends or screensaver stops.
+- **Diagnostic logging for video settings** — Added logcat output at save, config load, and playback to trace video audio mode and custom volume values.
+
+### Removed
+- **Auto-play / Loop toggles** — "Auto-play videos" and "Loop short videos" options removed from Video Playback Settings. Videos now always auto-play and short videos always loop.
+- **Video display mode options** — "Play full duration", "Play fixed time", and "Extract still frame" options removed. Videos always play their full duration (up to Max Video Duration cap).
+
+### Fixed
+- **Settings summaries not refreshing** — Main Settings screen now refreshes all preference summaries from DataStore when returning from sub-screens (added `onResume()`). Navigation preferences (Video Playback, Schedule, Photo Info, Decorations) now show their current state (e.g., "Muted", "Custom volume (75%)", "Enabled at 8:00 PM").
+- **Decoration settings sliders not initialized** — All 9 opacity sliders across Date, Clock, and Weather tabs now load their saved values instead of showing XML defaults.
+- **Schedule tab switching not reloading data** — Switching between Autostart and Autostop tabs now loads the correct schedule's settings instead of showing the previously loaded values.
+- **Folder browser summary summing unselected folders** — Both Gallery and Google Drive folder browsers now correctly sum only selected folders' counts (respecting the content filter) in the summary text at the bottom.
+- **Volume slider double-save race condition** — Changed from `OnChangeListener` to `OnSliderTouchListener` to prevent redundant saves when the radio button programmatically changes the slider value.
+- **Rename**: "Content Filter" setting renamed to "Content Type" for clarity.
+
 ## 1.8.0 (Current)
 
 ### Added
