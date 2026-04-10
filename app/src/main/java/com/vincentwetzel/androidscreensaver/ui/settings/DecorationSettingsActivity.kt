@@ -50,9 +50,12 @@ class DecorationSettingsActivity : AppCompatActivity() {
 
         loadCurrentSettings()
         setupTabLayout()
-        setupDateTab()
-        setupClockTab()
-        setupWeatherTab()
+        // Defer tab setup to after initial layout pass so spinner setSelection() renders correctly
+        binding.root.post {
+            setupDateTab()
+            setupClockTab()
+            setupWeatherTab()
+        }
     }
 
     private fun loadCurrentSettings() {
