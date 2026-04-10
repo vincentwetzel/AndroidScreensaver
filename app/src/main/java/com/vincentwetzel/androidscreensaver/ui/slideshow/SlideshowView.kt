@@ -5,9 +5,13 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
 import android.content.Context
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
@@ -23,6 +27,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.load
 import com.vincentwetzel.androidscreensaver.R
+import com.vincentwetzel.androidscreensaver.data.model.ClockPosition
+import com.vincentwetzel.androidscreensaver.data.model.ClockSize
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.dream.SlideshowManager
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +37,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Custom view that displays a photo slideshow with transitions
@@ -61,6 +70,15 @@ class SlideshowView @JvmOverloads constructor(
     private lateinit var loadingLayout: LinearLayout
     private lateinit var progressBar: ProgressBar
     private lateinit var loadingText: TextView
+
+    // Decoration overlays
+    private var dateTextView: TextView? = null
+    private var clockTextView: TextView? = null
+    private var weatherTextView: TextView? = null
+
+    // Decoration timers
+    private val decorationHandler = Handler(Looper.getMainLooper())
+    private var clockUpdateJob: Job? = null
 
     // State
     private var photos: List<Photo> = emptyList()
@@ -176,6 +194,54 @@ class SlideshowView @JvmOverloads constructor(
         addView(imageViewB)
         addView(playerView)
         addView(loadingLayout)
+
+        // Create decoration overlay views
+        setupDecorationOverlays()
+    }
+
+    /**
+     * Create decoration overlay TextViews for date, clock, and weather
+     */
+    private fun setupDecorationOverlays() {
+        // Date decoration
+        dateTextView = TextView(context).apply {
+            id = View.generateViewId()
+            visibility = GONE
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+        }
+
+        // Clock decoration
+        clockTextView = TextView(context).apply {
+            id = View.generateViewId()
+            visibility = GONE
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+        }
+
+        // Weather decoration
+        weatherTextView = TextView(context).apply {
+            id = View.generateViewId()
+            visibility = GONE
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+        }
+
+        addView(dateTextView, LayoutParams(
+            LayoutParams.WRAP_CONTENT,
+            LayoutParams.WRAP_CONTENT
+        ))
+        addView(clockTextView, LayoutParams(
+            LayoutParams.WRAP_CONTENT,
+            LayoutParams.WRAP_CONTENT
+        ))
+        addView(weatherTextView, LayoutParams(
+            LayoutParams.WRAP_CONTENT,
+            LayoutParams.WRAP_CONTENT
+        ))
     }
 
     /**
@@ -187,6 +253,8 @@ class SlideshowView @JvmOverloads constructor(
         // Apply configured background color
         setBackgroundColor(slideshowManager.config.backgroundColor)
         loadingLayout.setBackgroundColor(slideshowManager.config.backgroundColor)
+        // Setup decoration overlays
+        updateDecorations()
         loadPhotosAndStart()
     }
 
@@ -498,6 +566,173 @@ class SlideshowView @JvmOverloads constructor(
         isVolumeOverridden = false
     }
 
+    // ==================== DECORATIONS ====================
+
+    /**
+     * Update all decoration overlays based on current config
+     */
+    private fun updateDecorations() {
+        val config = slideshowManager.config
+
+        // Date decoration
+        if (config.dateDecoration != null) {
+            updateDateDecoration(config)
+            dateTextView?.visibility = VISIBLE
+        } else {
+            dateTextView?.visibility = GONE
+        }
+
+        // Clock decoration
+        if (config.clockDecoration != null) {
+            updateClockDecoration(config)
+            clockTextView?.visibility = VISIBLE
+            startClockUpdates()
+        } else {
+            clockTextView?.visibility = GONE
+            stopClockUpdates()
+        }
+
+        // Weather decoration
+        if (config.weatherDecoration != null) {
+            updateWeatherDecoration(config)
+            weatherTextView?.visibility = VISIBLE
+        } else {
+            weatherTextView?.visibility = GONE
+        }
+    }
+
+    private fun updateDateDecoration(config: com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig) {
+        val dateConfig = config.dateDecoration ?: return
+        val dateTextView = dateTextView ?: return
+
+        val now = Date()
+        val format = when (dateConfig.dateFormat) {
+            com.vincentwetzel.androidscreensaver.data.model.DateFormat.FULL_DATE -> "EEEE, MMMM d, yyyy"
+            com.vincentwetzel.androidscreensaver.data.model.DateFormat.SHORT_DATE -> "MMM d, yyyy"
+            com.vincentwetzel.androidscreensaver.data.model.DateFormat.MONTH_DAY -> "MMMM d"
+            com.vincentwetzel.androidscreensaver.data.model.DateFormat.NUMERIC_DATE -> "MM/dd/yyyy"
+            com.vincentwetzel.androidscreensaver.data.model.DateFormat.ABBREVIATE_MONTH -> "MMM d, yyyy"
+            com.vincentwetzel.androidscreensaver.data.model.DateFormat.WEEKDAY -> "EEEE"
+            com.vincentwetzel.androidscreensaver.data.model.DateFormat.YEAR -> "yyyy"
+            com.vincentwetzel.androidscreensaver.data.model.DateFormat.ABBREVIATE_WEEKDAY -> "EEE"
+            com.vincentwetzel.androidscreensaver.data.model.DateFormat.CUSTOM -> dateConfig.customDateFormatPattern ?: "M/d/yyyy"
+        }
+        dateTextView.text = SimpleDateFormat(format, Locale.getDefault()).format(now)
+
+        applyDecorationStyle(dateTextView, dateConfig.position, dateConfig.fontSize, dateConfig.opacity, dateConfig.background)
+    }
+
+    private fun updateClockDecoration(config: com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig) {
+        val clockConfig = config.clockDecoration ?: return
+        val clockTextView = clockTextView ?: return
+
+        val now = Date()
+        val pattern = if (clockConfig.clockFormat == com.vincentwetzel.androidscreensaver.data.model.ClockFormat.HOUR_24) {
+            if (clockConfig.showSeconds) "HH:mm:ss" else "HH:mm"
+        } else {
+            if (clockConfig.showSeconds) "h:mm:ss a" else "h:mm a"
+        }
+        clockTextView.text = SimpleDateFormat(pattern, Locale.getDefault()).format(now)
+
+        applyDecorationStyle(clockTextView, clockConfig.position, clockConfig.fontSize, clockConfig.opacity, clockConfig.background)
+    }
+
+    private fun updateWeatherDecoration(config: com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig) {
+        val weatherConfig = config.weatherDecoration ?: return
+        val weatherTextView = weatherTextView ?: return
+
+        // Placeholder weather text — real implementation would fetch from Open-Meteo API
+        val tempUnit = when (weatherConfig.temperatureUnit) {
+            com.vincentwetzel.androidscreensaver.data.model.TemperatureUnit.CELSIUS -> "°C"
+            else -> "°F"
+        }
+        weatherTextView.text = "72${tempUnit} ☀️"
+
+        applyDecorationStyle(weatherTextView, weatherConfig.position, weatherConfig.fontSize, weatherConfig.opacity,
+            if (weatherConfig.widgetBackground == com.vincentwetzel.androidscreensaver.data.model.WeatherWidgetBackground.SOLID)
+                com.vincentwetzel.androidscreensaver.data.model.DecorationBackground.SOLID
+            else if (weatherConfig.widgetBackground == com.vincentwetzel.androidscreensaver.data.model.WeatherWidgetBackground.FROSTED_GLASS)
+                com.vincentwetzel.androidscreensaver.data.model.DecorationBackground.SEMI_TRANSPARENT
+            else
+                com.vincentwetzel.androidscreensaver.data.model.DecorationBackground.NONE)
+    }
+
+    /**
+     * Apply common decoration styling (position, font size, opacity, background)
+     */
+    private fun applyDecorationStyle(
+        textView: TextView,
+        position: ClockPosition,
+        size: ClockSize,
+        opacity: Int,
+        background: com.vincentwetzel.androidscreensaver.data.model.DecorationBackground
+    ) {
+        // Font size
+        val fontSizeDp = when (size) {
+            ClockSize.SMALL -> 16f
+            ClockSize.MEDIUM -> 24f
+            ClockSize.LARGE -> 36f
+        }
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSizeDp)
+
+        // Position
+        val params = textView.layoutParams as LayoutParams
+        params.width = LayoutParams.WRAP_CONTENT
+        params.height = LayoutParams.WRAP_CONTENT
+        params.gravity = when (position) {
+            ClockPosition.TOP_LEFT -> Gravity.TOP or Gravity.START
+            ClockPosition.TOP_RIGHT -> Gravity.TOP or Gravity.END
+            ClockPosition.BOTTOM_LEFT -> Gravity.BOTTOM or Gravity.START
+            ClockPosition.BOTTOM_RIGHT -> Gravity.BOTTOM or Gravity.END
+            ClockPosition.CENTER -> Gravity.CENTER
+        }
+        val padding = 32
+        params.setMargins(padding, padding, padding, padding)
+        textView.layoutParams = params
+
+        // Background
+        val bgDrawable = when (background) {
+            com.vincentwetzel.androidscreensaver.data.model.DecorationBackground.NONE -> null
+            com.vincentwetzel.androidscreensaver.data.model.DecorationBackground.SEMI_TRANSPARENT -> GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(Color.argb(128, 0, 0, 0))
+                cornerRadius = 16f
+            }
+            com.vincentwetzel.androidscreensaver.data.model.DecorationBackground.SOLID -> GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(Color.argb(200, 0, 0, 0))
+                cornerRadius = 16f
+            }
+        }
+        textView.background = bgDrawable
+
+        // Opacity
+        textView.alpha = opacity / 100f
+    }
+
+    /**
+     * Start periodic clock updates (every second)
+     */
+    private fun startClockUpdates() {
+        val runnable = object : Runnable {
+            override fun run() {
+                val config = slideshowManager.config
+                if (config.clockDecoration != null) {
+                    updateClockDecoration(config)
+                }
+                decorationHandler.postDelayed(this, 1000)
+            }
+        }
+        decorationHandler.postDelayed(runnable, 1000)
+    }
+
+    /**
+     * Stop clock updates
+     */
+    private fun stopClockUpdates() {
+        decorationHandler.removeCallbacksAndMessages(null)
+    }
+
     /**
      * Stop the video player and cancel any pending duration timers
      */
@@ -523,6 +758,7 @@ class SlideshowView @JvmOverloads constructor(
             while (isPlaying && photos.isNotEmpty()) {
                 // Reload config each cycle so settings changes take effect immediately
                 slideshowManager.loadConfig()
+                updateDecorations()
 
                 // For videos, wait for them to finish (handled by ExoPlayer listener)
                 // The isPlayingVideo flag is set in showPhoto() when a video starts
@@ -575,6 +811,7 @@ class SlideshowView @JvmOverloads constructor(
     fun stop() {
         pause()
         stopVideoPlayer()
+        stopClockUpdates()
         slideshowScope.launch {
             withContext(Dispatchers.Main) {
                 imageViewA.setImageDrawable(null)

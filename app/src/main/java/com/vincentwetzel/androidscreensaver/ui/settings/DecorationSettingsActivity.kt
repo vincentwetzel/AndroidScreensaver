@@ -424,11 +424,10 @@ class DecorationSettingsActivity : AppCompatActivity() {
      * Read current UI values and persist to DataStore
      */
     private fun saveCurrentSettings() {
-        // Save date config
-        val newDateConfig = if (dateConfig.enabled) {
-            DecorationConfig(
-                enabled = true,
-                position = when (binding.contentDate.spinnerPosition.selectedItemPosition) {
+        // Save date config (always enabled since user opened this screen for it)
+        val newDateConfig = DecorationConfig(
+            enabled = true,
+            position = when (binding.contentDate.spinnerPosition.selectedItemPosition) {
                     0 -> ClockPosition.TOP_LEFT
                     1 -> ClockPosition.TOP_RIGHT
                     2 -> ClockPosition.BOTTOM_LEFT
@@ -468,15 +467,11 @@ class DecorationSettingsActivity : AppCompatActivity() {
                 pulseMinOpacity = binding.contentDate.sliderPulseMinOpacity.value.toInt(),
                 pulseMaxOpacity = binding.contentDate.sliderPulseMaxOpacity.value.toInt()
             )
-        } else {
-            null
-        }
 
-        // Save clock config
-        val newClockConfig = if (clockConfig.enabled) {
-            ClockDecorationConfig(
-                enabled = true,
-                position = when (binding.contentClock.spinnerPosition.selectedItemPosition) {
+        // Save clock config (always enabled)
+        val newClockConfig = ClockDecorationConfig(
+            enabled = true,
+            position = when (binding.contentClock.spinnerPosition.selectedItemPosition) {
                     0 -> ClockPosition.TOP_LEFT
                     1 -> ClockPosition.TOP_RIGHT
                     2 -> ClockPosition.BOTTOM_LEFT
@@ -511,14 +506,10 @@ class DecorationSettingsActivity : AppCompatActivity() {
                 pulseMinOpacity = binding.contentClock.sliderPulseMinOpacity.value.toInt(),
                 pulseMaxOpacity = binding.contentClock.sliderPulseMaxOpacity.value.toInt()
             )
-        } else {
-            null
-        }
 
-        // Save weather config
-        val newWeatherConfig = if (weatherConfig.enabled) {
-            WeatherDecorationConfig(
-                enabled = true,
+        // Save weather config (always enabled)
+        val newWeatherConfig = WeatherDecorationConfig(
+            enabled = true,
                 position = when (binding.contentWeather.spinnerPosition.selectedItemPosition) {
                     0 -> ClockPosition.TOP_LEFT
                     1 -> ClockPosition.TOP_RIGHT
@@ -560,9 +551,6 @@ class DecorationSettingsActivity : AppCompatActivity() {
                 pulseMinOpacity = binding.contentWeather.sliderPulseMinOpacity.value.toInt(),
                 pulseMaxOpacity = binding.contentWeather.sliderPulseMaxOpacity.value.toInt()
             )
-        } else {
-            null
-        }
 
         // Save all to DataStore
         val config = SettingsManager.getSlideshowConfig(this)

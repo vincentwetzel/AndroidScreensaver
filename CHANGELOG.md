@@ -18,6 +18,8 @@
 - **Folder browser summary summing unselected folders** — Both Gallery and Google Drive folder browsers now correctly sum only selected folders' counts (respecting the content filter) in the summary text at the bottom.
 - **Volume slider double-save race condition** — Changed from `OnChangeListener` to `OnSliderTouchListener` to prevent redundant saves when the radio button programmatically changes the slider value.
 - **Rename**: "Content Filter" setting renamed to "Content Type" for clarity.
+- **Date, Clock, and Weather decoration overlays rendered** — Decorations now display as overlay TextViews on top of the slideshow. Clock updates every second. Date, clock, and weather respect configured position, font size, opacity, and background style.
+- **DecorationSettingsActivity save fix** — Removed `if (config.enabled)` checks that caused decorations to always save as `null` since `enabled` defaulted to `false`. All three decorations now always save with `enabled = true`.
 
 ## 1.8.0 (Current)
 
