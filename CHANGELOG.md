@@ -1,5 +1,56 @@
 # Changelog
 
+## 1.11.0 (In Progress)
+
+### Build System
+- **Updated Android Gradle Plugin to 9.2.0** - Bumped the root `com.android.application` plugin to AGP 9.2.0 and validated that the app still builds and runs successfully with the existing Gradle 9.4.1 wrapper.
+
+- **Removed deprecated Gradle properties** - Cleaned up 7 deprecated options from `gradle.properties`:
+  - `android.usesSdkInManifest.disallowed`
+  - `android.sdk.defaultTargetSdkToCompileSdkIfUnset`
+  - `android.enableAppCompileTimeRClass`
+  - `android.builtInKotlin`
+  - `android.newDsl`
+  - `android.r8.optimizedResourceShrinking`
+  - `android.defaults.buildfeatures.resvalues`
+
+  These are now handled by AGP 9.2.0 defaults. Retained only essential properties: `android.nonTransitiveRClass` and `android.enableJetifier`.
+
+- **Migrated to AGP 9.1 built-in Kotlin** — Removed explicit `org.jetbrains.kotlin.android` plugin from root and app `build.gradle.kts` files. AGP 9.1+ includes Kotlin as a built-in feature, eliminating plugin conflicts. Added `android.disallowKotlinSourceSets=false` to allow KSP to generate Kotlin sources. Replaced deprecated `kotlinOptions` with modern `kotlin` DSL block.
+
+- **Enabled BuildConfig generation** — Added `buildConfig = true` to buildFeatures for custom debug/release configuration fields.
+
+### Added
+- **Debug logcat mirroring** — Automatic logcat output mirroring to file during development. All logcat output is written to `/sdcard/Android/data/com.vincentwetzel.androidscreensaver.debug/files/debug-logcat.txt` for easier debugging. Enabled only in debug builds via `BuildConfig.DEBUG_LOGCAT_MIRROR` (disabled in release builds).
+- **Multiple accounts per source type** — Google Drive now supports signing in to multiple accounts simultaneously (e.g., personal + work). Each account gets its own card on the main screen with independent folder selection, enable/disable toggle, and photo count. The slideshow combines photos from all enabled accounts.
+- **GoogleAccountManager** — New utility class that replaces the singleton auth state in GoogleDriveRepository. Manages per-account Drive services, OAuth tokens, and sign-out. All authenticated accounts are tracked in-memory with per-account Drive API clients.
+- **Per-account folder browsing** — FolderBrowserActivity and GoogleDriveViewModel now route all API calls to the correct account via accountId passed through intent extras.
+- **Per-account caching** — GoogleDrivePhotoRepository now uses per-account cache maps for folders and photo counts, preventing cross-account cache collisions. Cache keys include accountId prefix.
+- **Font size sliders for decorations** — Date, clock, and weather widgets now have continuous font size sliders (8sp–72sp) in the Customize Overlays settings. Replaces the previous Small/Medium/Large dropdown with precise control. Label shows current value (e.g., "Font Size (24sp)").
+- **Remove account option** — Source cards on the main screen now have a "more" menu with a "Remove account" option. This allows users to remove individual accounts (e.g., a second Google Drive account) after a confirmation dialog.
+
+### Fixed
+- **KSP repository map binding failure** - Replaced Hilt `@IntoMap` multibindings for `PhotoRepository` with explicit repository map assembly in `RepositoryModule`. This fixes the KSP error `@Provides methods of type map must declare a map key` during `:app:kspDebugKotlin`.
+- **Add Source dialog filtering** - Automatically hides singleton sources (like Gallery) from the dropdown if they have already been added. This prevents accidental duplicate additions and correctly surfaces Google Drive as the primary option for adding multiple accounts.
+- **Debug Kotlin compile failures** - Fixed malformed Kotlin imports in DreamService, Schedule settings, and SlideshowView; restored the missing SlideshowView brace; aligned Dropbox SDK calls with the 5.4 API; mapped photo info backgrounds to decoration backgrounds for overlay styling; and routed remote photo cache downloads through SlideshowManager instead of direct view-to-repository access.
+
+## 1.10.0
+
+### Added
+- **Screensaver timeout** — Automatically exit the screensaver after a specified duration. Preset options: 5min, 15min, 30min, 45min, 1hr, 1.5hr, 2hr. Custom option allows entering manual minutes (1-480) or hours (1-24). Requires "Start by Timer" to be enabled.
+
+## 1.9.2
+
+### Fixed
+- **RADIAL transition not working** — Fixed RADIAL transition to use `ViewAnimationUtils.createCircularReveal()` instead of simple scale animation. The transition now creates a true circular reveal effect that expands from the center of the image, properly revealing the new photo with a radial wipe effect.
+
+## 1.9.1
+
+### Fixed
+- **RADIAL transition black screen** — Fixed black screen during RADIAL transition by adding alpha fade-in animation. The target view now starts at alpha 0 and fades in while scaling from 0 to 1, preventing brief black screen artifacts.
+- **Loading overlay not hidden on error** — Fixed black screen when photos fail to load or no photos are found. The loading overlay is now properly hidden when an error occurs or the photo list is empty, allowing error messages to be visible.
+- **Gallery photos not loading (black screen)** — Added photo permission check before loading Gallery photos. Without the check, Coil silently failed to load `content://` URIs when permissions weren't granted, showing a permanent black screen. Now displays a clear error message: "Gallery photo access requires permission. Please grant photo permissions in Settings > Apps > Android Screensaver > Permissions."
+
 ## 1.9.0
 
 ### Added
@@ -22,6 +73,11 @@
 - **DecorationSettingsActivity save fix** — Removed `if (config.enabled)` checks that caused decorations to always save as `null` since `enabled` defaulted to `false`. All three decorations now always save with `enabled = true`.
 
 ## 1.8.0 (Current)
+
+### Changed
+- **Just-in-Time Photo Loading** — Eliminated the severe bottleneck where the app would synchronously download all photos from a Google Drive folder before starting the slideshow. The app now fetches lightweight metadata instantly and lets Coil download the photos just-in-time via remote URLs.
+- **Multi-Account OAuth Interceptor** — Configured a global Coil `ImageLoader` with an OkHttp interceptor that dynamically injects the correct Google Drive OAuth Bearer token based on an `accountId` query parameter attached to the image URI.
+- **SlideshowView Caching Fix** — Fixed a major performance bug in `SlideshowView` where a new `ImageLoader` was instantiated for every photo, breaking memory caching and connection pooling. It now correctly uses the singleton `context.imageLoader`.
 
 ### Added
 - **Gallery source** — Browse and select device photo folders via MediaStore API

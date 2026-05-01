@@ -57,6 +57,7 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
 - **Async:** Kotlin Coroutines + Flow
 - **Storage:** DataStore (preferences)
 - **Image Loading:** Coil
+- **Build:** Android Gradle Plugin 9.2.0 with Gradle 9.4.1
 - **Min SDK:** 26 (Android 8.0)
 - **Target SDK:** 34 (Android 14)
 

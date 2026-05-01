@@ -1,6 +1,7 @@
 package com.vincentwetzel.androidscreensaver.ui.settings
 
 import android.app.TimePickerDialog
+import android.content.Intent
 import android.os.Bundle
 import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
@@ -10,6 +11,7 @@ import com.vincentwetzel.androidscreensaver.data.model.DayOfWeek
 import com.vincentwetzel.androidscreensaver.data.model.ScheduleConfig
 import com.vincentwetzel.androidscreensaver.data.model.SchedulePreset
 import com.vincentwetzel.androidscreensaver.databinding.ActivityScheduleSettingsBinding
+import com.vincentwetzel.androidscreensaver.service.ScheduleService
 import com.vincentwetzel.androidscreensaver.utils.SettingsManager
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.Calendar
@@ -186,6 +188,9 @@ class ScheduleSettingsActivity : AppCompatActivity() {
         }
 
         SettingsManager.saveSlideshowConfig(this, newConfig)
+        
+        val scheduleIntent = Intent(this, ScheduleService::class.java)
+        startService(scheduleIntent)
     }
 
     private fun updateTimeButton() {

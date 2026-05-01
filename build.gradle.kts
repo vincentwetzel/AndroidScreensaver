@@ -1,6 +1,6 @@
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
+// Root build.gradle.kts
 plugins {
-    id("com.android.application") version "8.3.2" apply false
-    id("org.jetbrains.kotlin.android") version "1.9.22" apply false
-    id("com.google.dagger.hilt.android") version "2.50" apply false
+    id("com.android.application") version "9.2.0" apply false
+    id("com.google.devtools.ksp") version "2.3.2" apply false
+    id("com.google.dagger.hilt.android") version "2.59" apply false // MUST be 2.59+
 }

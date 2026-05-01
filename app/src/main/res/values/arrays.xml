@@ -203,4 +203,30 @@
         <item>shake</item>
         <item>voice</item>
     </string-array>
+
+    <!-- Screensaver Timeout Duration -->
+    <string-array name="screensaver_timeout_entries">
+        <item>Disabled</item>
+        <item>30 seconds</item>
+        <item>5 minutes</item>
+        <item>15 minutes</item>
+        <item>30 minutes</item>
+        <item>45 minutes</item>
+        <item>1 hour</item>
+        <item>1.5 hours</item>
+        <item>2 hours</item>
+        <item>Custom</item>
+    </string-array>
+    <string-array name="screensaver_timeout_values">
+        <item>DISABLED</item>
+        <item>SECONDS_30</item>
+        <item>MINUTES_5</item>
+        <item>MINUTES_15</item>
+        <item>MINUTES_30</item>
+        <item>MINUTES_45</item>
+        <item>MINUTES_60</item>
+        <item>MINUTES_90</item>
+        <item>MINUTES_120</item>
+        <item>CUSTOM</item>
+    </string-array>
 </resources>

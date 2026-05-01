@@ -57,13 +57,18 @@ Within the app, you can customize:
 **Decorations:**
 - Date, clock, and weather overlay toggles
 
+**Schedule & Timer:**
+- Autostart schedule (when to automatically start the screensaver)
+- Autostop schedule (when to automatically stop the screensaver)
+- Auto-exit timeout (how long before screensaver exits: Disabled, 30s, 5min, 15min, 30min, 45min, 1hr, 1.5hr, 2hr, or custom)
+
 **Display & Power:**
 - Screen rotation (portrait, landscape, or system default)
 - Keep screen on (prevent screen dimming)
 
 **Sync & Network:**
+- Sync timeout (how long to wait for network requests before timing out)
 - Wi-Fi only (only fetch cloud sources on Wi-Fi)
-- Network timeout duration
 
 **Appearance:**
 - Background color
@@ -93,4 +98,5 @@ Shows folders from your Google Drive account. Requires Google account authentica
 | Screensaver doesn't start | Check that "Android Screensaver" is selected in system screen saver settings |
 | No photos showing | Verify folders are selected and contain photos |
 | Google Drive sign-in fails | Check that your device has a Google account added |
+| 403 Error when adding Google account | If the app is unpublished, the Google account email must be added to the "Test users" list in Google Cloud Console (APIs & Services > OAuth consent screen). |
 | Gallery shows empty | Ensure device has photos and permission is granted |

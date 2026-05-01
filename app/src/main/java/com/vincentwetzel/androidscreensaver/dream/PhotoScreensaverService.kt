@@ -1,11 +1,20 @@
 package com.vincentwetzel.androidscreensaver.dream
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
 import android.service.dreams.DreamService
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.WindowManager
 import android.view.ViewGroup
 import com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger
+import com.vincentwetzel.androidscreensaver.data.model.TimeoutMinutes
+import com.vincentwetzel.androidscreensaver.data.model.TimeoutUnit
 import com.vincentwetzel.androidscreensaver.ui.slideshow.NoSourcesView
 import com.vincentwetzel.androidscreensaver.ui.slideshow.SlideshowView
 import com.vincentwetzel.androidscreensaver.utils.SettingsManager
@@ -23,10 +32,38 @@ class PhotoScreensaverService : DreamService() {
 
     private var slideshowView: SlideshowView? = null
     private var gestureDetector: GestureDetector? = null
+    private var timeoutHandler: Handler? = null
+    private var timeoutRunnable: Runnable? = null
+    
+    private val stopReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "com.vincentwetzel.androidscreensaver.STOP_DREAM") {
+                finish()
+            }
+        }
+    }
+    
+    private val powerSaveReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == PowerManager.ACTION_POWER_SAVE_MODE_CHANGED) {
+                if (slideshowManager.config.respectBatterySaver) {
+                    val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                    if (powerManager.isPowerSaveMode) {
+                        slideshowView?.pause()
+                    } else {
+                        slideshowView?.resume()
+                    }
+                }
+            }
+        }
+    }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         android.util.Log.d("PhotoScreensaver", "onAttachedToWindow - screensaver started!")
+        
+        registerReceiver(stopReceiver, IntentFilter("com.vincentwetzel.androidscreensaver.STOP_DREAM"), RECEIVER_NOT_EXPORTED)
+        registerReceiver(powerSaveReceiver, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED), RECEIVER_NOT_EXPORTED)
 
         isInteractive = false
         isScreenBright = false
@@ -100,6 +137,9 @@ class PhotoScreensaverService : DreamService() {
 
         // Setup exit trigger handling
         setupExitTrigger()
+
+        // Setup timeout if enabled
+        setupTimeout()
     }
 
     /**
@@ -126,13 +166,73 @@ class PhotoScreensaverService : DreamService() {
         return super.dispatchTouchEvent(ev)
     }
 
+    /**
+     * Setup screensaver timeout if timer is enabled
+     */
+    private fun setupTimeout() {
+        val timerConfig = slideshowManager.config.timerConfig
+        
+        android.util.Log.d(TAG, "setupTimeout called - timeout=${timerConfig.timeoutMinutes}")
+        
+        // Only setup timeout if not disabled
+        if (timerConfig.timeoutMinutes == TimeoutMinutes.DISABLED) {
+            android.util.Log.d(TAG, "Screensaver timeout disabled")
+            return
+        }
+
+        // Calculate timeout duration in milliseconds
+        val timeoutMillis = when (timerConfig.timeoutMinutes) {
+            TimeoutMinutes.DISABLED -> 0L // Should never reach here due to early return
+            TimeoutMinutes.SECONDS_30 -> 30 * 1000L
+            TimeoutMinutes.MINUTES_5 -> 5 * 60 * 1000L
+            TimeoutMinutes.MINUTES_15 -> 15 * 60 * 1000L
+            TimeoutMinutes.MINUTES_30 -> 30 * 60 * 1000L
+            TimeoutMinutes.MINUTES_45 -> 45 * 60 * 1000L
+            TimeoutMinutes.MINUTES_60 -> 60 * 60 * 1000L
+            TimeoutMinutes.MINUTES_90 -> 90 * 60 * 1000L
+            TimeoutMinutes.MINUTES_120 -> 120 * 60 * 1000L
+            TimeoutMinutes.CUSTOM -> {
+                // Use custom value
+                val multiplier = if (timerConfig.customTimeoutUnit == TimeoutUnit.HOURS) 60 else 1
+                timerConfig.customTimeoutValue * multiplier * 60 * 1000L
+            }
+        }
+
+        android.util.Log.d(TAG, "Screensaver timeout: $timeoutMillis ms (${timeoutMillis / 1000} seconds)")
+
+        // Create handler and runnable for timeout
+        timeoutHandler = Handler(Looper.getMainLooper())
+        timeoutRunnable = Runnable {
+            android.util.Log.d(TAG, "Screensaver timeout reached - finishing screensaver!")
+            finish()
+        }
+
+        // Post the delayed runnable
+        timeoutHandler?.postDelayed(timeoutRunnable!!, timeoutMillis)
+        android.util.Log.d(TAG, "Timeout scheduled successfully")
+    }
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         android.util.Log.d(TAG, "onDetachedFromWindow")
+        
+        unregisterReceiver(stopReceiver)
+        unregisterReceiver(powerSaveReceiver)
+        
+        // Clean up timeout handler
+        timeoutHandler?.let { handler ->
+            timeoutRunnable?.let { runnable ->
+                handler.removeCallbacks(runnable)
+            }
+        }
+        timeoutHandler = null
+        timeoutRunnable = null
+        
         slideshowView?.stop()
         slideshowView = null
         gestureDetector = null
     }
+
 
     companion object {
         private const val TAG = "PhotoScreensaver"

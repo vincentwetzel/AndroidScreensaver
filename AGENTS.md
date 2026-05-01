@@ -26,6 +26,15 @@ This file describes the roles/agents that can work on this project.
 
 ---
 
+## 🚫 CRITICAL: No Legacy Code / Zero Backward Compatibility
+
+**This project is pre-release. There is ZERO guaranteed compatibility with previous versions.**
+- Do NOT write migration code for old settings formats.
+- Do NOT keep "legacy" fallbacks for backwards compatibility.
+- If a data structure changes, break it and use the new one. Old structures should be deleted entirely.
+
+---
+
 ## ⚠️ Documentation Rule (MANDATORY)
 
 **Any coding agent that adds, removes, or modifies a feature MUST update all relevant markdown files in this project before completing the task.**

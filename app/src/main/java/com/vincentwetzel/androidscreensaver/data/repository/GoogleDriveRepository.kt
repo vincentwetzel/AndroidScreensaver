@@ -2,159 +2,104 @@ package com.vincentwetzel.androidscreensaver.data.repository
 
 import android.content.Context
 import android.content.Intent
-import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.Scope
-import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
-import com.google.api.client.http.javanet.NetHttpTransport
-import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.drive.Drive
-import com.google.api.services.drive.DriveScopes
-import com.vincentwetzel.androidscreensaver.utils.GoogleOAuthConfig
+import com.vincentwetzel.androidscreensaver.utils.GoogleAccountManager
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Google Drive Repository
- * Handles authentication and provides Drive API client
+ * Handles per-account Drive API access via GoogleAccountManager.
+ * All methods now accept an accountId to support multiple accounts.
+ * Legacy single-account behavior is preserved via accountId = null (uses the first available account).
  */
 @Singleton
 class GoogleDriveRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val accountManager: GoogleAccountManager
 ) {
-    // Authentication state
-    private val _isAuthenticated = MutableStateFlow(false)
-    val isAuthenticated: StateFlow<Boolean> = _isAuthenticated.asStateFlow()
-
-    private val _currentAccount = MutableStateFlow<GoogleSignInAccount?>(null)
-    val currentAccount: StateFlow<GoogleSignInAccount?> = _currentAccount.asStateFlow()
-
-    // Drive API client
-    private var driveService: Drive? = null
-    private var driveCredential: GoogleAccountCredential? = null
 
     init {
         // Automatically check for existing sign-in when repository is created
-        checkExistingSignIn()
-    }
-
-    // Google Sign-In client
-    private val googleSignInClient: GoogleSignInClient by lazy {
-        val signInOptions = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestEmail()
-            .requestScopes(Scope(DriveScopes.DRIVE_READONLY))
-            .requestScopes(Scope(DriveScopes.DRIVE_METADATA_READONLY))
-            .apply {
-                // Only request ID token if WEB_CLIENT_ID is configured
-                if (GoogleOAuthConfig.WEB_CLIENT_ID.isNotEmpty()) {
-                    requestIdToken(GoogleOAuthConfig.WEB_CLIENT_ID)
-                }
-            }
-            .build()
-
-        GoogleSignIn.getClient(context, signInOptions)
+        accountManager.checkExistingSignIn()
     }
 
     /**
      * Get the sign-in intent to launch Google authentication
      */
-    fun getSignInIntent(): Intent {
-        return googleSignInClient.signInIntent
+    fun getSignInIntent(): Intent = accountManager.getSignInIntent()
+
+    /**
+     * Handle the sign-in result. Returns the accountId if successful, null otherwise.
+     */
+    fun handleSignInResult(account: GoogleSignInAccount?): String? {
+        return accountManager.handleSignInResult(account)
     }
 
     /**
-     * Handle the sign-in result
+     * Get the OAuth access token for a specific account (for use with OkHttp).
+     * If accountId is null, returns the token for the first available account (legacy compat).
      */
-    suspend fun handleSignInResult(account: GoogleSignInAccount?): Boolean {
-        return try {
-            if (account != null) {
-                _currentAccount.value = account
-                initializeDriveService(account)
-                _isAuthenticated.value = true
-                true
-            } else {
-                false
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
+    fun getAccessToken(accountId: String? = null): String? {
+        val id = accountId ?: accountManager.getAuthenticatedAccountIds().firstOrNull()
+            ?: return null
+        return accountManager.getAccessToken(id)
+    }
+
+    /**
+     * Get the Drive API service for a specific account.
+     * If accountId is null, returns the service for the first available account (legacy compat).
+     */
+    fun getDriveService(accountId: String? = null): Drive? {
+        val id = accountId ?: accountManager.getAuthenticatedAccountIds().firstOrNull()
+            ?: return null
+        return accountManager.getDriveService(id)
+    }
+
+    /**
+     * Get the GoogleSignInAccount for a specific account.
+     */
+    fun getAccount(accountId: String): GoogleSignInAccount? {
+        return accountManager.getAccount(accountId)
+    }
+
+    /**
+     * Check if a specific account is authenticated.
+     * If accountId is null, checks if any account is authenticated (legacy compat).
+     */
+    fun isAccountAuthenticated(accountId: String? = null): Boolean {
+        return if (accountId != null) {
+            accountManager.isAccountAuthenticated(accountId)
+        } else {
+            accountManager.getAuthenticatedAccountIds().isNotEmpty()
         }
     }
 
     /**
-     * Initialize the Drive API service with the authenticated account
+     * Get all currently authenticated account IDs.
      */
-    private fun initializeDriveService(account: GoogleSignInAccount) {
-        driveCredential = GoogleAccountCredential.usingOAuth2(
-            context, listOf(DriveScopes.DRIVE_READONLY)
-        )
-        driveCredential!!.selectedAccount = account.account
+    fun getAuthenticatedAccountIds(): Set<String> = accountManager.getAuthenticatedAccountIds()
 
-        driveService = Drive.Builder(
-            NetHttpTransport(),
-            GsonFactory.getDefaultInstance(),
-            driveCredential
-        )
-            .setApplicationName("Android Screensaver")
-            .build()
+    /**
+     * Sign out and remove a specific account.
+     */
+    fun signOutAccount(accountId: String) {
+        accountManager.signOutAccount(accountId)
     }
 
     /**
-     * Get the OAuth access token for the current account (for use with OkHttp)
+     * Sign out all accounts and clear the Google Sign-In session.
      */
-    fun getAccessToken(): String? {
-        return try {
-            driveCredential?.getToken()
-        } catch (e: Exception) {
-            android.util.Log.e("GoogleDriveRepo", "Failed to get access token", e)
-            null
-        }
+    fun signOutAll() {
+        accountManager.signOutAll()
     }
 
     /**
-     * Get the Drive API service (must be authenticated first)
+     * Revoke access and remove all accounts.
      */
-    fun getDriveService(): Drive? {
-        return driveService
-    }
-
-    /**
-     * Sign out the current user
-     */
-    suspend fun signOut() {
-        googleSignInClient.signOut().addOnCompleteListener {
-            _isAuthenticated.value = false
-            _currentAccount.value = null
-            driveService = null
-        }
-    }
-
-    /**
-     * Revoke access and sign out
-     */
-    suspend fun revokeAccess() {
-        googleSignInClient.revokeAccess().addOnCompleteListener {
-            _isAuthenticated.value = false
-            _currentAccount.value = null
-            driveService = null
-        }
-    }
-
-    /**
-     * Check if user is already signed in (silent sign-in)
-     */
-    fun checkExistingSignIn() {
-        val account = GoogleSignIn.getLastSignedInAccount(context)
-        if (account != null && GoogleOAuthConfig.CLIENT_ID.isNotEmpty()) {
-            _currentAccount.value = account
-            _isAuthenticated.value = true
-            initializeDriveService(account)
-        }
+    fun revokeAll() {
+        accountManager.revokeAll()
     }
 }

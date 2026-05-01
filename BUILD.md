@@ -5,6 +5,7 @@
 - Android Studio Hedgehog or newer
 - JDK 17 (configured in project)
 - Android SDK 34 (compileSdk), minSdk 26
+- Android Gradle Plugin 9.2.0 with Gradle 9.4.1 wrapper
 
 ## Build Commands
 
@@ -50,6 +51,44 @@ Shows debug keystore SHA-1 fingerprint for Google Cloud Console setup.
 See [GOOGLE_CLOUD_SETUP.md](GOOGLE_CLOUD_SETUP.md) for full details.
 
 ## Troubleshooting
+
+### Debug Logcat Mirroring
+During development, all logcat output is automatically mirrored to a file for easier debugging:
+- **Location**: `/sdcard/Android/data/com.vincentwetzel.androidscreensaver.debug/files/debug-logcat.txt`
+- **Enabled**: Debug builds only (disabled in release builds via `BuildConfig.DEBUG_LOGCAT_MIRROR`)
+- **View the log**:
+  ```bash
+  adb shell "cat /sdcard/Android/data/com.vincentwetzel.androidscreensaver.debug/files/debug-logcat.txt"
+  ```
+- **Pull to computer**:
+  ```bash
+  adb pull /sdcard/Android/data/com.vincentwetzel.androidscreensaver.debug/files/debug-logcat.txt
+  ```
+
+This feature is developer-only and will NOT be active in release builds.
+
+### Kotlin Plugin Conflict with AGP 9.1+
+With AGP 9.1+ (including the current AGP 9.2.0 setup), Kotlin is now built-in and the explicit `org.jetbrains.kotlin.android` plugin should **NOT** be applied. This project has been migrated:
+- Removed `id("org.jetbrains.kotlin.android")` from both root and app `build.gradle.kts`
+- Replaced deprecated `kotlinOptions { jvmTarget = "17" }` with modern `kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }`
+- Added `android.disallowKotlinSourceSets=false` to allow KSP to generate Kotlin sources
+
+### KSP map-key error in RepositoryModule
+If KSP reports `@Provides methods of type map must declare a map key`, check `RepositoryModule`. Photo repositories should be injected as concrete Hilt bindings via their `@Inject` constructors, and `provideSlideshowManager()` should assemble the `Map<SourceType, PhotoRepository>` explicitly. Do not reintroduce `@IntoMap` providers for the photo repository map.
+
+### Deprecated Gradle Properties Warning
+The following deprecated properties were removed from `gradle.properties`:
+- `android.usesSdkInManifest.disallowed`
+- `android.sdk.defaultTargetSdkToCompileSdkIfUnset`
+- `android.enableAppCompileTimeRClass`
+- `android.builtInKotlin`
+- `android.newDsl`
+- `android.r8.optimizedResourceShrinking`
+- `android.defaults.buildfeatures.resvalues`
+
+These are now handled by AGP 9.2.0 defaults. The only custom properties retained are:
+- `android.nonTransitiveRClass=true` (for smaller R classes)
+- `android.enableJetifier=false` (to prevent Hilt annotation corruption)
 
 ### Google Sign-In fails with status code 10
 - Verify SHA-1 fingerprint matches your debug keystore

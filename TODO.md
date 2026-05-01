@@ -16,6 +16,13 @@
 ### SlideshowView
 - [x] **Video double-advance**: Added `isAdvancing` guard flag to prevent ExoPlayer + auto-advance race
 
+### UI / MainActivity
+- [x] **Add Source Dialog**: Filtered out singleton sources (like Gallery) if they already exist, preventing duplicate selections.
+
+### Build / Dependency Injection
+- [x] **KSP repository map binding failure**: Removed Hilt `@IntoMap` usage for `PhotoRepository` providers and explicitly assembles the source repository map in `RepositoryModule`.
+- [x] **Debug Kotlin compile cascade**: Fixed illegal mid-file imports, the missing `SlideshowView` brace, missing coroutine/Hilt imports, `dream.SourceType` references, Dropbox SDK 5.4 method usage, the photo info background enum mismatch, and the direct SlideshowView repository reference.
+
 ### Settings Fragment
 - [x] **`clear_cache`**: Now clears Coil memory and disk cache
 - [x] **`start_by_timer`**: Wired `OnPreferenceChangeListener` with DataStore persistence
@@ -26,21 +33,26 @@
 - [x] **Schedule tab switching**: Autostop tab now correctly loads its own settings when selected
 
 ## Enhancements — Active Components
+- [x] **Font size sliders for widgets**: Date, clock, and weather widgets now have continuous font size sliders (8sp–72sp) in Customize Overlays settings. Replaces the previous Small/Medium/Large dropdown with precise control.
 - [x] **Gallery photo preloading**: `SlideshowManager.preloadPhoto()` now routes correctly for Gallery (content:// URIs), Google Drive cached (file:// URIs), and remote URLs
 - [x] **Background folder pre-fetching**: Root folders are now fetched on background thread when a source is enabled/authenticated at app launch or via toggle. Cache is populated before the user clicks into the folder browser, making the initial load instant.
 - [x] **Photo count per source**: Main screen cards now show "X photos available" under the status text, fetched from repositories on card refresh
 - [x] **Source status indicators**: Colored dot indicators (green/orange/red) on source cards show connected/syncing/error states
 - [x] **Better error messages in folder browser**: Created `FolderError` sealed class with typed errors (NetworkError, AuthError, PermissionError, ApiError, EmptyError, UnknownError) and user-friendly messages
 - [x] **Folder thumbnail previews**: Folder items now show first photo as thumbnail using Coil (Gallery photos via content:// URIs, Google Drive falls back to folder icon)
+- [x] **Just-in-Time Photo Loading**: Eliminated the front-loaded mass download bottleneck for Google Drive. Photos are now loaded instantly via remote URLs with OAuth headers injected by a Coil Interceptor.
+- [x] **SlideshowView Cache Fix**: Switched to singleton `context.imageLoader` to restore proper memory caching and connection pooling.
 
 ## New Features
-- [ ] Date/clock overlay on photos during slideshow
-- [ ] Weather overlay on photos during slideshow
-- [ ] Photo info overlay (filename, date, source) during slideshow
-- [ ] Schedule-based source enabling (autostart/autostop schedules)
-- [ ] Battery-saver aware slideshow (pause on low battery)
-- [ ] Local photo cache for offline Google Drive use
-- [ ] Thumbnail caching for folder browser
+- [x] Multiple accounts per source type — Google Drive now supports signing in to multiple accounts simultaneously (e.g., 2 Google Drive accounts). Each account has independent folder selection, enable/disable toggle, and photo loading. The slideshow combines photos from all enabled accounts. UI shows one card per account with "Signed in as [email]" status.
+- [x] Remove account option on source cards.
+- [x] Date/clock overlay on photos during slideshow
+- [x] Weather overlay on photos during slideshow
+- [x] Photo info overlay (filename, date, source) during slideshow
+- [x] Schedule-based source enabling (autostart/autostop schedules)
+- [x] Battery-saver aware slideshow (pause on low battery)
+- [x] Local photo cache for offline Google Drive use
+- [x] Thumbnail caching for folder browser
 
 ### Cleanup
 - [x] **Removed "Include subfolders" toggle** — Subfolder inclusion is now always-on by default. Removed toggle switch from folder browser UI, ViewModels, and `includeSubfolders` fields from `SourceConfig` and `SelectedFolder` data models.
@@ -54,7 +66,7 @@
   - **Both**: `FolderAdapter.cascadeSelection()` updates selected/deselected sets, both are persisted to DataStore. The user can later override any subfolder's state individually.
 
 ## New Sources (Low Priority)
-- [ ] Dropbox integration
+- [x] Dropbox integration
 - [ ] Google Photos integration
 - [ ] OneDrive integration
 - [ ] Local network (SMB/WebDAV) support
@@ -62,6 +74,7 @@
 ## Quality
 - [ ] Unit tests for repositories
 - [ ] Instrumentation tests for folder browser
+- [x] Re-run `:app:assembleDebug` after the AGP 9.2.0 bump and confirm the app still runs
 - [ ] Lint checks passing
 - [ ] Memory leak detection (LeakCanary)
 
@@ -117,6 +130,12 @@
 - ✅ **Min Video Duration setting**: New spinner lets users exclude videos shorter than a threshold (5s, 10s, 15s, 30s, 1min). Short videos are auto-skipped in slideshow.
 - ✅ **Video playback settings simplified**: Removed autoplay/loop toggles (always on). Removed display mode options (always plays full). Content Type renamed from Content Filter.
 - ✅ **Folder browser summary counts fixed**: Both Gallery and Drive folder browsers now correctly sum only selected folders' counts using `adapter.getPhotoCount()` instead of `viewModel.getPhotoCount()`.
+- ✅ **Add Source dialog filtering**: Singleton sources like Gallery are now hidden from the Add Source dialog once they are added, making it easier to select Google Drive for a secondary account.
+
+- ✅ **Multiple accounts per source**: Full multi-account support for Google Drive. Each account has its own card on the main screen, independent folder selection, independent enable/disable toggle, and per-account photo loading. The slideshow combines photos from all enabled accounts. Per-account caching in GoogleDrivePhotoRepository prevents cross-account cache collisions.
+- ✅ **GoogleAccountManager**: New utility class replaces singleton auth state in GoogleDriveRepository. Manages per-account Drive services, OAuth tokens, and sign-out.
+- ✅ **Per-account folder browsing**: FolderBrowserActivity and GoogleDriveViewModel route all API calls to the correct account via accountId.
+- ✅ **Per-account settings persistence**: SettingsManager.isSourceEnabled() and hasAnySourceConfigured() now check multi-account state.
 
 ### In Progress
 - (none)

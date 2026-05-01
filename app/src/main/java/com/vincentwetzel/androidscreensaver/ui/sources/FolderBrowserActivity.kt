@@ -13,7 +13,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.FolderError.Companion.userMessage
+import com.vincentwetzel.androidscreensaver.data.model.SourceType
 import com.vincentwetzel.androidscreensaver.databinding.ActivityFolderBrowserBinding
+import com.vincentwetzel.androidscreensaver.utils.SettingsManager
 import com.vincentwetzel.androidscreensaver.viewmodel.GoogleDriveViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
@@ -21,7 +23,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Folder Browser Activity
- * Allows user to select which Google Drive folders to include in the screensaver
+ * Allows user to select which Google Drive folders to include in the screensaver.
+ * Now supports per-account browsing via accountId intent extra.
  */
 @AndroidEntryPoint
 class FolderBrowserActivity : AppCompatActivity() {
@@ -29,6 +32,7 @@ class FolderBrowserActivity : AppCompatActivity() {
     private lateinit var binding: ActivityFolderBrowserBinding
     private val viewModel: GoogleDriveViewModel by viewModels()
     private lateinit var adapter: FolderAdapter
+    private var accountId: String? = null
 
     companion object {
         const val EXTRA_SELECTED_FOLDERS = "selected_folders"
@@ -40,17 +44,24 @@ class FolderBrowserActivity : AppCompatActivity() {
         binding = ActivityFolderBrowserBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Get accountId from intent
+        accountId = intent.getStringExtra("account_id")
+
         setupToolbar()
         setupRecyclerView()
         setupButtons()
         observeViewModel()
 
-        // Handle system back button — navigate to previous folder, or finish if none
+        // Configure ViewModel with accountId
+        accountId?.let { id ->
+            viewModel.setAccountId(id)
+        }
+
+        // Handle system back button
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 val didNavigate = viewModel.navigateBack()
                 if (!didNavigate) {
-                    // No history left — finish and return to main menu
                     isEnabled = false
                     onBackPressedDispatcher.onBackPressed()
                 }
@@ -63,15 +74,12 @@ class FolderBrowserActivity : AppCompatActivity() {
         viewModel.loadFolders(parentFolderId = null, forceRefresh = false, addToBackStack = false, mediaFilter = mediaFilter)
     }
 
-    /**
-     * Get the current content filter setting and map it to a string for the repository.
-     */
     private fun getContentFilter(): String? {
-        val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(this)
+        val config = SettingsManager.getSlideshowConfig(this)
         return when (config.mediaTypeFilter) {
             com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "images"
             com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY -> "videos"
-            else -> null // BOTH
+            else -> null
         }
     }
 
@@ -81,53 +89,70 @@ class FolderBrowserActivity : AppCompatActivity() {
 
         binding.toolbar.setNavigationOnClickListener {
             val didNavigate = viewModel.navigateBack()
-            if (!didNavigate) {
-                // No history left — return to main menu
-                finish()
-            }
+            if (!didNavigate) finish()
         }
     }
 
     private fun setupRecyclerView() {
         val mediaFilter = getContentFilter()
+        val dreamSourceType = com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE
+
         adapter = FolderAdapter(
             onSelectionChanged = { selectedIds ->
-                // Auto-save selections immediately
-                com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSelectedFolders(
-                    this,
-                    com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE,
-                    selectedIds
-                )
+                accountId?.let { id ->
+                    val account = SettingsManager.getAccount(this, dreamSourceType, id)
+                    account?.let {
+                        val updated = it.copy(
+                            selectedFolders = selectedIds.map { folderId ->
+                                com.vincentwetzel.androidscreensaver.data.model.SelectedFolder(
+                                    folderId = folderId, folderName = folderId, path = folderId, isSelected = true
+                                )
+                            },
+                            deselectedFolders = adapter.getDeselectedFolders()
+                        )
+                        SettingsManager.saveAccount(this, updated)
+                    }
+                }
                 updateSummary(selectedIds.size, adapter.getPhotoCount())
             },
             onFolderClick = { folderId ->
                 viewModel.navigateToFolder(folderId)
             },
             onDeselectionChanged = { deselectedIds ->
-                // Auto-save deselections immediately
-                com.vincentwetzel.androidscreensaver.utils.SettingsManager.setDeselectedFolders(
-                    this,
-                    com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE,
-                    deselectedIds
-                )
+                accountId?.let { id ->
+                    val account = SettingsManager.getAccount(this, dreamSourceType, id)
+                    account?.let {
+                        val updated = it.copy(
+                            selectedFolders = adapter.getSelectedFolders().map { fId ->
+                                com.vincentwetzel.androidscreensaver.data.model.SelectedFolder(
+                                    folderId = fId, folderName = fId, path = fId, isSelected = true
+                                )
+                            },
+                            deselectedFolders = deselectedIds
+                        )
+                        SettingsManager.saveAccount(this, updated)
+                    }
+                }
             },
             onFolderChecked = { folderId, isChecked ->
-                // Cascade: fetch subfolder IDs and apply cascade
                 lifecycleScope.launch {
                     val childIds = viewModel.getSubfolderIds(folderId).toSet()
                     if (childIds.isNotEmpty()) {
                         adapter.cascadeSelection(folderId, isChecked, childIds)
-                        // Re-persist selections and deselections after cascade
-                        com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSelectedFolders(
-                            this@FolderBrowserActivity,
-                            com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE,
-                            adapter.getSelectedFolders()
-                        )
-                        com.vincentwetzel.androidscreensaver.utils.SettingsManager.setDeselectedFolders(
-                            this@FolderBrowserActivity,
-                            com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE,
-                            adapter.getDeselectedFolders()
-                        )
+                        accountId?.let { id ->
+                            val account = SettingsManager.getAccount(this@FolderBrowserActivity, dreamSourceType, id)
+                            account?.let {
+                                val updated = it.copy(
+                                    selectedFolders = adapter.getSelectedFolders().map { fId ->
+                                        com.vincentwetzel.androidscreensaver.data.model.SelectedFolder(
+                                            folderId = fId, folderName = fId, path = fId, isSelected = true
+                                        )
+                                    },
+                                    deselectedFolders = adapter.getDeselectedFolders()
+                                )
+                                SettingsManager.saveAccount(this@FolderBrowserActivity, updated)
+                            }
+                        }
                         updateSummary(adapter.getSelectedFolders().size, adapter.getPhotoCount())
                     }
                 }
@@ -138,28 +163,21 @@ class FolderBrowserActivity : AppCompatActivity() {
         binding.recyclerFolders.layoutManager = LinearLayoutManager(this)
         binding.recyclerFolders.adapter = adapter
 
-        // Restore previously saved folder selections
         restoreSelectedFolders()
     }
 
     private fun restoreSelectedFolders() {
-        val savedFolders = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSelectedFolders(
-            this,
-            com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE
-        )
-        val savedFolderIds = savedFolders.map { it.id }.toSet()
+        val account = accountId?.let {
+            SettingsManager.getAccount(this, com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE, it)
+        }
+        val savedFolderIds = account?.selectedFolders?.map { it.folderId }?.toSet() ?: emptySet()
         adapter.setSelectedFolders(savedFolderIds)
 
-        // Restore deselected folders
-        val deselectedIds = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getDeselectedFolders(
-            this,
-            com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE
-        )
+        val deselectedIds = account?.deselectedFolders ?: emptySet()
         adapter.setDeselectedFolders(deselectedIds)
     }
 
     private fun setupButtons() {
-        // Pull-to-refresh for force reload
         binding.swipeRefresh.setOnRefreshListener {
             viewModel.loadFolders(forceRefresh = true)
         }
@@ -183,11 +201,8 @@ class FolderBrowserActivity : AppCompatActivity() {
                     binding.recyclerFolders.visibility = View.VISIBLE
                     binding.emptyState.visibility = View.GONE
                     adapter.submitList(folders)
-                    // Restore selected folders after list is submitted
                     restoreSelectedFolders()
-                    // Set parent folder context for auto-checking subfolders
                     adapter.setCurrentParentFolderId(viewModel.currentFolderId.value)
-                    // Update title to show current folder name
                     val currentFolder = folders.find { it.id == viewModel.currentFolderId.value }
                     supportActionBar?.title = currentFolder?.name ?: "Browse Folders"
                 }
@@ -196,11 +211,7 @@ class FolderBrowserActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             viewModel.currentFolderId.collectLatest { folderId ->
-                supportActionBar?.title = if (folderId != null) {
-                    "📁 Subfolder"
-                } else {
-                    "Browse Folders"
-                }
+                supportActionBar?.title = if (folderId != null) "📁 Subfolder" else "Browse Folders"
                 adapter.setCurrentParentFolderId(folderId)
             }
         }

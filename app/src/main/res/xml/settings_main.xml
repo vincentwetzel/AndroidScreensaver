@@ -52,65 +52,53 @@
 
     <!-- Media & Content Category -->
     <PreferenceCategory
-        app:title="Media &amp; Content"
+        app:title="Media Content"
         app:iconSpaceReserved="false">
 
         <ListPreference
-            app:key="media_order"
-            app:title="Media Order"
-            app:summary="Shuffle/Random"
-            app:defaultValue="shuffle"
-            app:entries="@array/media_order_entries"
-            app:entryValues="@array/media_order_values"
-            app:iconSpaceReserved="false" />
-
-        <ListPreference
             app:key="content_filter"
-            app:title="Content Type"
+            app:title="Media Type"
             app:summary="Images Only"
             app:defaultValue="images"
             app:entries="@array/content_filter_entries"
             app:entryValues="@array/content_filter_values"
             app:iconSpaceReserved="false" />
 
+        <ListPreference
+            app:key="media_order"
+            app:title="Playback Order"
+            app:summary="Shuffle/Random"
+            app:defaultValue="shuffle"
+            app:entries="@array/media_order_entries"
+            app:entryValues="@array/media_order_values"
+            app:iconSpaceReserved="false" />
+
         <SwitchPreferenceCompat
             app:key="match_orientation"
-            app:title="Match Device Orientation Only"
+            app:title="Match Device Orientation"
+            app:summary="Skip photos/videos in wrong orientation"
             app:defaultValue="false"
             app:iconSpaceReserved="false" />
 
     </PreferenceCategory>
 
-    <!-- Slideshow Category -->
+    <!-- Photo Display Category -->
     <PreferenceCategory
-        app:title="Slideshow"
+        app:title="Photos"
         app:iconSpaceReserved="false">
 
         <ListPreference
             app:key="display_time"
-            app:title="Display Time"
+            app:title="Photo Duration"
             app:summary="5 seconds"
             app:defaultValue="5"
             app:entries="@array/display_time_entries"
             app:entryValues="@array/display_time_values"
             app:iconSpaceReserved="false" />
 
-        <Preference
-            app:key="video_playback"
-            app:title="Video Playback Settings"
-            app:summary="Muted"
-            app:iconSpaceReserved="false" />
-
-    </PreferenceCategory>
-
-    <!-- Display & Transitions Category -->
-    <PreferenceCategory
-        app:title="Display &amp; Transitions"
-        app:iconSpaceReserved="false">
-
         <ListPreference
             app:key="display_effect"
-            app:title="Display Effect"
+            app:title="Photo Animation"
             app:summary="Crop to Fit"
             app:defaultValue="crop_to_fit"
             app:entries="@array/display_effect_entries"
@@ -128,7 +116,7 @@
 
         <ListPreference
             app:key="transition_duration"
-            app:title="Transition Duration"
+            app:title="Transition Speed"
             app:summary="1 second"
             app:defaultValue="1000"
             app:entries="@array/transition_duration_entries"
@@ -137,32 +125,53 @@
 
     </PreferenceCategory>
 
-    <!-- Decorations Category -->
+    <!-- Video Playback Category -->
     <PreferenceCategory
-        app:title="Decorations"
+        app:title="Videos"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreferenceCompat
+            app:key="video_playback_enabled"
+            app:title="Enable Video Playback"
+            app:summary="Play videos in the slideshow"
+            app:defaultValue="true"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            app:key="video_playback"
+            app:title="Video Settings"
+            app:summary="Configure audio, display, and behavior"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- On-Screen Overlays Category -->
+    <PreferenceCategory
+        app:title="On-Screen Overlays"
         app:iconSpaceReserved="false">
 
         <SwitchPreferenceCompat
             app:key="decoration_date"
-            app:title="Date"
+            app:title="Show Date"
             app:defaultValue="false"
             app:iconSpaceReserved="false" />
 
         <SwitchPreferenceCompat
             app:key="decoration_clock"
-            app:title="Clock"
+            app:title="Show Clock"
             app:defaultValue="false"
             app:iconSpaceReserved="false" />
 
         <SwitchPreferenceCompat
             app:key="decoration_weather"
-            app:title="Weather"
+            app:title="Show Weather"
             app:defaultValue="false"
             app:iconSpaceReserved="false" />
 
         <Preference
             app:key="decoration_customize"
-            app:title="Customize Decorations"
+            app:title="Customize Overlays"
+            app:summary="Position, size, opacity, and more"
             app:iconSpaceReserved="false" />
 
     </PreferenceCategory>
@@ -174,100 +183,50 @@
 
         <SwitchPreferenceCompat
             app:key="photo_info_enabled"
-            app:title="Show Photo Information"
+            app:title="Show Photo Details"
             app:defaultValue="false"
-            app:summary="Display metadata overlay during slideshow"
+            app:summary="Display file name, date, dimensions, etc."
             app:iconSpaceReserved="false" />
 
         <Preference
             app:key="photo_info_customize"
-            app:title="Customize Photo Information"
-            app:summary="Configure fields, appearance, and behavior"
+            app:title="Customize Photo Details"
+            app:summary="Choose which fields to display"
             app:iconSpaceReserved="false" />
 
     </PreferenceCategory>
 
-    <!-- Schedule & Timer Category -->
+    <!-- Screensaver Timing Category -->
     <PreferenceCategory
-        app:title="Schedule &amp; Timer"
+        app:title="Screensaver Timing"
         app:iconSpaceReserved="false">
 
         <Preference
             app:key="autostart"
-            app:title="Autostart Schedule"
+            app:title="Auto-Start Schedule"
             app:summary="Disabled"
             app:iconSpaceReserved="false" />
 
         <Preference
             app:key="autostop"
-            app:title="Autostop Schedule"
+            app:title="Auto-Stop Schedule"
             app:summary="Disabled"
             app:iconSpaceReserved="false" />
 
-        <SwitchPreferenceCompat
-            app:key="start_by_timer"
-            app:title="Start by Timer"
-            app:defaultValue="false"
+        <ListPreference
+            app:key="screensaver_timeout"
+            app:title="Auto-Exit Timer"
+            app:summary="30 minutes"
+            app:defaultValue="MINUTES_30"
+            app:entries="@array/screensaver_timeout_entries"
+            app:entryValues="@array/screensaver_timeout_values"
             app:iconSpaceReserved="false" />
 
     </PreferenceCategory>
 
-    <!-- Display & Power Category -->
+    <!-- Screen & Power Category -->
     <PreferenceCategory
-        app:title="Display &amp; Power"
-        app:iconSpaceReserved="false">
-
-        <ListPreference
-            app:key="screen_rotation"
-            app:title="Screen Rotation"
-            app:summary="Use System Settings"
-            app:defaultValue="system"
-            app:entries="@array/screen_rotation_entries"
-            app:entryValues="@array/screen_rotation_values"
-            app:iconSpaceReserved="false" />
-
-        <SwitchPreferenceCompat
-            app:key="keep_screen_on"
-            app:title="Keep Screen On"
-            app:defaultValue="false"
-            app:iconSpaceReserved="false" />
-
-    </PreferenceCategory>
-
-    <!-- Sync & Network Category -->
-    <PreferenceCategory
-        app:title="Sync &amp; Network"
-        app:iconSpaceReserved="false">
-
-        <ListPreference
-            app:key="sync_interval"
-            app:title="Sync Interval"
-            app:summary="Auto"
-            app:defaultValue="auto"
-            app:entries="@array/sync_interval_entries"
-            app:entryValues="@array/sync_interval_values"
-            app:iconSpaceReserved="false" />
-
-        <SwitchPreferenceCompat
-            app:key="wifi_only"
-            app:title="Wi-Fi Only"
-            app:defaultValue="true"
-            app:iconSpaceReserved="false" />
-
-        <ListPreference
-            app:key="network_timeout"
-            app:title="Timeout Duration"
-            app:summary="30 seconds"
-            app:defaultValue="30"
-            app:entries="@array/timeout_entries"
-            app:entryValues="@array/timeout_values"
-            app:iconSpaceReserved="false" />
-
-    </PreferenceCategory>
-
-    <!-- Appearance Category -->
-    <PreferenceCategory
-        app:title="Appearance"
+        app:title="Screen &amp; Appearance"
         app:iconSpaceReserved="false">
 
         <Preference
@@ -276,9 +235,62 @@
             app:summary="Black"
             app:iconSpaceReserved="false" />
 
+        <ListPreference
+            app:key="screen_rotation"
+            app:title="Screen Orientation"
+            app:summary="Use System Settings"
+            app:defaultValue="system"
+            app:entries="@array/screen_rotation_entries"
+            app:entryValues="@array/screen_rotation_values"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="keep_screen_on"
+            app:title="Prevent Screen Dimming"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- Data & Network Category -->
+    <PreferenceCategory
+        app:title="Data &amp; Network"
+        app:iconSpaceReserved="false">
+
+        <ListPreference
+            app:key="sync_interval"
+            app:title="Media Sync Frequency"
+            app:summary="Auto"
+            app:defaultValue="auto"
+            app:entries="@array/sync_interval_entries"
+            app:entryValues="@array/sync_interval_values"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            app:key="wifi_only"
+            app:title="Sync on Wi-Fi Only"
+            app:defaultValue="true"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            app:key="network_timeout"
+            app:title="Network Request Timeout"
+            app:summary="30 seconds"
+            app:defaultValue="30"
+            app:entries="@array/timeout_entries"
+            app:entryValues="@array/timeout_values"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- Storage Category -->
+    <PreferenceCategory
+        app:title="Storage &amp; Cache"
+        app:iconSpaceReserved="false">
+
         <Preference
             app:key="cache_limit"
-            app:title="Cache Limit"
+            app:title="Cache Size Limit"
             app:summary="500 MB"
             app:iconSpaceReserved="false" />
 
@@ -296,12 +308,13 @@
 
         <Preference
             app:key="power_management"
-            app:title="Power Management"
+            app:title="Battery Optimization"
+            app:summary="Configure power management settings"
             app:iconSpaceReserved="false" />
 
         <ListPreference
             app:key="exit_trigger"
-            app:title="Exit Screensaver On"
+            app:title="Exit Screensaver With"
             app:summary="Touch"
             app:defaultValue="touch"
             app:entries="@array/exit_trigger_entries"

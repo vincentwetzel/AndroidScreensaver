@@ -1,13 +1,21 @@
 package com.vincentwetzel.androidscreensaver.dream
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
+import android.util.Log
+import androidx.core.content.ContextCompat
+import com.vincentwetzel.androidscreensaver.data.model.AccountConfig
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig
-import com.vincentwetzel.androidscreensaver.data.repository.GalleryPhotoRepository
+import com.vincentwetzel.androidscreensaver.data.model.SourceType
+import com.vincentwetzel.androidscreensaver.data.repository.DropboxPhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDrivePhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDriveRepository
+import com.vincentwetzel.androidscreensaver.data.repository.PhotoRepository
 import com.vincentwetzel.androidscreensaver.utils.SettingsManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -16,14 +24,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Manages slideshow configuration and photo loading
+ * Manages slideshow configuration and photo loading.
+ * Supports multiple accounts per source type (e.g., 2 Google Drive accounts).
  */
 @Singleton
 class SlideshowManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val driveRepository: GoogleDriveRepository,
-    private val photoRepository: GoogleDrivePhotoRepository,
-    private val galleryPhotoRepository: GalleryPhotoRepository
+    private val driveRepository: GoogleDriveRepository, // Still needed for Google Drive specific auth checks
+    private val photoRepositories: Map<SourceType, @JvmSuppressWildcards PhotoRepository>
 ) {
     // Current slideshow configuration
     lateinit var config: SlideshowConfig
@@ -56,66 +64,87 @@ class SlideshowManager @Inject constructor(
         SettingsManager.saveSlideshowConfig(context, newConfig)
     }
 
+    suspend fun downloadPhotoToLocalCache(photo: Photo): String? {
+        val accountId = photo.accountId ?: return null
+        return when (val repository = photoRepositories[photo.sourceType]) {
+            is GoogleDrivePhotoRepository -> repository.downloadPhotoToLocalCache(photo.id, accountId)
+            is DropboxPhotoRepository -> repository.downloadPhotoToLocalCache(photo.id, accountId)
+            else -> null
+        }
+    }
+
     /**
-     * Load photos from all enabled sources
+     * Load photos from all enabled accounts across all source types.
+     * For Google Drive, iterates over each authenticated account.
+     * For Gallery, loads from the single gallery source.
      */
     suspend fun loadPhotos(): List<Photo> {
         return withContext(Dispatchers.IO) {
             val allPhotos = mutableListOf<Photo>()
 
-            // Check if Google Drive is authenticated and enabled
-            if (driveRepository.isAuthenticated.value && isSourceEnabled(com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE)) {
-                // Respect wifi_only setting
-                if (config.wifiOnly && !isOnWifi()) {
-                    android.util.Log.w(TAG, "Skipping Google Drive: not on Wi-Fi and wifi_only is enabled")
-                } else {
-                    try {
-                        val selectedFolders = getSelectedFolders(com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE)
-                        val excludedFolderIds = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getDeselectedFolders(
-                            context, com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE
-                        )
-                        val driveFolders = if (selectedFolders.isEmpty()) {
-                            photoRepository.listFolders(null, forceRefresh = false)
-                        } else {
-                            selectedFolders
-                        }
+            // Iterate over all available source types
+            SourceType.entries.forEach { sourceType ->
+                val accounts = SettingsManager.getAccountsForSource(context, sourceType)
+                val enabledAccounts = accounts.filter { it.enabled && it.isAuthenticated }
 
-                        for (folder in driveFolders) {
-                            val folderPhotos = photoRepository.listPhotos(folder.id, excludedFolderIds)
-                            // Download each photo to local cache (Google Drive API requires OAuth headers)
-                            val photosWithLocalUris = folderPhotos.mapNotNull { photo ->
-                                val localPath = photoRepository.downloadPhotoToLocalCache(photo.id)
-                                    ?: return@mapNotNull null
-                                photo.copy(uri = "file://$localPath")
+                if (enabledAccounts.isNotEmpty()) {
+                    // Respect wifi_only setting for remote sources
+                    if (sourceType != SourceType.GALLERY && config.wifiOnly && !isOnWifi()) {
+                        android.util.Log.w(TAG, "Skipping $sourceType: not on Wi-Fi and wifi_only is enabled")
+                        return@forEach // Continue to next source type
+                    }
+
+                    val photoRepository = photoRepositories[sourceType]
+                    if (photoRepository == null) {
+                        android.util.Log.e(TAG, "No PhotoRepository found for SourceType: $sourceType")
+                        return@forEach
+                    }
+
+                    for (account in enabledAccounts) {
+                        try {
+                            android.util.Log.d(TAG, "Loading $sourceType photos for account: ${account.accountId}")
+
+                            // Google Drive specific authentication check
+                            if (sourceType == SourceType.GOOGLE_DRIVE && !driveRepository.isAccountAuthenticated(account.accountId)) {
+                                android.util.Log.w(TAG, "Account ${account.accountId} is not authenticated for Google Drive, skipping")
+                                continue
                             }
-                            allPhotos.addAll(photosWithLocalUris)
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.e(TAG, "Error loading Google Drive photos", e)
-                    }
-                }
-            }
 
-            // Check if Gallery is enabled
-            if (isSourceEnabled(com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY)) {
-                try {
-                    val selectedFolders = getSelectedFolders(com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY)
-                    val excludedFolderIds = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getDeselectedFolders(
-                        context, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
-                    )
+                            // Gallery specific permission check
+                            if (sourceType == SourceType.GALLERY && !hasGalleryPermission()) {
+                                android.util.Log.w(TAG, "Gallery photo access requires permission for ${account.accountId}, skipping")
+                                continue
+                            }
+                            
+                            val selectedFolders = account.selectedFolders
+                                .map { sf ->
+                                    com.vincentwetzel.androidscreensaver.data.model.PhotoFolder(
+                                        id = sf.folderId,
+                                        sourceType = sourceType,
+                                        accountId = account.accountId,
+                                        name = sf.folderName,
+                                        parentFolderId = sf.parentFolderId,
+                                        photoCount = sf.photoCount
+                                    )
+                                }
+                            val excludedFolderIds = account.deselectedFolders
 
-                    if (selectedFolders.isEmpty()) {
-                        val allFolders = galleryPhotoRepository.listFolders(null, forceRefresh = false)
-                        for (folder in allFolders) {
-                            allPhotos.addAll(galleryPhotoRepository.listPhotos(folder.id, excludedFolderIds))
-                        }
-                    } else {
-                        for (folder in selectedFolders) {
-                            allPhotos.addAll(galleryPhotoRepository.listPhotos(folder.id, excludedFolderIds))
+                            val foldersToLoad = if (selectedFolders.isEmpty()) {
+                                photoRepository.listFolders(null, forceRefresh = false)
+                            } else {
+                                selectedFolders
+                            }
+
+                            for (folder in foldersToLoad) {
+                                val folderPhotos = photoRepository.listPhotos(folder.id, excludedFolderIds)
+                                allPhotos.addAll(folderPhotos)
+                            }
+
+                            android.util.Log.d(TAG, "Loaded ${allPhotos.size} photos so far from $sourceType account: ${account.accountId}")
+                        } catch (e: Exception) {
+                            android.util.Log.e(TAG, "Error loading $sourceType photos for ${account.accountId}", e)
                         }
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
                 }
             }
 
@@ -123,6 +152,7 @@ class SlideshowManager @Inject constructor(
             // along with its subfolders — listPhotos recurses into subfolders, so the same
             // photo can be loaded from both the parent and child folder entries)
             val uniquePhotos = allPhotos.distinctBy { it.id }
+            android.util.Log.d(TAG, "Total photos loaded: ${allPhotos.size}, unique: ${uniquePhotos.size}")
 
             loadedPhotos = uniquePhotos
 
@@ -133,6 +163,11 @@ class SlideshowManager @Inject constructor(
                 com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY ->
                     uniquePhotos.filter { isVideo(it.uri) }
                 else -> uniquePhotos
+            }
+
+            android.util.Log.d(TAG, "After media type filter (${config.mediaTypeFilter}): ${filteredPhotos.size} photos")
+            if (filteredPhotos.isEmpty() && uniquePhotos.isNotEmpty()) {
+                android.util.Log.w(TAG, "Warning: Had ${uniquePhotos.size} photos but filtered to 0. Sample URIs: ${uniquePhotos.take(3).map { it.uri }}")
             }
 
             loadedPhotos = filteredPhotos
@@ -198,7 +233,13 @@ class SlideshowManager @Inject constructor(
 
         withContext(Dispatchers.IO) {
             try {
-                // Route to correct source based on photo URI
+                // Route to correct source based on photo's sourceType
+                val photoRepository = photoRepositories[photo.sourceType]
+                if (photoRepository == null) {
+                    android.util.Log.e(TAG, "No PhotoRepository found for Photo.sourceType: ${photo.sourceType}")
+                    return@withContext
+                }
+
                 if (photo.uri.startsWith("content://")) {
                     // Gallery photos: content:// URIs - already local, Coil can load directly
                     preloadCache[photo.id] = true
@@ -208,13 +249,18 @@ class SlideshowManager @Inject constructor(
                     preloadCache[photo.id] = true
                     android.util.Log.d(TAG, "Preloaded cached Drive photo: ${photo.uri}")
                 } else if (photo.uri.startsWith("http")) {
-                    // Google Drive remote URLs - need to download
-                    val url = photoRepository.getPhotoUrl(photo.id)
-                    if (url != null) {
-                        preloadCache[photo.id] = true
-                        android.util.Log.d(TAG, "Preloaded remote Drive photo: ${photo.uri}")
-                    } else {
-                        android.util.Log.w(TAG, "Failed to get URL for Drive photo: ${photo.id}")
+                    // Remote URLs (Google Drive, Dropbox, etc.) - need to handle caching/downloading if not already local
+                    val accountId = photo.accountId
+                    if (accountId != null) {
+                        // For Google Drive, the download is handled by GoogleDrivePhotoRepository
+                        // For Dropbox, it will be handled by DropboxPhotoRepository
+                        val url = photoRepository.getPhotoUrl(photo.id) // This should trigger the download/cache logic if needed
+                        if (url != null) {
+                            preloadCache[photo.id] = true
+                            android.util.Log.d(TAG, "Preloaded remote photo from ${photo.sourceType}: ${photo.uri}")
+                        } else {
+                            android.util.Log.w(TAG, "Failed to get URL for ${photo.sourceType} photo: ${photo.id}")
+                        }
                     }
                 } else {
                     android.util.Log.w(TAG, "Unknown URI scheme for preloading: ${photo.uri}")
@@ -226,16 +272,17 @@ class SlideshowManager @Inject constructor(
     }
 
     /**
-     * Check if a source is enabled
+     * Check if a source is enabled (legacy: checks if any account exists for the source)
      */
-    private fun isSourceEnabled(sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType): Boolean {
-        return SettingsManager.isSourceEnabled(context, sourceType)
+    private fun isSourceEnabled(sourceType: SourceType): Boolean {
+        val accounts = SettingsManager.getAccountsForSource(context, sourceType)
+        return accounts.any { it.enabled }
     }
 
     /**
-     * Get selected folders for a source
+     * Get selected folders for a source (legacy: returns combined from all accounts)
      */
-    private fun getSelectedFolders(sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType): List<com.vincentwetzel.androidscreensaver.data.model.PhotoFolder> {
+    private fun getSelectedFolders(sourceType: SourceType): List<com.vincentwetzel.androidscreensaver.data.model.PhotoFolder> {
         return SettingsManager.getSelectedFolders(context, sourceType)
     }
 
@@ -249,19 +296,23 @@ class SlideshowManager @Inject constructor(
         return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
     }
 
+    /**
+     * Check if the app has permission to read Gallery photos
+     */
+    fun hasGalleryPermission(): Boolean {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        val hasPermission = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        if (!hasPermission) {
+            Log.w(TAG, "Gallery permission not granted: $permission")
+        }
+        return hasPermission
+    }
+
     companion object {
         private const val TAG = "SlideshowManager"
     }
-}
-
-/**
- * Source type enum for slideshow manager
- */
-enum class SourceType {
-    GOOGLE_DRIVE,
-    GALLERY,
-    DROPBOX,
-    GOOGLE_PHOTOS,
-    ONEDRIVE,
-    LOCAL_NETWORK
 }

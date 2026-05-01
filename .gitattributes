@@ -1,0 +1,24 @@
+# Let Git detect text files by default.
+* text=auto
+
+# Keep documentation stable across Windows/macOS/Linux.
+*.md text eol=lf
+.gitignore text eol=lf
+
+# This file currently has mixed working-tree endings on Windows; do not block sync on normalization.
+app/build.gradle.kts -text
+
+# Windows command scripts should keep CRLF line endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets should never be line-ending normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.keystore binary
+*.jks binary

@@ -70,19 +70,19 @@ object SettingsManager {
 
         // Timer
         val TIMER_ENABLED = booleanPreferencesKey("timer_enabled")
+        val TIMER_TIMEOUT_MINUTES = stringPreferencesKey("timer_timeout_minutes")
+        val TIMER_TIMEOUT_CUSTOM_MINUTES = intPreferencesKey("timer_timeout_custom_minutes")
+        val TIMER_TIMEOUT_CUSTOM_UNIT = stringPreferencesKey("timer_timeout_custom_unit") // "minutes" or "hours"
 
         // Cache
         val CACHE_LIMIT = intPreferencesKey("cache_limit_mb")
         val CACHE_USE_PRESET = booleanPreferencesKey("cache_use_preset")
         val ENABLE_CACHE = booleanPreferencesKey("enable_cache")
 
-        // Sources
-        val SOURCE_GOOGLE_DRIVE_ENABLED = booleanPreferencesKey("source_google_drive_enabled")
-        val SOURCE_GOOGLE_DRIVE_FOLDERS = stringSetPreferencesKey("source_google_drive_folders")
-        val SOURCE_GOOGLE_DRIVE_DESELECTED = stringSetPreferencesKey("source_google_drive_deselected")
-        val SOURCE_GALLERY_ENABLED = booleanPreferencesKey("source_gallery_enabled")
-        val SOURCE_GALLERY_FOLDERS = stringSetPreferencesKey("source_gallery_folders")
-        val SOURCE_GALLERY_DESELECTED = stringSetPreferencesKey("source_gallery_deselected")
+        // Sources (multi-account - stores JSON-like serialized account configs)
+        // Format: accountId|sourceType|email|enabled|folderId1,folderId2|deselectedId1,id2|authTime|syncTime|photoCount
+        // Multiple accounts separated by ;;
+        val SOURCE_ACCOUNTS = stringPreferencesKey("source_accounts")
     }
 
     /**
@@ -180,6 +180,11 @@ object SettingsManager {
                 // Timer
                 timerConfig = TimerConfig(
                     enabled = preferences[PreferencesKeys.TIMER_ENABLED] ?: false,
+                    timeoutMinutes = parseTimeoutMinutes(preferences[PreferencesKeys.TIMER_TIMEOUT_MINUTES] ?: "30"),
+                    customTimeoutValue = preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_MINUTES] ?: 30,
+                    customTimeoutUnit = enumValueOfOrNull<TimeoutUnit>(
+                        preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_UNIT] ?: TimeoutUnit.MINUTES.name
+                    ) ?: TimeoutUnit.MINUTES,
                 ),
             )
         }
@@ -237,50 +242,45 @@ object SettingsManager {
                 preferences[PreferencesKeys.NETWORK_TIMEOUT] = config.networkTimeoutSeconds
 
                 // Timer
-                preferences[PreferencesKeys.TIMER_ENABLED] = config.timerConfig.enabled
+                preferences[PreferencesKeys.TIMER_ENABLED] = config.timerConfig.timeoutMinutes != TimeoutMinutes.DISABLED
+                preferences[PreferencesKeys.TIMER_TIMEOUT_MINUTES] = config.timerConfig.timeoutMinutes.name
+                preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_MINUTES] = config.timerConfig.customTimeoutValue
+                preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_UNIT] = config.timerConfig.customTimeoutUnit.name
             }
         }
     }
 
     /**
-     * Check if a source is enabled
+     * Check if a source is enabled (checks if ANY account for the source is enabled).
+     * For multi-account support, checks if at least one account is enabled.
      */
     fun isSourceEnabled(context: Context, sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType): Boolean {
         return runBlocking {
             val preferences = context.dataStore.data.first()
-            when (sourceType) {
-                com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE ->
-                    preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_ENABLED] ?: false
-                com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY ->
-                    preferences[PreferencesKeys.SOURCE_GALLERY_ENABLED] ?: false
-                else -> false
+            val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+            if (accountsJson.isEmpty()) return@runBlocking false
+            
+            val accounts = parseAccountsJson(accountsJson)
+            val matchingAccounts = accounts.filter {
+                it.sourceType == sourceType.toModelSourceType()
             }
+            return@runBlocking matchingAccounts.any { it.enabled && it.isAuthenticated }
         }
     }
 
     /**
-     * Check if any sources are configured with selected folders
-     * Returns true if at least one source is enabled AND has folders selected
+     * Check if any sources are configured with selected folders.
+     * Returns true if at least one account is enabled AND has folders selected.
      */
     fun hasAnySourceConfigured(context: Context): Boolean {
         return runBlocking {
             val preferences = context.dataStore.data.first()
-            
-            // Check Google Drive
-            val googleDriveEnabled = preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_ENABLED] ?: false
-            if (googleDriveEnabled) {
-                val googleDriveFolders = preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_FOLDERS] ?: emptySet()
-                if (googleDriveFolders.isNotEmpty()) return@runBlocking true
-            }
-            
-            // Check Gallery
-            val galleryEnabled = preferences[PreferencesKeys.SOURCE_GALLERY_ENABLED] ?: false
-            if (galleryEnabled) {
-                val galleryFolders = preferences[PreferencesKeys.SOURCE_GALLERY_FOLDERS] ?: emptySet()
-                if (galleryFolders.isNotEmpty()) return@runBlocking true
-            }
-            
-            false
+            val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+            if (accountsJson.isEmpty()) return@runBlocking false
+
+            val accounts = parseAccountsJson(accountsJson)
+            val enabledAccounts = accounts.filter { it.enabled && it.isAuthenticated }
+            return@runBlocking enabledAccounts.any { it.selectedFolders.isNotEmpty() }
         }
     }
 
@@ -292,110 +292,17 @@ object SettingsManager {
         sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType
     ): List<com.vincentwetzel.androidscreensaver.data.model.PhotoFolder> {
         return runBlocking {
-            val preferences = context.dataStore.data.first()
-            when (sourceType) {
-                com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE -> {
-                    val folderIds = preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_FOLDERS] ?: emptySet()
-                    folderIds.map { id ->
-                        com.vincentwetzel.androidscreensaver.data.model.PhotoFolder(
-                            id = id,
-                            sourceType = com.vincentwetzel.androidscreensaver.data.model.SourceType.GOOGLE_DRIVE,
-                            name = id,
-                            parentFolderId = null,
-                            photoCount = 0
-                        )
-                    }
-                }
-                com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY -> {
-                    val folderIds = preferences[PreferencesKeys.SOURCE_GALLERY_FOLDERS] ?: emptySet()
-                    folderIds.map { id ->
-                        com.vincentwetzel.androidscreensaver.data.model.PhotoFolder(
-                            id = id,
-                            sourceType = com.vincentwetzel.androidscreensaver.data.model.SourceType.GALLERY,
-                            name = id,
-                            parentFolderId = null,
-                            photoCount = 0
-                        )
-                    }
-                }
-                else -> emptyList()
-            }
-        }
-    }
-
-    /**
-     * Save selected folders for a source
-     */
-    fun setSelectedFolders(
-        context: Context,
-        sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType,
-        folderIds: Set<String>
-    ) {
-        runBlocking {
-            context.dataStore.edit { preferences ->
-                when (sourceType) {
-                    com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE ->
-                        preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_FOLDERS] = folderIds
-                    com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY ->
-                        preferences[PreferencesKeys.SOURCE_GALLERY_FOLDERS] = folderIds
-                    else -> {}
-                }
-            }
-        }
-    }
-
-    /**
-     * Enable/disable a source
-     */
-    fun setSourceEnabled(context: Context, sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType, enabled: Boolean) {
-        runBlocking {
-            context.dataStore.edit { preferences ->
-                when (sourceType) {
-                    com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE ->
-                        preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_ENABLED] = enabled
-                    com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY ->
-                        preferences[PreferencesKeys.SOURCE_GALLERY_ENABLED] = enabled
-                    else -> {}
-                }
-            }
-        }
-    }
-
-    /**
-     * Get deselected folders for a source (subfolders explicitly unchecked by user)
-     */
-    fun getDeselectedFolders(
-        context: Context,
-        sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType
-    ): Set<String> {
-        return runBlocking {
-            val preferences = context.dataStore.data.first()
-            when (sourceType) {
-                com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE ->
-                    preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_DESELECTED] ?: emptySet()
-                com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY ->
-                    preferences[PreferencesKeys.SOURCE_GALLERY_DESELECTED] ?: emptySet()
-                else -> emptySet()
-            }
-        }
-    }
-
-    /**
-     * Save deselected folders for a source
-     */
-    fun setDeselectedFolders(
-        context: Context,
-        sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType,
-        folderIds: Set<String>
-    ) {
-        runBlocking {
-            context.dataStore.edit { preferences ->
-                when (sourceType) {
-                    com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE ->
-                        preferences[PreferencesKeys.SOURCE_GOOGLE_DRIVE_DESELECTED] = folderIds
-                    com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY ->
-                        preferences[PreferencesKeys.SOURCE_GALLERY_DESELECTED] = folderIds
-                    else -> {}
+            val accounts = getAccountsForSource(context, sourceType)
+            val enabledAccounts = accounts.filter { it.enabled && it.isAuthenticated }
+            enabledAccounts.flatMap { account ->
+                account.selectedFolders.map { sf ->
+                    com.vincentwetzel.androidscreensaver.data.model.PhotoFolder(
+                        id = sf.folderId,
+                        sourceType = account.sourceType,
+                        name = sf.folderName,
+                        parentFolderId = null,
+                        photoCount = 0
+                    )
                 }
             }
         }
@@ -407,6 +314,174 @@ object SettingsManager {
             enumValueOf<T>(name)
         } catch (e: IllegalArgumentException) {
             null
+        }
+    }
+
+    // Helper function to parse timeout minutes from string
+    private fun parseTimeoutMinutes(value: String): TimeoutMinutes {
+        return try {
+            enumValueOf<TimeoutMinutes>(value)
+        } catch (e: IllegalArgumentException) {
+            TimeoutMinutes.MINUTES_30
+        }
+    }
+
+    // ============================================================================
+    // Multi-Account Support
+    // ============================================================================
+
+    /**
+     * Convert dream.SourceType to model.SourceType
+     */
+    private fun com.vincentwetzel.androidscreensaver.dream.SourceType.toModelSourceType(): com.vincentwetzel.androidscreensaver.data.model.SourceType {
+        return when (this) {
+            com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE -> com.vincentwetzel.androidscreensaver.data.model.SourceType.GOOGLE_DRIVE
+            com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY -> com.vincentwetzel.androidscreensaver.data.model.SourceType.GALLERY
+            com.vincentwetzel.androidscreensaver.dream.SourceType.DROPBOX -> com.vincentwetzel.androidscreensaver.data.model.SourceType.DROPBOX
+            com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_PHOTOS -> com.vincentwetzel.androidscreensaver.data.model.SourceType.GOOGLE_PHOTOS
+            com.vincentwetzel.androidscreensaver.dream.SourceType.ONEDRIVE -> com.vincentwetzel.androidscreensaver.data.model.SourceType.ONEDRIVE
+            com.vincentwetzel.androidscreensaver.dream.SourceType.LOCAL_NETWORK -> com.vincentwetzel.androidscreensaver.data.model.SourceType.LOCAL_NETWORK
+        }
+    }
+
+    /**
+     * Get all accounts for a specific source type
+     */
+    fun getAccountsForSource(
+        context: Context,
+        sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType
+    ): List<AccountConfig> {
+        return runBlocking {
+            val preferences = context.dataStore.data.first()
+            val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+            if (accountsJson.isEmpty()) return@runBlocking emptyList()
+
+            val allAccounts = parseAccountsJson(accountsJson)
+            return@runBlocking allAccounts.filter { it.sourceType == sourceType.toModelSourceType() }
+        }
+    }
+
+    /**
+     * Add or update an account
+     */
+    fun saveAccount(context: Context, account: AccountConfig) {
+        runBlocking {
+            val preferences = context.dataStore.data.first()
+            val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+            val allAccounts = parseAccountsJson(accountsJson).toMutableList()
+            
+            // Remove existing account with same ID if present
+            allAccounts.removeAll { it.accountId == account.accountId }
+            allAccounts.add(account)
+            
+            context.dataStore.edit { prefs ->
+                prefs[PreferencesKeys.SOURCE_ACCOUNTS] = serializeAccountsJson(allAccounts)
+            }
+        }
+    }
+
+    /**
+     * Remove an account by ID
+     */
+    fun removeAccount(
+        context: Context,
+        sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType,
+        accountId: String
+    ) {
+        runBlocking {
+            val preferences = context.dataStore.data.first()
+            val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+            val allAccounts = parseAccountsJson(accountsJson).toMutableList()
+            
+            allAccounts.removeAll { 
+                it.accountId == accountId && it.sourceType == sourceType.toModelSourceType() 
+            }
+            
+            context.dataStore.edit { prefs ->
+                prefs[PreferencesKeys.SOURCE_ACCOUNTS] = serializeAccountsJson(allAccounts)
+            }
+        }
+    }
+
+    /**
+     * Get a specific account by ID
+     */
+    fun getAccount(
+        context: Context,
+        sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType,
+        accountId: String
+    ): AccountConfig? {
+        return runBlocking {
+            val accounts = getAccountsForSource(context, sourceType)
+            accounts.find { it.accountId == accountId }
+        }
+    }
+
+    /**
+     * Parse accounts from JSON string
+     * Simple format: accountId|sourceType|email|enabled|folderId1,folderId2|deselectedId1,id2|isAuth|authTime|syncTime|photoCount
+     * Multiple accounts separated by ;;
+     */
+    private fun parseAccountsJson(json: String): List<AccountConfig> {
+        if (json.isEmpty()) return emptyList()
+        
+        return try {
+            json.split(";;").filter { it.isNotEmpty() }.mapNotNull { accountStr ->
+                val parts = accountStr.split("|")
+                if (parts.size < 4) return@mapNotNull null
+                
+                val accountId = parts[0]
+                val sourceType = try {
+                    com.vincentwetzel.androidscreensaver.data.model.SourceType.valueOf(parts[1])
+                } catch (e: IllegalArgumentException) {
+                    return@mapNotNull null
+                }
+                val email = parts[2]
+                val enabled = parts[3].toBoolean()
+                
+                val selectedFolderIds = if (parts.size > 4 && parts[4].isNotEmpty()) {
+                    parts[4].split(",").map { id ->
+                        SelectedFolder(folderId = id, folderName = id, path = id, isSelected = true)
+                    }
+                } else emptyList()
+                
+                val deselectedIds = if (parts.size > 5 && parts[5].isNotEmpty()) {
+                    parts[5].split(",").toSet()
+                } else emptySet()
+                
+                val isAuth = if (parts.size > 6) parts[6].toBoolean() else false
+                val authTime = if (parts.size > 7 && parts[7].isNotEmpty()) parts[7].toLongOrNull() else null
+                val syncTime = if (parts.size > 8 && parts[8].isNotEmpty()) parts[8].toLongOrNull() else null
+                val photoCount = if (parts.size > 9) parts[9].toIntOrNull() ?: 0 else 0
+                
+                AccountConfig(
+                    accountId = accountId,
+                    sourceType = sourceType,
+                    accountEmail = email,
+                    enabled = enabled,
+                    selectedFolders = selectedFolderIds,
+                    deselectedFolders = deselectedIds,
+                    isAuthenticated = isAuth,
+                    lastAuthTime = authTime,
+                    lastSyncTime = syncTime,
+                    photoCount = photoCount
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("SettingsManager", "Failed to parse accounts JSON", e)
+            emptyList()
+        }
+    }
+
+    /**
+     * Serialize accounts to JSON string
+     */
+    private fun serializeAccountsJson(accounts: List<AccountConfig>): String {
+        return accounts.joinToString(";;") { account ->
+            val folderIds = account.selectedFolders.joinToString(",") { it.folderId }
+            val deselectedIds = account.deselectedFolders.joinToString(",")
+            
+            "${account.accountId}|${account.sourceType.name}|${account.accountEmail}|${account.enabled}|$folderIds|$deselectedIds|${account.isAuthenticated}|${account.lastAuthTime ?: ""}|${account.lastSyncTime ?: ""}|${account.photoCount}"
         }
     }
 }

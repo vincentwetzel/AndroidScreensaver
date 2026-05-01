@@ -23,11 +23,30 @@ data class SourceAuthState(
 )
 
 /**
+ * Represents a single account for a source type (e.g., one Google Drive account)
+ * Stores auth state, selected folders, and sync metadata
+ */
+data class AccountConfig(
+    val accountId: String,              // Unique ID: "gdrive:user@gmail.com" or "dropbox:uuid"
+    val sourceType: SourceType,
+    val accountEmail: String,           // For display (e.g., "user@gmail.com")
+    val accountDisplayName: String? = null, // Optional friendly name
+    val enabled: Boolean = true,
+    val selectedFolders: List<SelectedFolder> = emptyList(),
+    val deselectedFolders: Set<String> = emptySet(),
+    val isAuthenticated: Boolean = false,
+    val lastAuthTime: Long? = null,
+    val lastSyncTime: Long? = null,
+    val photoCount: Int = 0
+)
+
+/**
  * Represents a photo in the system
  */
 data class Photo(
     val id: String,
     val sourceType: SourceType,
+    val accountId: String? = null,      // Which account this photo belongs to
     val uri: String,
     val thumbnailUri: String? = null,
     val title: String? = null,
@@ -45,6 +64,7 @@ data class Photo(
 data class PhotoFolder(
     val id: String,
     val sourceType: SourceType,
+    val accountId: String? = null,      // Which account this folder belongs to
     val name: String,
     val parentFolderId: String? = null,
     val photoCount: Int = 0,
@@ -73,6 +93,7 @@ data class SlideshowConfig(
     val maxFileSizeMB: Long? = null,
     
     // Video playback
+    val videoPlaybackEnabled: Boolean = true,
     val videoAudioMode: VideoAudioMode = VideoAudioMode.SYSTEM_VOLUME,
     val videoCustomVolume: Int = 75,
     val videoMinDurationSeconds: Int = 0, // 0 = no minimum
@@ -83,6 +104,7 @@ data class SlideshowConfig(
     val videoDisplayMode: VideoDisplayMode = VideoDisplayMode.PLAY_FULL,
     val videoFixedPlaySeconds: Int = 30,
     val videoStillTimestamp: VideoStillTimestamp = VideoStillTimestamp.BEGINNING,
+    val videoPlaybackSpeed: VideoPlaybackSpeed = VideoPlaybackSpeed.NORMAL,
     
     // Display effects
     val displayEffect: DisplayEffect = DisplayEffect.CROP_TO_FIT,
@@ -97,8 +119,8 @@ data class SlideshowConfig(
     val transitionDirection: TransitionDirection = TransitionDirection.LEFT,
     
     // Decorations
-    val dateDecoration: DecorationConfig? = null,
-    val clockDecoration: ClockDecorationConfig? = null,
+    val dateDecoration: DecorationConfig? = DecorationConfig(enabled = true),
+    val clockDecoration: ClockDecorationConfig? = ClockDecorationConfig(enabled = true),
     val weatherDecoration: WeatherDecorationConfig? = null,
     val decorationFontFamily: DecorationFontFamily = DecorationFontFamily.SYSTEM_DEFAULT,
     val decorationTextShadow: Boolean = true,
@@ -182,6 +204,7 @@ enum class TransitionEffect {
     RADIAL,
     
     // Artistic
+    ZOOM,
     MEMORY,
     ILLUSION,
     RIPPLE,
@@ -326,15 +349,29 @@ enum class ScreensaverExitTrigger {
 
 /**
  * Represents a source configuration in the system
+ * Now supports multiple accounts per source type
  */
 data class SourceConfig(
     val sourceType: SourceType,
+    val accounts: List<AccountConfig> = emptyList(),
+    @Deprecated("Use accounts list instead")
     val enabled: Boolean = false,
+    @Deprecated("Use accounts list instead")
     val selectedFolders: List<SelectedFolder> = emptyList(),
+    @Deprecated("Use accounts list instead")
     val authState: SourceAuthState? = null,
     val lastSyncTime: Long? = null,
     val photoCount: Int = 0
-)
+) {
+    /** Helper: get all enabled accounts */
+    fun getEnabledAccounts() = accounts.filter { it.enabled && it.isAuthenticated }
+    
+    /** Helper: get account by ID */
+    fun getAccount(accountId: String) = accounts.find { it.accountId == accountId }
+    
+    /** Helper: total photo count across all accounts */
+    fun getTotalPhotoCount() = accounts.sumOf { it.photoCount }
+}
 
 /**
  * Represents a selected folder with its state
@@ -383,6 +420,16 @@ enum class VideoStillTimestamp {
     MIDDLE,
     END,
     CUSTOM
+}
+
+/**
+ * Video playback speed
+ */
+enum class VideoPlaybackSpeed {
+    SLOW_0_5X,
+    NORMAL,
+    FAST_1_5X,
+    FAST_2X
 }
 
 /**
@@ -527,11 +574,11 @@ enum class DecorationSpacing {
  * Date decoration configuration
  */
 data class DecorationConfig(
-    val enabled: Boolean = false,
+    val enabled: Boolean = true,
     val position: ClockPosition = ClockPosition.BOTTOM_LEFT,
     val dateFormat: DateFormat = DateFormat.FULL_DATE,
     val customDateFormatPattern: String? = null,
-    val fontSize: ClockSize = ClockSize.MEDIUM,
+    val fontSize: Float = 24f, // Font size in SP (default 24sp = MEDIUM)
     val fontColor: Int = 0xFFFFFFFF.toInt(),
     val opacity: Int = 100,
     val background: DecorationBackground = DecorationBackground.NONE,
@@ -545,11 +592,11 @@ data class DecorationConfig(
  * Clock decoration configuration
  */
 data class ClockDecorationConfig(
-    val enabled: Boolean = false,
+    val enabled: Boolean = true,
     val position: ClockPosition = ClockPosition.BOTTOM_RIGHT,
     val clockFormat: ClockFormat = ClockFormat.HOUR_12,
     val showSeconds: Boolean = false,
-    val fontSize: ClockSize = ClockSize.MEDIUM,
+    val fontSize: Float = 24f, // Font size in SP (default 24sp = MEDIUM)
     val fontColor: Int = 0xFFFFFFFF.toInt(),
     val opacity: Int = 100,
     val background: DecorationBackground = DecorationBackground.NONE,
@@ -575,7 +622,7 @@ data class WeatherDecorationConfig(
     val visibilityUnit: VisibilityUnit = VisibilityUnit.MILES,
     val iconStyle: WeatherIconStyle = WeatherIconStyle.DETAILED,
     val widgetBackground: WeatherWidgetBackground = WeatherWidgetBackground.TRANSPARENT,
-    val fontSize: ClockSize = ClockSize.MEDIUM,
+    val fontSize: Float = 24f, // Font size in SP (default 24sp = MEDIUM)
     val fontColor: Int = 0xFFFFFFFF.toInt(),
     val opacity: Int = 100,
     val animation: DecorationAnimation = DecorationAnimation.STATIC,
@@ -648,6 +695,30 @@ enum class TimerMode {
 }
 
 /**
+ * Timeout duration preset options
+ */
+enum class TimeoutMinutes {
+    DISABLED,
+    SECONDS_30,
+    MINUTES_5,
+    MINUTES_15,
+    MINUTES_30,
+    MINUTES_45,
+    MINUTES_60,
+    MINUTES_90,
+    MINUTES_120,
+    CUSTOM
+}
+
+/**
+ * Custom timeout unit (minutes or hours)
+ */
+enum class TimeoutUnit {
+    MINUTES,
+    HOURS
+}
+
+/**
  * Sync mode
  */
 enum class SyncMode {
@@ -676,20 +747,25 @@ data class ScheduleConfig(
 data class TimerConfig(
     val enabled: Boolean = false,
     val timerMode: TimerMode = TimerMode.IDLE_TIMER,
-    
+
     // Idle timer settings
     val idleDurationMinutes: Int = 5,
     val resetOnInteraction: Boolean = true,
-    
+
     // Manual countdown settings
     val countdownDurationMinutes: Int = 5,
     val showCountdown: Boolean = true,
     val countdownPosition: ClockPosition = ClockPosition.TOP_RIGHT,
     val countdownSize: ClockSize = ClockSize.MEDIUM,
     val countdownOpacity: Int = 100,
-    
+
     // Override priority
-    val scheduleOverridesTimer: Boolean = true
+    val scheduleOverridesTimer: Boolean = true,
+
+    // Screensaver timeout settings
+    val timeoutMinutes: TimeoutMinutes = TimeoutMinutes.MINUTES_30,
+    val customTimeoutValue: Int = 30,
+    val customTimeoutUnit: TimeoutUnit = TimeoutUnit.MINUTES
 )
 
 /**

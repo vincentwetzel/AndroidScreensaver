@@ -34,6 +34,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
     private lateinit var binding: ActivityFolderBrowserBinding
     private val viewModel: GalleryViewModel by viewModels()
     private lateinit var adapter: FolderAdapter
+    private var accountId: String? = null
 
     companion object {
         const val EXTRA_SELECTED_FOLDERS = "selected_folders"
@@ -45,7 +46,9 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
     ) { permissions ->
         val allGranted = permissions.values.all { it }
         if (allGranted) {
-            viewModel.loadFolders()
+            viewModel.clearNavigationBackStack()
+            val mediaFilter = getContentFilter()
+            viewModel.loadFolders(parentFolderId = null, forceRefresh = true, addToBackStack = false, mediaFilter = mediaFilter)
         } else {
             Toast.makeText(this, "Photo permission is required to browse Gallery folders", Toast.LENGTH_LONG).show()
             binding.progressBar.visibility = View.GONE
@@ -56,6 +59,8 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityFolderBrowserBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        accountId = intent.getStringExtra("account_id")
 
         setupToolbar()
         setupRecyclerView()
@@ -130,24 +135,14 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         val mediaFilter = getContentFilter()
         adapter = FolderAdapter(
             onSelectionChanged = { selectedIds ->
-                // Auto-save selections immediately
-                com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSelectedFolders(
-                    this,
-                    com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY,
-                    selectedIds
-                )
+                saveSelections()
                 updateSummary(selectedIds.size, adapter.getPhotoCount())
             },
             onFolderClick = { folderId ->
                 viewModel.navigateToFolder(folderId)
             },
             onDeselectionChanged = { deselectedIds ->
-                // Auto-save deselections immediately
-                com.vincentwetzel.androidscreensaver.utils.SettingsManager.setDeselectedFolders(
-                    this,
-                    com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY,
-                    deselectedIds
-                )
+                saveSelections()
             },
             onFolderChecked = { folderId, isChecked ->
                 // Cascade: fetch subfolder IDs and apply cascade
@@ -155,24 +150,13 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                     val childIds = viewModel.getSubfolderIds(folderId).toSet()
                     if (childIds.isNotEmpty()) {
                         adapter.cascadeSelection(folderId, isChecked, childIds)
-                        // Re-persist selections and deselections after cascade
-                        com.vincentwetzel.androidscreensaver.utils.SettingsManager.setSelectedFolders(
-                            this@GalleryFolderBrowserActivity,
-                            com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY,
-                            adapter.getSelectedFolders()
-                        )
-                        com.vincentwetzel.androidscreensaver.utils.SettingsManager.setDeselectedFolders(
-                            this@GalleryFolderBrowserActivity,
-                            com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY,
-                            adapter.getDeselectedFolders()
-                        )
+                        saveSelections()
                         updateSummary(adapter.getSelectedFolders().size, adapter.getPhotoCount())
                     }
                 }
             },
             mediaFilter = mediaFilter
         )
-
         binding.recyclerFolders.layoutManager = LinearLayoutManager(this)
         binding.recyclerFolders.adapter = adapter
 
@@ -181,18 +165,18 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
     }
 
     private fun restoreSelectedFolders() {
-        val savedFolders = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSelectedFolders(
-            this,
-            com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
-        )
-        val savedFolderIds = savedFolders.map { it.id }.toSet()
+        val account = accountId?.let {
+            com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(
+                this,
+                com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY,
+                it
+            )
+        }
+        val savedFolderIds = account?.selectedFolders?.map { it.folderId }?.toSet() ?: emptySet()
         adapter.setSelectedFolders(savedFolderIds)
 
         // Restore deselected folders
-        val deselectedIds = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getDeselectedFolders(
-            this,
-            com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
-        )
+        val deselectedIds = account?.deselectedFolders ?: emptySet()
         adapter.setDeselectedFolders(deselectedIds)
     }
 
@@ -203,6 +187,24 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
 
         binding.btnDeselectAll.setOnClickListener {
             adapter.deselectAll()
+        }
+    }
+
+    private fun saveSelections() {
+        val dreamSourceType = com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
+        accountId?.let { id ->
+            val account = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(this, dreamSourceType, id)
+            account?.let {
+                val updated = it.copy(
+                    selectedFolders = adapter.getSelectedFolders().map { folderId ->
+                        com.vincentwetzel.androidscreensaver.data.model.SelectedFolder(
+                            folderId = folderId, folderName = folderId, path = folderId, isSelected = true
+                        )
+                    },
+                    deselectedFolders = adapter.getDeselectedFolders()
+                )
+                com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveAccount(this, updated)
+            }
         }
     }
 

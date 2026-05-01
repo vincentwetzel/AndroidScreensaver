@@ -44,9 +44,12 @@ class MainViewModel @Inject constructor(
      * Check if user is already signed in and update account email
      */
     private fun checkGoogleDriveAuthState() {
-        val account = driveRepository.currentAccount.value
-        if (account != null) {
-            _googleDriveAccountName.value = account.email
+        val accountIds = driveRepository.getAuthenticatedAccountIds()
+        if (accountIds.isNotEmpty()) {
+            // Use the first account's email for display
+            val accountId = accountIds.first()
+            val account = driveRepository.getAccount(accountId)
+            _googleDriveAccountName.value = account?.email
             _isGoogleDriveAuthenticated.value = true
         } else {
             _googleDriveAccountName.value = null
@@ -59,9 +62,16 @@ class MainViewModel @Inject constructor(
      */
     fun refreshGoogleDriveAccountName() {
         viewModelScope.launch {
-            val account = driveRepository.currentAccount.value
-            _googleDriveAccountName.value = account?.email
-            _isGoogleDriveAuthenticated.value = driveRepository.isAuthenticated.value == true
+            val accountIds = driveRepository.getAuthenticatedAccountIds()
+            if (accountIds.isNotEmpty()) {
+                val accountId = accountIds.first()
+                val account = driveRepository.getAccount(accountId)
+                _googleDriveAccountName.value = account?.email
+                _isGoogleDriveAuthenticated.value = true
+            } else {
+                _googleDriveAccountName.value = null
+                _isGoogleDriveAuthenticated.value = false
+            }
         }
     }
 

@@ -20,20 +20,24 @@ Android Screensaver uses **MVVM (Model-View-ViewModel)** with a **Repository** p
 
 ### Data Layer (`data/`)
 - **PhotoRepository** (interface) — Unified contract for all photo sources
-  - `GalleryPhotoRepository` — MediaStore API for device photos
-  - `GoogleDrivePhotoRepository` — Google Drive API for cloud photos
-- **GoogleDriveRepository** — Handles Google Sign-In + Drive API client
-- **SettingsManager** — DataStore-backed preferences (slideshow config, source state)
+  - `GalleryPhotoRepository` - MediaStore API for device photos
+  - `GoogleDrivePhotoRepository` - Google Drive API for cloud photos (per-account routing)
+  - `DropboxPhotoRepository` - Dropbox API photo access, folder search, thumbnail/local cache support
+- **GoogleDriveRepository** - Delegates to GoogleAccountManager for per-account auth; provides per-account Drive API clients
+- **GoogleAccountManager** (`utils/`) - Manages multiple Google accounts simultaneously. Each account has its own Drive service, OAuth credential, and sign-in state. Replaces the previous singleton auth pattern.
+- **SettingsManager** - DataStore-backed preferences (slideshow config, source state, multi-account configs)
 
 ### Service Layer (`dream/`)
 - **PhotoScreensaverService** — DreamService that runs the slideshow
   - Uses `SlideshowView` to display photos with crossfade transitions
   - Shows `NoSourcesView` when no sources are configured
   - Injected with `SlideshowManager` via Hilt
-- **SlideshowManager** — Central orchestrator for photo loading and slideshow configuration
-  - Loads photos from all enabled sources (Gallery, Google Drive)
+- **SlideshowManager** - Central orchestrator for photo loading and slideshow configuration
+  - Loads photos from all enabled accounts across all source types (Gallery, Google Drive multi-account)
+  - Iterates over each enabled Google Drive account, loading and caching photos per-account
+  - Owns repository-specific local download routing for cacheable remote photos
   - Applies shuffle and sort based on user settings
-  - Manages preload cache (partial — Gallery preloading needs wiring)
+  - Manages preload cache (partial - Gallery preloading needs wiring)
 
 ### Dependency Injection (`di/`)
 - **RepositoryModule** — Hilt module providing singletons for all repositories and `SlideshowManager`
@@ -58,7 +62,7 @@ Slideshow starts → SlideshowView.initialize(slideshowManager)
 
 Slideshow runs → SlideshowView loads photos via Coil from content:// URIs
                → auto-advances based on slide duration
-               → crossfades between photos using two ImageViews
+               → crossfades between photos using two ImageViews (OAuth handled via Coil Interceptor)
                → handles pause/resume on activity lifecycle
 ```
 
@@ -68,7 +72,7 @@ Slideshow runs → SlideshowView loads photos via Coil from content:// URIs
 |-------|---------------|
 | `PhotoRepository` | Interface defining photo source operations |
 | `GalleryPhotoRepository` | MediaStore-based local photo access |
-| `GoogleDrivePhotoRepository` | Google Drive API photo access |
+| `GoogleDrivePhotoRepository` | Google Drive API photo access (metadata only, emits remote URIs) |
 | `GoogleDriveRepository` | Google Sign-In + Drive service client |
 | `SlideshowManager` | Combines sources, loads photos, applies slideshow config |
 | `SlideshowView` | Custom view that displays photos with crossfade transitions |

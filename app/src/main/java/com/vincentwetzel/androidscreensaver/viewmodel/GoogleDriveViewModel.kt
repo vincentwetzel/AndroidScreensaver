@@ -2,13 +2,11 @@ package com.vincentwetzel.androidscreensaver.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.vincentwetzel.androidscreensaver.data.model.FolderError
 import com.vincentwetzel.androidscreensaver.data.model.FolderError.Companion.fromException
-import com.vincentwetzel.androidscreensaver.data.model.FolderError.Companion.userMessage
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
-import com.vincentwetzel.androidscreensaver.data.repository.GoogleDriveRepository
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDrivePhotoRepository
+import com.vincentwetzel.androidscreensaver.data.repository.GoogleDriveRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +17,8 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
- * ViewModel for Google Drive authentication and folder browsing
+ * ViewModel for Google Drive folder browsing.
+ * Now supports per-account operations via accountId parameter.
  */
 @HiltViewModel
 class GoogleDriveViewModel @Inject constructor(
@@ -27,13 +26,8 @@ class GoogleDriveViewModel @Inject constructor(
     private val photoRepository: GoogleDrivePhotoRepository
 ) : ViewModel() {
 
-    // Authentication state
-    private val _authState = MutableStateFlow<AuthState>(AuthState.Unauthenticated)
-    val authState: StateFlow<AuthState> = _authState.asStateFlow()
-
-    // Account info
-    private val _accountName = MutableStateFlow<String?>(null)
-    val accountName: StateFlow<String?> = _accountName.asStateFlow()
+    // Account ID for per-account routing (null = first available account)
+    private var accountId: String? = null
 
     // Folder state
     private val _folders = MutableStateFlow<List<PhotoFolder>>(emptyList())
@@ -53,48 +47,22 @@ class GoogleDriveViewModel @Inject constructor(
     private val _error = MutableStateFlow<FolderError?>(null)
     val error: StateFlow<FolderError?> = _error.asStateFlow()
 
-    init {
-        // Check if user is already signed in
-        driveRepository.checkExistingSignIn()
-        if (driveRepository.isAuthenticated.value) {
-            _authState.value = AuthState.Authenticated
-            _accountName.value = driveRepository.currentAccount.value?.displayName
-        }
-    }
-
     /**
-     * Handle successful authentication
+     * Set the account ID for this ViewModel instance. Must be called before loading folders.
      */
-    fun onAuthenticated(account: GoogleSignInAccount) {
-        viewModelScope.launch {
-            val success = driveRepository.handleSignInResult(account)
-            if (success) {
-                _authState.value = AuthState.Authenticated
-                _accountName.value = account.displayName
-                _error.value = null
-            } else {
-                _authState.value = AuthState.Error("Failed to authenticate")
-            }
-        }
+    fun setAccountId(id: String) {
+        accountId = id
     }
 
     /**
-     * Sign out
-     */
-    fun signOut() {
-        viewModelScope.launch {
-            driveRepository.signOut()
-            _authState.value = AuthState.Unauthenticated
-            _accountName.value = null
-            _folders.value = emptyList()
-        }
-    }
-
-    /**
-     * Load folders from Google Drive
-     * Cache is in the repository, so it persists across Activity recreations
+     * Load folders from Google Drive for the configured account.
      */
     fun loadFolders(parentFolderId: String? = null, forceRefresh: Boolean = false, addToBackStack: Boolean = true, mediaFilter: String? = null) {
+        val id = accountId ?: run {
+            _error.value = FolderError.UnknownError("No account configured for Google Drive folder browsing")
+            return
+        }
+
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
@@ -104,11 +72,11 @@ class GoogleDriveViewModel @Inject constructor(
                     _navigationBackStack.add(_currentFolderId.value)
                 }
                 _currentFolderId.value = parentFolderId
-                val folderList = photoRepository.listFolders(parentFolderId, forceRefresh)
+                val folderList = photoRepository.listFoldersForAccount(parentFolderId, forceRefresh, id)
 
                 // Get media counts for each folder, filtered by the content filter
                 val foldersWithCounts = folderList.map { folder ->
-                    val count = photoRepository.getFilteredFolderMediaCount(folder.id, mediaFilter)
+                    val count = photoRepository.getFilteredFolderMediaCountForAccount(folder.id, mediaFilter, id)
                     folder.copy(photoCount = count)
                 }
 
@@ -148,9 +116,11 @@ class GoogleDriveViewModel @Inject constructor(
     }
 
     /**
-     * Search folders by name
+     * Search folders by name for the configured account.
      */
     fun searchFolders(query: String) {
+        val id = accountId ?: return
+
         viewModelScope.launch {
             if (query.isBlank()) {
                 loadFolders(_currentFolderId.value)
@@ -159,7 +129,7 @@ class GoogleDriveViewModel @Inject constructor(
 
             _isLoading.value = true
             try {
-                _folders.value = photoRepository.searchFolders(query)
+                _folders.value = photoRepository.searchFoldersForAccount(query, id)
             } catch (e: Exception) {
                 _error.value = fromException(e)
             } finally {
@@ -184,9 +154,11 @@ class GoogleDriveViewModel @Inject constructor(
 
     /**
      * Get ALL subfolder IDs recursively for a given folder (used for cascade selection).
+     * Routes to the correct account.
      */
     suspend fun getSubfolderIds(folderId: String): List<String> = withContext(Dispatchers.IO) {
-        val driveService = driveRepository.getDriveService() ?: return@withContext emptyList()
+        val id = accountId ?: return@withContext emptyList()
+        val driveService = driveRepository.getDriveService(id) ?: return@withContext emptyList()
         val allSubfolders = mutableListOf<String>()
         collectSubfolderIds(folderId, driveService, allSubfolders)
         allSubfolders
@@ -206,7 +178,7 @@ class GoogleDriveViewModel @Inject constructor(
                 files.files?.forEach { file ->
                     file.id?.let {
                         result.add(it)
-                        collectSubfolderIds(it, driveService, result) // recurse
+                        collectSubfolderIds(it, driveService, result)
                     }
                 }
                 nextPageToken = files.nextPageToken
@@ -215,14 +187,4 @@ class GoogleDriveViewModel @Inject constructor(
             android.util.Log.w("GoogleDriveVM", "Failed to get subfolders: ${e.message}")
         }
     }
-}
-
-/**
- * Authentication state
- */
-sealed class AuthState {
-    object Unauthenticated : AuthState()
-    object Authenticated : AuthState()
-    object Authenticating : AuthState()
-    data class Error(val message: String) : AuthState()
 }

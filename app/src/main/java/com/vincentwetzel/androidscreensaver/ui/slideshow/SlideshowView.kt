@@ -25,11 +25,16 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import coil.ImageLoader
+import coil.imageLoader
 import coil.load
+import coil.request.ImageRequest
+import coil.request.ErrorResult
+import coil.request.SuccessResult
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.ClockPosition
-import com.vincentwetzel.androidscreensaver.data.model.ClockSize
 import com.vincentwetzel.androidscreensaver.data.model.Photo
+import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoConfig
 import com.vincentwetzel.androidscreensaver.dream.SlideshowManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +80,7 @@ class SlideshowView @JvmOverloads constructor(
     private var dateTextView: TextView? = null
     private var clockTextView: TextView? = null
     private var weatherTextView: TextView? = null
+    private var photoInfoTextView: TextView? = null
 
     // Decoration timers
     private val decorationHandler = Handler(Looper.getMainLooper())
@@ -197,6 +203,7 @@ class SlideshowView @JvmOverloads constructor(
 
         // Create decoration overlay views
         setupDecorationOverlays()
+        setupPhotoInfoOverlay()
     }
 
     /**
@@ -243,6 +250,20 @@ class SlideshowView @JvmOverloads constructor(
             LayoutParams.WRAP_CONTENT
         ))
     }
+    
+    private fun setupPhotoInfoOverlay() {
+        photoInfoTextView = TextView(context).apply {
+            id = View.generateViewId()
+            visibility = GONE
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+        }
+        addView(photoInfoTextView, LayoutParams(
+            LayoutParams.WRAP_CONTENT,
+            LayoutParams.WRAP_CONTENT
+        ))
+    }
 
     /**
      * Initialize and start the slideshow
@@ -270,10 +291,14 @@ class SlideshowView @JvmOverloads constructor(
                 imageViewB.visibility = GONE
                 playerView.visibility = GONE
 
+                android.util.Log.d(TAG, "Loading photos from sources...")
+
                 // Load photos
                 val loadedPhotos = withContext(Dispatchers.IO) {
                     slideshowManager.loadPhotos()
                 }
+
+                android.util.Log.d(TAG, "Loaded ${loadedPhotos.size} photos from sources")
 
                 // Apply shuffle if enabled
                 val finalPhotos = if (slideshowManager.config.shuffle) {
@@ -287,12 +312,13 @@ class SlideshowView @JvmOverloads constructor(
                 photos = finalPhotos
 
                 if (photos.isEmpty()) {
-                    // No media - caller should handle this case
+                    // No media - hide loading and notify caller
                     val label = when (slideshowManager.config.mediaTypeFilter) {
                         com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY -> "videos"
                         com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "photos"
                         else -> "items"
                     }
+                    loadingLayout.visibility = GONE
                     withContext(Dispatchers.Main) {
                         onError?.invoke("No $label found in selected sources")
                     }
@@ -315,6 +341,7 @@ class SlideshowView @JvmOverloads constructor(
 
             } catch (e: Exception) {
                 android.util.Log.e(TAG, "Error loading photos", e)
+                loadingLayout.visibility = GONE
                 withContext(Dispatchers.Main) {
                     onError?.invoke("Error loading photos: ${e.message}")
                 }
@@ -341,6 +368,7 @@ class SlideshowView @JvmOverloads constructor(
         val targetView = if (activeView) imageViewB else imageViewA
         val currentView = if (activeView) imageViewA else imageViewB
         val uri = Uri.parse(photo.uri)
+        val config = slideshowManager.config
 
         // Stop any playing video first
         stopVideoPlayer()
@@ -349,8 +377,6 @@ class SlideshowView @JvmOverloads constructor(
             // Handle video playback
             android.util.Log.d(TAG, "Playing video: uri=$uri, title=${photo.title}")
             isPlayingVideo = true
-
-            val config = slideshowManager.config
 
             // Apply display mode
             when (config.videoDisplayMode) {
@@ -423,70 +449,78 @@ class SlideshowView @JvmOverloads constructor(
             // Hide video player, show image views
             playerView.visibility = GONE
 
-            // Apply match_orientation: use FIT_CENTER if photo orientation doesn't match device
-            if (slideshowManager.config.matchDeviceOrientation) {
-                val photoIsPortrait = (photo.height ?: 0) > (photo.width ?: 0)
-                val deviceIsPortrait = context.resources.configuration.orientation ==
-                    android.content.res.Configuration.ORIENTATION_PORTRAIT
-                targetView.scaleType = if (photoIsPortrait == deviceIsPortrait) {
-                    ImageView.ScaleType.CENTER_CROP
-                } else {
-                    ImageView.ScaleType.FIT_CENTER
-                }
-            } else {
-                targetView.scaleType = ImageView.ScaleType.CENTER_CROP
-            }
+            // Cancel any running animation
+            targetView.clearAnimation()
+            targetView.translationX = 0f
+            targetView.translationY = 0f
+            targetView.scaleX = 1f
+            targetView.scaleY = 1f
 
-            targetView.load(uri) {
-                crossfade(false)
-                placeholder(android.R.color.black)
-                error(android.R.color.black)
-                allowHardware(false)
-                listener(
-                    onStart = {
-                        android.util.Log.d(TAG, "Started loading: $uri")
-                    },
-                    onSuccess = { _, _ ->
-                        android.util.Log.d(TAG, "Successfully loaded: $uri")
-                    },
-                    onError = { _, result ->
-                        android.util.Log.e(TAG, "Failed to load: $uri, error=${result.throwable?.message}")
+            // Apply display effect
+            applyDisplayEffect(targetView, config)
+
+            if (photo.uri.startsWith("http") && photo.sourceType == com.vincentwetzel.androidscreensaver.data.model.SourceType.GOOGLE_DRIVE) {
+                slideshowScope.launch {
+                    val localUri = slideshowManager.downloadPhotoToLocalCache(photo)
+                    if (localUri != null) {
+                        val newPhoto = photo.copy(uri = localUri)
+                        loadImage(newPhoto, targetView, currentView, animate)
+                    } else {
+                        // Handle download error
+                        advanceToNext()
                     }
-                )
-            }
-
-            if (animate) {
-                // Crossfade transition
-                currentView.visibility = VISIBLE
-                targetView.visibility = VISIBLE
-                targetView.alpha = 0f
-
-                val fadeIn = ObjectAnimator.ofFloat(targetView, "alpha", 0f, 1f).apply {
-                    duration = slideshowManager.config.transitionDurationMs.toLong()
-                    interpolator = DecelerateInterpolator()
                 }
-
-                val fadeOut = ObjectAnimator.ofFloat(currentView, "alpha", 1f, 0f).apply {
-                    duration = slideshowManager.config.transitionDurationMs.toLong()
-                    interpolator = DecelerateInterpolator()
-                    addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) {
-                            currentView.visibility = GONE
-                            activeView = !activeView
-                        }
-                    })
-                }
-
-                fadeIn.start()
-                fadeOut.start()
             } else {
-                // No animation - just show immediately
-                targetView.alpha = 1f
-                targetView.visibility = VISIBLE
-                currentView.visibility = GONE
-                activeView = !activeView
+                loadImage(photo, targetView, currentView, animate)
             }
         }
+    }
+    
+    private fun loadImage(photo: Photo, targetView: ImageView, currentView: ImageView, animate: Boolean) {
+        val uri = Uri.parse(photo.uri)
+        val config = slideshowManager.config
+        
+        // Use explicit ImageRequest for better error handling
+        val request = ImageRequest.Builder(context)
+            .data(uri)
+            .crossfade(false)
+            .placeholder(android.R.color.black)
+            .error(android.R.color.black)
+            .allowHardware(false)
+            .target(
+                onStart = {
+                    android.util.Log.d(TAG, "Started loading: $uri")
+                },
+                onSuccess = { drawable ->
+                    targetView.setImageDrawable(drawable)
+                    android.util.Log.d(TAG, "Successfully loaded: $uri, size=${drawable.intrinsicWidth}x${drawable.intrinsicHeight}")
+                    // Now that image is loaded, either transition or show immediately
+                    if (animate) {
+                        applyTransition(currentView, targetView)
+                    } else {
+                        targetView.alpha = 1f
+                        targetView.visibility = VISIBLE
+                        currentView.visibility = GONE
+                        activeView = !activeView
+                        // Start display effect animation after image is shown
+                        startDisplayEffectAnimation(targetView, config)
+                    }
+                    updatePhotoInfoOverlay(photo)
+                },
+                onError = { errorDrawable ->
+                    android.util.Log.e(TAG, "Failed to load: $uri, drawable=$errorDrawable")
+                    // Skip this photo and advance to next
+                    slideshowScope.launch {
+                        delay(1000) // Wait 1s before advancing
+                        advanceToNext()
+                    }
+                }
+            )
+            .build()
+
+        // Execute the request using the singleton ImageLoader
+        // This is CRITICAL for connection pooling and memory/disk caching to work
+        context.imageLoader.enqueue(request)
     }
 
     /**
@@ -599,6 +633,10 @@ class SlideshowView @JvmOverloads constructor(
         } else {
             weatherTextView?.visibility = GONE
         }
+        
+        if (photos.isNotEmpty()) {
+            updatePhotoInfoOverlay(photos[currentIndex])
+        }
     }
 
     private fun updateDateDecoration(config: com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig) {
@@ -656,6 +694,656 @@ class SlideshowView @JvmOverloads constructor(
             else
                 com.vincentwetzel.androidscreensaver.data.model.DecorationBackground.NONE)
     }
+    
+    private fun updatePhotoInfoOverlay(photo: Photo) {
+        val config = slideshowManager.config.photoInfoConfig
+        val photoInfoTextView = photoInfoTextView ?: return
+
+        if (!config.enabled) {
+            photoInfoTextView.visibility = GONE
+            return
+        }
+
+        val info = mutableListOf<String>()
+
+        if (config.showFileName) {
+            photo.title?.let {
+                var name = it
+                if (!config.showFileNameWithExtension) {
+                    name = name.substringBeforeLast('.')
+                }
+                info.add(name)
+            }
+        }
+        if (config.showDateTaken) {
+            photo.dateTaken?.let {
+                val format = when (config.dateFormat) {
+                    com.vincentwetzel.androidscreensaver.data.model.PhotoInfoDateFormat.FULL_DATE -> "EEEE, MMMM d, yyyy"
+                    com.vincentwetzel.androidscreensaver.data.model.PhotoInfoDateFormat.SHORT_DATE -> "MMM d, yyyy"
+                    com.vincentwetzel.androidscreensaver.data.model.PhotoInfoDateFormat.NUMERIC -> "MM/dd/yyyy"
+                    com.vincentwetzel.androidscreensaver.data.model.PhotoInfoDateFormat.RELATIVE -> {
+                        // Not implemented yet, fall back to short
+                        "MMM d, yyyy"
+                    }
+                }
+                info.add(SimpleDateFormat(format, Locale.getDefault()).format(Date(it)))
+            }
+        }
+        if (config.showSourceName) {
+            info.add(photo.sourceType.name)
+        }
+        if (config.showDescription) {
+            photo.description?.let { info.add(it) }
+        }
+        if (config.showDimensions) {
+            photo.width?.let { w ->
+                photo.height?.let { h ->
+                    info.add("${w}x${h}")
+                }
+            }
+        }
+        if (config.showFileSize) {
+            photo.fileSize?.let {
+                val sizeInMb = it / 1024.0 / 1024.0
+                info.add(String.format("%.2f MB", sizeInMb))
+            }
+        }
+
+
+        val separator = when (config.separator) {
+            com.vincentwetzel.androidscreensaver.data.model.PhotoInfoSeparator.BULLET -> " • "
+            com.vincentwetzel.androidscreensaver.data.model.PhotoInfoSeparator.PIPE -> " | "
+            com.vincentwetzel.androidscreensaver.data.model.PhotoInfoSeparator.DASH -> " — "
+            com.vincentwetzel.androidscreensaver.data.model.PhotoInfoSeparator.SLASH -> " / "
+            com.vincentwetzel.androidscreensaver.data.model.PhotoInfoSeparator.COMMA -> ", "
+        }
+
+        photoInfoTextView.text = info.joinToString(separator)
+
+        applyDecorationStyle(
+            photoInfoTextView,
+            config.position,
+            16f,
+            config.textOpacity,
+            config.background.toDecorationBackground()
+        )
+        
+        photoInfoTextView.visibility = VISIBLE
+    }
+
+    // ==================== DISPLAY EFFECTS ====================
+
+    /**
+     * Apply the configured display effect to the target image view.
+     * Sets scaleType immediately (before image load). Animations are started separately
+     * via startDisplayEffectAnimation() after the image finishes loading.
+     */
+    private fun applyDisplayEffect(targetView: ImageView, config: com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig) {
+        android.util.Log.d(TAG, "=== Applying display effect: ${config.displayEffect}, panDirection=${config.panDirection}, matchOrientation=${config.matchDeviceOrientation}")
+
+        when (config.displayEffect) {
+            com.vincentwetzel.androidscreensaver.data.model.DisplayEffect.CROP_TO_FIT -> {
+                targetView.scaleType = ImageView.ScaleType.CENTER_CROP
+                android.util.Log.d(TAG, "  -> CROP_TO_FIT (scaleType set, no animation)")
+            }
+            com.vincentwetzel.androidscreensaver.data.model.DisplayEffect.SCALE_TO_FIT -> {
+                targetView.scaleType = ImageView.ScaleType.FIT_CENTER
+                android.util.Log.d(TAG, "  -> SCALE_TO_FIT (scaleType set, no animation)")
+            }
+            com.vincentwetzel.androidscreensaver.data.model.DisplayEffect.ZOOM -> {
+                targetView.scaleType = ImageView.ScaleType.CENTER_CROP
+                android.util.Log.d(TAG, "  -> ZOOM (scaleType set, animation starts after load)")
+            }
+            com.vincentwetzel.androidscreensaver.data.model.DisplayEffect.PAN -> {
+                targetView.scaleType = ImageView.ScaleType.CENTER_CROP
+                android.util.Log.d(TAG, "  -> PAN (scaleType set, animation starts after load)")
+            }
+            com.vincentwetzel.androidscreensaver.data.model.DisplayEffect.FOCUS -> {
+                targetView.scaleType = ImageView.ScaleType.CENTER_CROP
+                android.util.Log.d(TAG, "  -> FOCUS (scaleType set, animation starts after load)")
+            }
+        }
+    }
+
+    /**
+     * Start display effect animations. Called AFTER the image has been loaded by Coil.
+     */
+    private fun startDisplayEffectAnimation(targetView: ImageView, config: com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig) {
+        when (config.displayEffect) {
+            com.vincentwetzel.androidscreensaver.data.model.DisplayEffect.ZOOM -> {
+                // Reset any previous animation state
+                targetView.scaleX = 1f
+                targetView.scaleY = 1f
+                // Animate scale from 1.0 to 1.5 over slide duration
+                ObjectAnimator.ofFloat(targetView, View.SCALE_X, 1.0f, 1.5f).apply {
+                    duration = config.slideDurationSeconds * 1000L
+                    interpolator = DecelerateInterpolator()
+                    start()
+                }
+                ObjectAnimator.ofFloat(targetView, View.SCALE_Y, 1.0f, 1.5f).apply {
+                    duration = config.slideDurationSeconds * 1000L
+                    interpolator = DecelerateInterpolator()
+                    start()
+                }
+            }
+            com.vincentwetzel.androidscreensaver.data.model.DisplayEffect.PAN -> {
+                // Reset any previous animation state
+                targetView.translationX = 0f
+                targetView.translationY = 0f
+                applyPanEffect(targetView, config)
+            }
+            com.vincentwetzel.androidscreensaver.data.model.DisplayEffect.FOCUS -> {
+                // Reset alpha
+                targetView.alpha = 0f
+                ObjectAnimator.ofFloat(targetView, View.ALPHA, 0f, 1f).apply {
+                    duration = (config.slideDurationSeconds * 1000L / 3).coerceAtMost(2000L)
+                    interpolator = AccelerateDecelerateInterpolator()
+                    start()
+                }
+            }
+            else -> {
+                // CROP_TO_FIT and SCALE_TO_FIT have no animations
+            }
+        }
+    }
+
+    /**
+     * Apply Ken Burns pan effect with configurable direction
+     */
+    private fun applyPanEffect(targetView: ImageView, config: com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig) {
+        val direction = config.panDirection
+        val actualDirection = if (direction == com.vincentwetzel.androidscreensaver.data.model.PanDirection.RANDOM) {
+            com.vincentwetzel.androidscreensaver.data.model.PanDirection.values().random()
+        } else {
+            direction
+        }
+
+        val panDistance = targetView.width * 0.15f
+        val duration = config.slideDurationSeconds * 1000L
+
+        val (startX, endX, startY, endY) = when (actualDirection) {
+            com.vincentwetzel.androidscreensaver.data.model.PanDirection.LEFT_TO_RIGHT ->
+                listOf(-panDistance, panDistance, 0f, 0f)
+            com.vincentwetzel.androidscreensaver.data.model.PanDirection.RIGHT_TO_LEFT ->
+                listOf(panDistance, -panDistance, 0f, 0f)
+            com.vincentwetzel.androidscreensaver.data.model.PanDirection.TOP_TO_BOTTOM ->
+                listOf(0f, 0f, -panDistance, panDistance)
+            com.vincentwetzel.androidscreensaver.data.model.PanDirection.BOTTOM_TO_TOP ->
+                listOf(0f, 0f, panDistance, -panDistance)
+            else -> listOf(-panDistance, panDistance, 0f, 0f)
+        }
+
+        ObjectAnimator.ofFloat(targetView, View.TRANSLATION_X, startX, endX).apply {
+            this.duration = duration
+            interpolator = AccelerateDecelerateInterpolator()
+            start()
+        }
+        ObjectAnimator.ofFloat(targetView, View.TRANSLATION_Y, startY, endY).apply {
+            this.duration = duration
+            interpolator = AccelerateDecelerateInterpolator()
+            start()
+        }
+    }
+
+    /**
+     * Stop any running display effect animations
+     */
+    private fun stopDisplayEffects() {
+        imageViewA.clearAnimation()
+        imageViewB.clearAnimation()
+        imageViewA.translationX = 0f
+        imageViewA.translationY = 0f
+        imageViewA.scaleX = 1f
+        imageViewA.scaleY = 1f
+        imageViewA.alpha = 1f
+        imageViewB.translationX = 0f
+        imageViewB.translationY = 0f
+        imageViewB.scaleX = 1f
+        imageViewB.scaleY = 1f
+        imageViewB.alpha = 1f
+    }
+
+    // ==================== TRANSITIONS ====================
+
+    /**
+     * Apply the configured transition effect between two image views.
+     * Called AFTER the target image is loaded and ready.
+     */
+    private fun applyTransition(currentView: ImageView, targetView: ImageView) {
+        val config = slideshowManager.config
+        val durationMs = config.transitionDurationMs.toLong()
+        val effect = config.transitionEffect
+        val easing = when (config.transitionEasing) {
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEasing.EASE_IN_OUT -> AccelerateDecelerateInterpolator()
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEasing.EASE_IN -> android.view.animation.AccelerateInterpolator()
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEasing.EASE_OUT -> DecelerateInterpolator()
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEasing.LINEAR -> android.view.animation.LinearInterpolator()
+        }
+
+        // Get view dimensions for slide/wipe transitions (use measured width/height)
+        val viewWidth = if (currentView.width > 0) currentView.width.toFloat()
+            else context.resources.displayMetrics.widthPixels.toFloat()
+        val viewHeight = if (currentView.height > 0) currentView.height.toFloat()
+            else context.resources.displayMetrics.heightPixels.toFloat()
+
+        // Clear any running animations on both views
+        currentView.clearAnimation()
+        targetView.clearAnimation()
+
+        when (effect) {
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.FADE -> {
+                currentView.visibility = VISIBLE
+                currentView.alpha = 1f
+                targetView.visibility = VISIBLE
+                targetView.alpha = 0f
+                ObjectAnimator.ofFloat(targetView, View.ALPHA, 0f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            currentView.alpha = 1f
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                    start()
+                }
+            }
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.CROSS_FADE -> {
+                currentView.visibility = VISIBLE
+                currentView.alpha = 1f
+                targetView.visibility = VISIBLE
+                targetView.alpha = 0f
+                val fadeIn = ObjectAnimator.ofFloat(targetView, View.ALPHA, 0f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                }
+                val fadeOut = ObjectAnimator.ofFloat(currentView, View.ALPHA, 1f, 0f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            currentView.alpha = 1f
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                }
+                fadeIn.start()
+                fadeOut.start()
+            }
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.SLIDE -> {
+                currentView.visibility = VISIBLE
+                currentView.alpha = 1f
+                currentView.translationX = 0f
+                targetView.visibility = VISIBLE
+                targetView.alpha = 1f
+                targetView.translationX = viewWidth
+                val slideIn = ObjectAnimator.ofFloat(targetView, View.TRANSLATION_X, viewWidth, 0f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                }
+                val slideOut = ObjectAnimator.ofFloat(currentView, View.TRANSLATION_X, 0f, -viewWidth).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            currentView.translationX = 0f
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                }
+                slideIn.start()
+                slideOut.start()
+            }
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.WIPE -> {
+                currentView.visibility = VISIBLE
+                currentView.alpha = 1f
+                targetView.visibility = VISIBLE
+                targetView.alpha = 1f
+                targetView.translationY = -viewHeight
+                val wipeIn = ObjectAnimator.ofFloat(targetView, View.TRANSLATION_Y, -viewHeight, 0f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            targetView.translationY = 0f
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                }
+                wipeIn.start()
+            }
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.SWAP -> {
+                currentView.visibility = VISIBLE
+                currentView.alpha = 1f
+                currentView.translationX = 0f
+                targetView.visibility = VISIBLE
+                targetView.alpha = 1f
+                targetView.translationX = viewWidth
+                val slideIn = ObjectAnimator.ofFloat(targetView, View.TRANSLATION_X, viewWidth, 0f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                }
+                val slideOut = ObjectAnimator.ofFloat(currentView, View.TRANSLATION_X, 0f, -viewWidth).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            currentView.translationX = 0f
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                }
+                slideIn.start()
+                slideOut.start()
+            }
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.ZOOM -> {
+                currentView.visibility = VISIBLE
+                currentView.alpha = 1f
+                targetView.visibility = VISIBLE
+                targetView.scaleX = 0.1f
+                targetView.scaleY = 0.1f
+                targetView.alpha = 0f
+                val scaleX = ObjectAnimator.ofFloat(targetView, View.SCALE_X, 0.1f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                }
+                val scaleY = ObjectAnimator.ofFloat(targetView, View.SCALE_Y, 0.1f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                }
+                val fadeIn = ObjectAnimator.ofFloat(targetView, View.ALPHA, 0f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            targetView.scaleX = 1f
+                            targetView.scaleY = 1f
+                            targetView.alpha = 1f
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                }
+                scaleX.start()
+                scaleY.start()
+                fadeIn.start()
+            }
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.FLASH -> {
+                currentView.visibility = VISIBLE
+                targetView.visibility = GONE
+                val flashView = ImageView(context).apply {
+                    setBackgroundColor(Color.WHITE)
+                    alpha = 0f
+                }
+                addView(flashView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+                val fadeIn = ObjectAnimator.ofFloat(flashView, View.ALPHA, 0f, 1f).apply {
+                    this.duration = durationMs / 3
+                    interpolator = android.view.animation.AccelerateInterpolator()
+                }
+                val fadeOut = ObjectAnimator.ofFloat(flashView, View.ALPHA, 1f, 0f).apply {
+                    this.duration = durationMs * 2 / 3
+                    interpolator = DecelerateInterpolator()
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            targetView.visibility = VISIBLE
+                            targetView.alpha = 1f
+                            removeView(flashView)
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                }
+                fadeIn.addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        targetView.visibility = VISIBLE
+                        targetView.alpha = 1f
+                        fadeOut.start()
+                    }
+                })
+                fadeIn.start()
+            }
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.RIPPLE -> {
+                currentView.visibility = VISIBLE
+                currentView.alpha = 1f
+                targetView.visibility = VISIBLE
+                targetView.alpha = 0f
+                targetView.scaleX = 0.5f
+                targetView.scaleY = 0.5f
+                val rippleInterpolator = android.view.animation.OvershootInterpolator(2f)
+                val scaleX = ObjectAnimator.ofFloat(targetView, View.SCALE_X, 0.5f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = rippleInterpolator
+                }
+                val scaleY = ObjectAnimator.ofFloat(targetView, View.SCALE_Y, 0.5f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = rippleInterpolator
+                }
+                val fadeIn = ObjectAnimator.ofFloat(targetView, View.ALPHA, 0f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            targetView.scaleX = 1f
+                            targetView.scaleY = 1f
+                            targetView.alpha = 1f
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                }
+                scaleX.start()
+                scaleY.start()
+                fadeIn.start()
+            }
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.DOORWAY -> {
+                currentView.visibility = VISIBLE
+                currentView.alpha = 1f
+                targetView.visibility = VISIBLE
+                targetView.alpha = 0f
+                val slideOut = ObjectAnimator.ofFloat(currentView, View.TRANSLATION_X, 0f, -viewWidth / 2).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                }
+                val fadeOutCurrent = ObjectAnimator.ofFloat(currentView, View.ALPHA, 1f, 0f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                }
+                val fadeIn = ObjectAnimator.ofFloat(targetView, View.ALPHA, 0f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            currentView.translationX = 0f
+                            currentView.alpha = 1f
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                }
+                slideOut.start()
+                fadeOutCurrent.start()
+                fadeIn.start()
+            }
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.RADIAL -> {
+                currentView.visibility = VISIBLE
+                currentView.alpha = 1f
+                targetView.visibility = VISIBLE
+                targetView.alpha = 1f
+                
+                // Calculate the center point and max radius for the circular reveal
+                val centerX = targetView.width / 2f
+                val centerY = targetView.height / 2f
+                val startRadius = 0f
+                val endRadius = kotlin.math.sqrt(
+                    (targetView.width * targetView.width + targetView.height * targetView.height).toDouble()
+                ).toFloat()
+                
+                // Use ViewAnimationUtils for a true circular reveal
+                val revealAnimator = android.view.ViewAnimationUtils.createCircularReveal(
+                    targetView,
+                    centerX.toInt(),
+                    centerY.toInt(),
+                    startRadius,
+                    endRadius
+                ).apply {
+                    this.duration = durationMs
+                    this.interpolator = easing
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            currentView.alpha = 1f
+                            targetView.visibility = VISIBLE
+                            targetView.alpha = 1f
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                }
+                
+                revealAnimator.start()
+            }
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.STAR -> {
+                currentView.visibility = VISIBLE
+                currentView.alpha = 1f
+                targetView.visibility = VISIBLE
+                targetView.alpha = 0f
+                targetView.scaleX = 0.1f
+                targetView.scaleY = 0.1f
+                targetView.rotation = -30f
+                val scaleX = ObjectAnimator.ofFloat(targetView, View.SCALE_X, 0.1f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                }
+                val scaleY = ObjectAnimator.ofFloat(targetView, View.SCALE_Y, 0.1f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                }
+                val rotate = ObjectAnimator.ofFloat(targetView, View.ROTATION, -30f, 0f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                }
+                val fadeIn = ObjectAnimator.ofFloat(targetView, View.ALPHA, 0f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            targetView.scaleX = 1f
+                            targetView.scaleY = 1f
+                            targetView.rotation = 0f
+                            targetView.alpha = 1f
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                }
+                scaleX.start()
+                scaleY.start()
+                rotate.start()
+                fadeIn.start()
+            }
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.WIND -> {
+                currentView.visibility = VISIBLE
+                currentView.alpha = 1f
+                targetView.visibility = VISIBLE
+                targetView.alpha = 0f
+                targetView.translationX = -viewWidth
+                targetView.rotation = -5f
+                val slideIn = ObjectAnimator.ofFloat(targetView, View.TRANSLATION_X, -viewWidth, 0f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                }
+                val rotate = ObjectAnimator.ofFloat(targetView, View.ROTATION, -5f, 0f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                }
+                val fadeIn = ObjectAnimator.ofFloat(targetView, View.ALPHA, 0f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            targetView.rotation = 0f
+                            targetView.translationX = 0f
+                            targetView.alpha = 1f
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                }
+                slideIn.start()
+                rotate.start()
+                fadeIn.start()
+            }
+            com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.CIRCLE -> {
+                currentView.visibility = VISIBLE
+                currentView.alpha = 1f
+                targetView.visibility = VISIBLE
+                targetView.alpha = 1f
+                targetView.scaleX = 0f
+                targetView.scaleY = 0f
+                val bounceInterpolator = android.view.animation.BounceInterpolator()
+                val scaleX = ObjectAnimator.ofFloat(targetView, View.SCALE_X, 0f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = bounceInterpolator
+                }
+                val scaleY = ObjectAnimator.ofFloat(targetView, View.SCALE_Y, 0f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = bounceInterpolator
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            targetView.scaleX = 1f
+                            targetView.scaleY = 1f
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                }
+                scaleX.start()
+                scaleY.start()
+            }
+            // CUBE, MEMORY, ILLUSION fall back to crossfade
+            else -> {
+                currentView.visibility = VISIBLE
+                currentView.alpha = 1f
+                targetView.visibility = VISIBLE
+                targetView.alpha = 0f
+                val fadeIn = ObjectAnimator.ofFloat(targetView, View.ALPHA, 0f, 1f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                }
+                val fadeOut = ObjectAnimator.ofFloat(currentView, View.ALPHA, 1f, 0f).apply {
+                    this.duration = durationMs
+                    interpolator = easing
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            currentView.visibility = GONE
+                            currentView.alpha = 1f
+                            activeView = !activeView
+                            startDisplayEffectAnimation(targetView, config)
+                        }
+                    })
+                }
+                fadeIn.start()
+                fadeOut.start()
+            }
+        }
+    }
 
     /**
      * Apply common decoration styling (position, font size, opacity, background)
@@ -663,17 +1351,12 @@ class SlideshowView @JvmOverloads constructor(
     private fun applyDecorationStyle(
         textView: TextView,
         position: ClockPosition,
-        size: ClockSize,
+        fontSizeSp: Float,
         opacity: Int,
         background: com.vincentwetzel.androidscreensaver.data.model.DecorationBackground
     ) {
-        // Font size
-        val fontSizeDp = when (size) {
-            ClockSize.SMALL -> 16f
-            ClockSize.MEDIUM -> 24f
-            ClockSize.LARGE -> 36f
-        }
-        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSizeDp)
+        // Font size (direct SP value)
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSizeSp)
 
         // Position
         val params = textView.layoutParams as LayoutParams
@@ -708,6 +1391,19 @@ class SlideshowView @JvmOverloads constructor(
 
         // Opacity
         textView.alpha = opacity / 100f
+    }
+
+    private fun com.vincentwetzel.androidscreensaver.data.model.PhotoInfoBackground.toDecorationBackground():
+        com.vincentwetzel.androidscreensaver.data.model.DecorationBackground {
+        return when (this) {
+            com.vincentwetzel.androidscreensaver.data.model.PhotoInfoBackground.NONE ->
+                com.vincentwetzel.androidscreensaver.data.model.DecorationBackground.NONE
+            com.vincentwetzel.androidscreensaver.data.model.PhotoInfoBackground.SOLID ->
+                com.vincentwetzel.androidscreensaver.data.model.DecorationBackground.SOLID
+            com.vincentwetzel.androidscreensaver.data.model.PhotoInfoBackground.SEMI_TRANSPARENT,
+            com.vincentwetzel.androidscreensaver.data.model.PhotoInfoBackground.GRADIENT_FADE ->
+                com.vincentwetzel.androidscreensaver.data.model.DecorationBackground.SEMI_TRANSPARENT
+        }
     }
 
     /**

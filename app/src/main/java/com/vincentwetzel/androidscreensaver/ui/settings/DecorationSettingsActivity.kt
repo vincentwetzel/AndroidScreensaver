@@ -11,13 +11,11 @@ import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.ClockDecorationConfig
 import com.vincentwetzel.androidscreensaver.data.model.ClockFormat
 import com.vincentwetzel.androidscreensaver.data.model.ClockPosition
-import com.vincentwetzel.androidscreensaver.data.model.ClockSize
 import com.vincentwetzel.androidscreensaver.data.model.DateFormat
 import com.vincentwetzel.androidscreensaver.data.model.DecorationAnimation
 import com.vincentwetzel.androidscreensaver.data.model.DecorationBackground
 import com.vincentwetzel.androidscreensaver.data.model.DecorationConfig
 import com.vincentwetzel.androidscreensaver.data.model.PulseSpeed
-import com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity
 import com.vincentwetzel.androidscreensaver.data.model.TemperatureUnit
 import com.vincentwetzel.androidscreensaver.data.model.WeatherDecorationConfig
 import com.vincentwetzel.androidscreensaver.data.model.WeatherIconStyle
@@ -128,18 +126,12 @@ class DecorationSettingsActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
-        // Font size — auto-save
-        setupSpinner(binding.contentDate.spinnerFontSize, arrayOf("Small", "Medium", "Large"))
-        binding.contentDate.spinnerFontSize.setSelection(when (dateConfig.fontSize) {
-            ClockSize.SMALL -> 0
-            ClockSize.MEDIUM -> 1
-            ClockSize.LARGE -> 2
-        })
-        binding.contentDate.spinnerFontSize.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                saveCurrentSettings()
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        // Font size slider — auto-save
+        binding.contentDate.sliderFontSize.value = dateConfig.fontSize
+        updateFontSizeLabel(binding.contentDate.labelFontSize, dateConfig.fontSize)
+        binding.contentDate.sliderFontSize.addOnChangeListener { _, value, _ ->
+            updateFontSizeLabel(binding.contentDate.labelFontSize, value)
+            saveCurrentSettings()
         }
 
         // Background — auto-save
@@ -230,18 +222,12 @@ class DecorationSettingsActivity : AppCompatActivity() {
             saveCurrentSettings()
         }
 
-        // Font size — auto-save
-        setupSpinner(binding.contentClock.spinnerFontSize, arrayOf("Small", "Medium", "Large"))
-        binding.contentClock.spinnerFontSize.setSelection(when (clockConfig.fontSize) {
-            ClockSize.SMALL -> 0
-            ClockSize.MEDIUM -> 1
-            ClockSize.LARGE -> 2
-        })
-        binding.contentClock.spinnerFontSize.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                saveCurrentSettings()
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        // Font size slider — auto-save
+        binding.contentClock.sliderFontSize.value = clockConfig.fontSize
+        updateFontSizeLabel(binding.contentClock.labelFontSize, clockConfig.fontSize)
+        binding.contentClock.sliderFontSize.addOnChangeListener { _, value, _ ->
+            updateFontSizeLabel(binding.contentClock.labelFontSize, value)
+            saveCurrentSettings()
         }
 
         // Background — auto-save
@@ -362,18 +348,12 @@ class DecorationSettingsActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
-        // Font size — auto-save
-        setupSpinner(binding.contentWeather.spinnerFontSize, arrayOf("Small", "Medium", "Large"))
-        binding.contentWeather.spinnerFontSize.setSelection(when (weatherConfig.fontSize) {
-            ClockSize.SMALL -> 0
-            ClockSize.MEDIUM -> 1
-            ClockSize.LARGE -> 2
-        })
-        binding.contentWeather.spinnerFontSize.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                saveCurrentSettings()
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        // Font size slider — auto-save
+        binding.contentWeather.sliderFontSize.value = weatherConfig.fontSize
+        updateFontSizeLabel(binding.contentWeather.labelFontSize, weatherConfig.fontSize)
+        binding.contentWeather.sliderFontSize.addOnChangeListener { _, value, _ ->
+            updateFontSizeLabel(binding.contentWeather.labelFontSize, value)
+            saveCurrentSettings()
         }
 
         // Animation — auto-save
@@ -417,6 +397,13 @@ class DecorationSettingsActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Update the font size label to show the current SP value
+     */
+    private fun updateFontSizeLabel(label: android.widget.TextView, sizeSp: Float) {
+        label.text = "Font Size (${sizeSp.toInt()}sp)"
+    }
+
     private fun setupSpinner(spinner: android.widget.Spinner, items: Array<String>) {
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
@@ -446,12 +433,7 @@ class DecorationSettingsActivity : AppCompatActivity() {
                     4 -> DateFormat.ABBREVIATE_MONTH
                     else -> DateFormat.CUSTOM
                 },
-                fontSize = when (binding.contentDate.spinnerFontSize.selectedItemPosition) {
-                    0 -> ClockSize.SMALL
-                    1 -> ClockSize.MEDIUM
-                    2 -> ClockSize.LARGE
-                    else -> ClockSize.MEDIUM
-                },
+                fontSize = binding.contentDate.sliderFontSize.value,
                 background = when (binding.contentDate.spinnerBackground.selectedItemPosition) {
                     0 -> DecorationBackground.NONE
                     1 -> DecorationBackground.SEMI_TRANSPARENT
@@ -485,12 +467,7 @@ class DecorationSettingsActivity : AppCompatActivity() {
                 clockFormat = if (binding.contentClock.spinnerFormat.selectedItemPosition == 1) 
                     ClockFormat.HOUR_24 else ClockFormat.HOUR_12,
                 showSeconds = binding.contentClock.switchShowSeconds.isChecked,
-                fontSize = when (binding.contentClock.spinnerFontSize.selectedItemPosition) {
-                    0 -> ClockSize.SMALL
-                    1 -> ClockSize.MEDIUM
-                    2 -> ClockSize.LARGE
-                    else -> ClockSize.MEDIUM
-                },
+                fontSize = binding.contentClock.sliderFontSize.value,
                 background = when (binding.contentClock.spinnerBackground.selectedItemPosition) {
                     0 -> DecorationBackground.NONE
                     1 -> DecorationBackground.SEMI_TRANSPARENT
@@ -536,12 +513,7 @@ class DecorationSettingsActivity : AppCompatActivity() {
                     2 -> WeatherWidgetBackground.SOLID
                     else -> WeatherWidgetBackground.TRANSPARENT
                 },
-                fontSize = when (binding.contentWeather.spinnerFontSize.selectedItemPosition) {
-                    0 -> ClockSize.SMALL
-                    1 -> ClockSize.MEDIUM
-                    2 -> ClockSize.LARGE
-                    else -> ClockSize.MEDIUM
-                },
+                fontSize = binding.contentWeather.sliderFontSize.value,
                 animation = if (binding.contentWeather.spinnerAnimation.selectedItemPosition == 1) 
                     DecorationAnimation.PULSE_SOFTLY else DecorationAnimation.STATIC,
                 pulseSpeed = when (binding.contentWeather.spinnerPulseSpeed.selectedItemPosition) {

@@ -152,6 +152,21 @@
             android:exported="false"
             android:theme="@style/Theme.AndroidScreensaver" />
 
+        <!-- Dropbox Authentication Activity -->
+        <activity
+            android:name="com.dropbox.core.android.AuthActivity"
+            android:configChanges="orientation|keyboard"
+            android:launchMode="singleTask"
+            android:exported="true">
+            <intent-filter>
+                <data
+                    android:scheme="db-${DROPBOX_APP_KEY}" />
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <!-- Callback for OAuth2 flows -->
         <activity
             android:name=".ui.sources.OAuthCallbackActivity"
@@ -165,6 +180,21 @@
                 <data android:scheme="db-${DROPBOX_APP_KEY}" />
             </intent-filter>
         </activity>
+        
+        <!-- Boot receiver to reschedule alarms -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Service to set alarms -->
+        <service android:name=".service.ScheduleService" />
+
+        <!-- Receiver to handle alarms -->
+        <receiver android:name=".receiver.AlarmReceiver" />
         
     </application>
 
