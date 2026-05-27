@@ -1,69 +1,60 @@
 # Architecture
 
-Android Screensaver uses **MVVM (Model-View-ViewModel)** with a **Repository** pattern for data abstraction.
+Android Screensaver uses MVVM with a Repository pattern for photo source abstraction.
 
 ## Layers
 
 ### Presentation Layer (`ui/`)
-- **Activities** — Single screen UIs (MainActivity, SettingsActivity, FolderBrowserActivity, etc.)
-- **Adapters** — RecyclerView adapters for lists
-- **Views** observe **ViewModels** via `StateFlow`/`LiveData`
-- **SlideshowView** — Custom `FrameLayout` that renders the photo slideshow with crossfade transitions
-- **NoSourcesView** — Custom `LinearLayout` that displays guidance when no sources are configured
-- **ScreensaverPreviewActivity** — Activity-based preview of the screensaver for testing
+
+- **Activities** - Single-screen UIs such as `MainActivity`, settings screens, and folder browsers.
+- **Adapters** - RecyclerView adapters for source and folder lists.
+- **Views** - Observe ViewModels through `StateFlow`/`LiveData`.
+- **SlideshowView** - Custom `FrameLayout` that renders photos/videos, transitions, overlays, and playback behavior.
+- **NoSourcesView** - Setup guidance when no sources are configured.
+- **ScreensaverPreviewActivity** - Activity-based preview that mirrors DreamService behavior for testing.
 
 ### ViewModel Layer (`viewmodel/`)
-- **MainViewModel** — Manages source selection state
-- **GoogleDriveViewModel** — Google Drive auth + folder browsing
-- **GalleryViewModel** — Gallery folder browsing
-- Expose UI state as flows; never hold Android Context references
+
+- **MainViewModel** - Manages source selection state.
+- **GoogleDriveViewModel** - Google Drive account and folder browsing state.
+- **GalleryViewModel** - Gallery folder browsing state.
+- ViewModels expose UI state as flows and should not hold long-lived Android `Context` references.
 
 ### Data Layer (`data/`)
-- **PhotoRepository** (interface) — Unified contract for all photo sources
-  - `GalleryPhotoRepository` - MediaStore API for device photos
-  - `GoogleDrivePhotoRepository` - Google Drive API for cloud photos with per-account routing, recursive folder traversal, thumbnail metadata, and local file cache paths
-  - `DropboxPhotoRepository` - Dropbox API photo access with recursive listing, paginated folder search, thumbnail/local cache support, and per-account caches
-- **GoogleDriveRepository** - Delegates to GoogleAccountManager for per-account auth; provides per-account Drive API clients
-- **GoogleAccountManager** (`utils/`) - Manages multiple Google accounts simultaneously. Each account has its own Drive service, OAuth credential, and sign-in state. Replaces the previous singleton auth pattern.
-- **SettingsManager** - DataStore-backed preferences (slideshow config, source state, multi-account configs)
+
+- **PhotoRepository** - Unified contract for all photo sources.
+- **GalleryPhotoRepository** - MediaStore access for local photos and videos.
+- **GoogleDrivePhotoRepository** - Google Drive media access with account-scoped routing, recursive folder traversal, thumbnail metadata, and local cache paths.
+- **DropboxPhotoRepository** - Dropbox media access with recursive listing, paginated folder search, thumbnails, and local cache support.
+- **GoogleDriveRepository** - Delegates auth and Drive service creation to `GoogleAccountManager`.
+- **SettingsManager** - DataStore-backed preferences for slideshow config, source state, selected folders, and account configs.
 
 ### Service Layer (`dream/`)
-- **PhotoScreensaverService** — DreamService that runs the slideshow
-  - Uses `SlideshowView` to display photos with crossfade transitions
-  - Shows `NoSourcesView` when no sources are configured
-  - Injected with `SlideshowManager` via Hilt
-- **SlideshowManager** - Central orchestrator for photo loading and slideshow configuration
-  - Loads photos from all enabled accounts across all source types (Gallery, Google Drive multi-account)
-  - Iterates over each enabled Google Drive account, loading and caching photos per-account
-  - Owns repository-specific local download routing for cacheable remote photos
-  - Applies content-type filtering, deduplication by source/account/photo ID, shuffle, and sort based on user settings
-  - Manages preload cache for Gallery content URIs, cached file URIs, and cloud downloads
+
+- **PhotoScreensaverService** - Android DreamService that hosts the slideshow.
+- **SlideshowManager** - Loads media from enabled sources, applies settings, filters content, deduplicates entries, sorts/shuffles media, and routes cacheable cloud downloads through the correct repository.
 
 ### Dependency Injection (`di/`)
-- **RepositoryModule** — Hilt module providing singletons for all repositories and `SlideshowManager`
+
+- **RepositoryModule** - Hilt module providing repositories and `SlideshowManager`.
+- Photo repositories are concrete injected singletons. The repository map is assembled explicitly instead of using Hilt map multibindings.
 
 ## Data Flow
 
-```
-User enables Gallery → SettingsManager saves source state
-User selects folders → SettingsManager saves folder IDs to DataStore
-TEST button pressed → ScreensaverPreviewActivity launched
-                    → checks SettingsManager.hasAnySourceConfigured()
-                    → if false: shows NoSourcesView
-                    → if true: creates SlideshowView
+```text
+User enables a source
+-> SettingsManager saves source state
 
-Slideshow starts → SlideshowView.initialize(slideshowManager)
-                 → calls SlideshowManager.loadPhotos()
-                 → SlideshowManager checks SettingsManager for enabled sources
-                 → for each enabled source, gets selected folders
-                 → loads photos from GalleryPhotoRepository / GoogleDrivePhotoRepository
-                 → applies shuffle or sort based on config
-                 → returns combined photo list to SlideshowView
+User selects folders
+-> SettingsManager saves selected folder IDs
 
-Slideshow runs → SlideshowView loads photos via Coil from content:// URIs
-               → auto-advances based on slide duration
-               → crossfades between photos using two ImageViews (OAuth handled via Coil Interceptor)
-               → handles pause/resume on activity lifecycle
+Preview or DreamService starts
+-> SlideshowManager loads fresh config
+-> SlideshowManager checks enabled sources and selected folders
+-> Repositories load media
+-> SlideshowManager filters, deduplicates, sorts/shuffles
+-> SlideshowView renders media with Coil and ExoPlayer
+-> SlideshowView advances based on slideshow/video settings
 ```
 
 ## Key Classes
@@ -71,37 +62,39 @@ Slideshow runs → SlideshowView loads photos via Coil from content:// URIs
 | Class | Responsibility |
 |-------|---------------|
 | `PhotoRepository` | Interface defining photo source operations |
-| `GalleryPhotoRepository` | MediaStore-based local photo access |
-| `GoogleDrivePhotoRepository` | Google Drive API photo access with metadata, account-scoped remote URLs, and local cache paths |
-| `GoogleDriveRepository` | Google Sign-In + Drive service client |
-| `SlideshowManager` | Combines sources, loads photos, applies slideshow config |
-| `SlideshowView` | Custom view that displays photos with crossfade transitions |
-| `NoSourcesView` | Custom view that shows setup guidance when no sources configured |
-| `ScreensaverPreviewActivity` | Activity that mirrors DreamService for testing |
-| `PhotoScreensaverService` | DreamService — fullscreen slideshow |
-| `SettingsManager` | DataStore persistence for all settings |
-| `GoogleOAuthConfig` | OAuth client ID configuration |
+| `GalleryPhotoRepository` | MediaStore-based local photo/video access |
+| `GoogleDrivePhotoRepository` | Google Drive media access with account-scoped URLs and cache paths |
+| `DropboxPhotoRepository` | Dropbox media access with thumbnail and local cache support |
+| `GoogleDriveRepository` | Google Sign-In and Drive service client facade |
+| `GoogleAccountManager` | Per-account Google auth, credentials, and Drive services |
+| `SlideshowManager` | Combines sources and applies slideshow config |
+| `SlideshowView` | Displays photos/videos, transitions, overlays, and playback |
+| `NoSourcesView` | Shows setup guidance when no source is configured |
+| `ScreensaverPreviewActivity` | Activity preview of screensaver behavior |
+| `PhotoScreensaverService` | DreamService fullscreen slideshow host |
+| `SettingsManager` | DataStore persistence for app settings |
 
 ## Threading
 
-- All repository API calls use `withContext(Dispatchers.IO)` to avoid blocking the main thread
-- Folder lists and photo counts are cached in repositories (`@Singleton`) with TTLs; repository caches use concurrent maps where background prefetch and slideshow loading can overlap
-- `SlideshowManager` chunk-loads selected folders in small concurrent batches to limit memory/API spikes
-- ViewModel coroutines use `viewModelScope.launch` for lifecycle-aware async
+- Repository API calls use `withContext(Dispatchers.IO)`.
+- Folder lists and photo counts are cached in repository singletons.
+- Shared repository caches use concurrent maps where background prefetch and slideshow loading can overlap.
+- `SlideshowManager` chunk-loads selected folders in small concurrent batches to limit memory/API spikes.
+- ViewModel work runs in `viewModelScope`.
 
 ## Screensaver Implementation
 
-The app uses Android's **DreamService** API for screensaver functionality. The activation card in MainActivity detects whether the app is set as the active screensaver using:
+The app uses Android DreamService. The activation card in `MainActivity` detects the active screensaver with:
 
-1. Multi-key settings detection (`dream_components`, `screensaver_components`, `dream_component`)
-2. Fallback: checks `screensaver_enabled` when this is the only DreamService installed
-3. DreamService support detection via `queryIntentServices()` before attempting to read settings
+1. Multi-key settings detection: `dream_components`, `screensaver_components`, and `dream_component`.
+2. Fallback detection through `screensaver_enabled` when this is the only DreamService installed.
+3. DreamService support detection through `queryIntentServices()` before reading settings.
 
-The card automatically hides once the app is detected as the active screensaver.
+The card hides once the app is detected as the active screensaver.
 
 ## Settings Reference
 
-All settings are persisted via **DataStore Preferences**.
+All settings are persisted through DataStore Preferences.
 
 ### Source Settings
 
@@ -110,7 +103,7 @@ All settings are persisted via **DataStore Preferences**.
 | `source_google_drive_enabled` | Boolean | `false` | Google Drive source enabled |
 | `source_google_drive_folders` | StringSet | `{}` | Selected Google Drive folder IDs |
 | `source_gallery_enabled` | Boolean | `false` | Gallery source enabled |
-| `source_gallery_folders` | StringSet | `{}` | Selected Gallery folder IDs (bucket IDs) |
+| `source_gallery_folders` | StringSet | `{}` | Selected Gallery folder IDs |
 
 ### Slideshow Settings
 
@@ -120,46 +113,38 @@ All settings are persisted via **DataStore Preferences**.
 | `shuffle` | Boolean | `true` | Randomize photo order |
 | `photo_order` | String | `DATE_NEWEST_FIRST` | Sort order |
 | `media_type_filter` | String | `IMAGES_ONLY` | Filter by media type |
-| `match_orientation` | Boolean | `false` | Use FIT_CENTER for mismatched orientation |
+| `match_orientation` | Boolean | `false` | Use `FIT_CENTER` for mismatched orientation |
 | `display_effect` | String | `CROP_TO_FIT` | Photo display effect |
-| `pan_direction` | String | `RANDOM` | Pan direction for pan effect |
 | `transition_effect` | String | `FADE` | Transition between photos |
 | `transition_duration_ms` | Int | `1000` | Transition animation duration |
-| `transition_easing` | String | `EASE_IN_OUT` | Transition easing curve |
-| `transition_direction` | String | `LEFT` | Transition direction |
 | `background_color` | Int | `0xFF000000` | Slideshow background color |
 | `screen_orientation` | String | `SYSTEM_DEFAULT` | Screen orientation lock |
-| `keep_screen_on` | Boolean | `false` | Prevent screen dimming via FLAG_KEEP_SCREEN_ON |
-| `enable_cache` | Boolean | `true` | Enable photo caching |
-| `cache_limit_mb` | Int | `500` | Custom cache size limit in MB |
-| `cache_use_preset` | Boolean | `true` | Use preset cache limit vs custom value |
-| `wifi_only` | Boolean | `true` | Only fetch cloud sources on Wi-Fi |
+| `keep_screen_on` | Boolean | `false` | Prevent screen dimming |
+| `enable_cache` | Boolean | `true` | Enable media caching |
+| `cache_limit_mb` | Int | `500` | Custom cache size limit |
+| `cache_use_preset` | Boolean | `true` | Use preset cache limit |
+| `wifi_only` | Boolean | `true` | Fetch cloud sources only on Wi-Fi/Ethernet |
 | `network_timeout` | Int | `30` | HTTP request timeout in seconds |
-| `exit_trigger` | String | `TOUCH` | How to exit screensaver (touch/remote/shake/voice) |
-| `timer_enabled` | Boolean | `false` | Enable timer-based screensaver start |
+| `exit_trigger` | String | `TOUCH` | How to exit screensaver |
+| `timer_enabled` | Boolean | `false` | Enable timer behavior |
 | `photo_info_enabled` | Boolean | `false` | Show photo metadata overlay |
-| `photo_info_fade_seconds` | Int | `5` | Photo info overlay fade duration |
-| `decoration_date` | Boolean | `false` | Show date decoration |
-| `decoration_clock` | Boolean | `false` | Show clock decoration |
-| `decoration_weather` | Boolean | `false` | Show weather decoration |
+| `decoration_date` | Boolean | `false` | Show date overlay |
+| `decoration_clock` | Boolean | `false` | Show clock overlay |
+| `decoration_weather` | Boolean | `false` | Show weather overlay |
 
-### Settings Runtime Behavior
+## Settings Runtime Behavior
 
-Settings are loaded from DataStore via `SettingsManager.getSlideshowConfig()` and applied at slideshow start:
+- `PhotoScreensaverService.onAttachedToWindow()` refreshes slideshow config.
+- `SlideshowView.initialize()` applies background color and starts rendering.
+- DreamService applies keep-screen-on and screen-orientation behavior.
+- `SlideshowManager.loadPhotos()` checks network restrictions before cloud fetches.
+- `SlideshowView.showPhoto()` applies match-orientation behavior.
+- `SlideshowView.startAutoAdvance()` reloads config each cycle so setting changes can take effect mid-slideshow.
+- DreamService handles touch exit, receiver cleanup, timeout cleanup, and battery-saver pause behavior.
 
-- `PhotoScreensaverService.onAttachedToWindow()` calls `SlideshowManager.loadConfig()` to refresh config
-- `SlideshowView.initialize()` applies `backgroundColor` to the view
-- DreamService applies `FLAG_KEEP_SCREEN_ON` and `screenOrientation` via WindowManager
-- `SlideshowManager.loadPhotos()` checks `wifiOnly` via `ConnectivityManager` before Google Drive fetches
-- `SlideshowView.showPhoto()` adjusts `scaleType` when `matchDeviceOrientation` is enabled
-- `SlideshowView.startAutoAdvance()` reloads config each cycle so setting changes take effect mid-slideshow
-- DreamService uses `GestureDetector` to handle touch exit when `exitOnTrigger` is TOUCH
-- DreamService registers receivers through `ContextCompat.registerReceiver()`, guards unregister cleanup, clears timeout callbacks on reset/detach, and immediately pauses when battery saver is already active and `respectBatterySaver` is enabled
-- `wifiOnly` permits Wi-Fi and Ethernet transports for cloud loading
+## Accessing Settings
 
-### Accessing Settings
-
-- **Slideshow config:** `SettingsManager.getSlideshowConfig(context)` / `saveSlideshowConfig(context, config)`
-- **Source state:** `SettingsManager.isSourceEnabled(context, sourceType)` / `setSourceEnabled(...)`
-- **Selected folders:** `SettingsManager.getSelectedFolders(context, sourceType)` / `setSelectedFolders(...)`
-- **Any source configured:** `SettingsManager.hasAnySourceConfigured(context)`
+- Slideshow config: `SettingsManager.getSlideshowConfig(context)` / `saveSlideshowConfig(context, config)`
+- Source state: `SettingsManager.isSourceEnabled(context, sourceType)` / `setSourceEnabled(...)`
+- Selected folders: `SettingsManager.getSelectedFolders(context, sourceType)` / `setSelectedFolders(...)`
+- Any source configured: `SettingsManager.hasAnySourceConfigured(context)`

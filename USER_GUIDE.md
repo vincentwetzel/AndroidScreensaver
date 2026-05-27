@@ -4,104 +4,107 @@
 
 ### 1. Enable a Photo Source
 
-Open the app and toggle ON the sources you want to use:
+Open the app and toggle on the sources you want to use:
 
 - **Gallery** - Photos stored on your device. No sign-in required.
-- **Google Drive** - Photos stored in your Google Drive. Requires Google account sign-in.
+- **Google Drive** - Photos stored in Google Drive. Requires Google account sign-in.
 - **Dropbox** - Photos stored in Dropbox. Requires Dropbox sign-in.
 
 ### 2. Select Folders
 
 After enabling a source, tap it to browse folders:
 
-- **Check boxes** next to folders you want to include (selections are saved automatically)
-- **Tap a folder name** to open it and see subfolders
-- Use the **back arrow** in the toolbar to go up one level
-- Selected folders include nested subfolders automatically. You can deselect a nested folder to exclude it.
-- **Pull down** to refresh and detect new/removed folders from the source
-- **Select All / Deselect All** buttons for quick selection
-- Selections are saved **immediately** — no Save/Cancel buttons needed
+- Check boxes next to folders you want to include.
+- Tap a folder name to open it and view subfolders.
+- Use the toolbar back arrow to return to the previous folder.
+- Selected folders include nested subfolders automatically.
+- Deselect a nested folder to exclude it.
+- Pull down to refresh and detect new or removed folders.
+- Use **Select All** and **Deselect All** for quick selection.
+
+Selections save immediately; there are no Save or Cancel buttons.
 
 ### 3. Activate the Screensaver
 
-1. The **"Activate Screensaver"** card at the top of the app will appear when this app is not yet your active screensaver
-2. Tap **"Open Screensaver Settings"** to go to your device's screensaver settings
-3. Select **"Android Screensaver"** from the list
-4. Configure when to start (while charging, while docked, etc.) and the delay
-5. Once selected, return to the app — the activation card will automatically disappear
+1. The **Activate Screensaver** card appears when this app is not yet your active screensaver.
+2. Tap **Open Screensaver Settings**.
+3. Select **Android Screensaver** from the system list.
+4. Configure when to start, such as while charging or docked.
+5. Return to the app. The activation card should disappear automatically.
 
 ### 4. Test It
 
-**Quick Preview:** Tap the **preview icon** (👁) in the top toolbar to instantly launch the screensaver — no need to wait for screen timeout.
+Tap the preview icon in the top toolbar to instantly launch the screensaver without waiting for the system screen timeout.
 
-**Full Activation:** After activation, lock your screen or put the device on a charger. The screensaver should start after your configured delay.
-If the system sends you back to **"Colors"**, update to a build that includes the DreamService permission fix or verify that your device supports DreamService.
+After activation, lock the screen or place the device on a charger. The screensaver should start after the configured system delay.
 
 ## Screensaver Settings
 
-Within the app, you can customize:
+Settings are accessed through **Menu > Settings**.
 
-**Media & Content:**
-- Media order (shuffle, date, name sorting)
-- Content Type filter (Images Only, Videos Only, or Both)
-- Match device orientation (shows letterboxed photos when orientation differs)
+### Media & Content
 
-**Slideshow:**
-- Slide duration (how long each photo is shown)
-- Video playback settings
+- Media order: shuffle, date, and name sorting.
+- Content Type filter: Images Only, Videos Only, or Both.
+- Match device orientation for letterboxed photos when orientation differs.
 
-**Display & Transitions:**
-- Display effects (crop-to-fit, scale-to-fit, zoom, pan, focus)
-- Transition effects (fade, cross fade, wipe, slide, swap, cube, doorway, radial, etc.)
-- Transition duration
+### Slideshow
 
-**Decorations:**
-- Date, clock, and weather overlay toggles
+- Slide duration.
+- Video playback settings.
+- Display effects such as crop-to-fit, scale-to-fit, zoom, pan, and focus.
+- Transition effects such as fade, cross fade, wipe, slide, swap, cube, doorway, and radial.
+- Transition duration.
 
-**Schedule & Timer:**
-- Autostart schedule (when to automatically start the screensaver)
-- Autostop schedule (when to automatically stop the screensaver)
-- Auto-exit timeout (how long before screensaver exits: Disabled, 30s, 5min, 15min, 30min, 45min, 1hr, 1.5hr, 2hr, or custom)
+### Decorations
 
-**Display & Power:**
-- Screen rotation (portrait, landscape, or system default)
-- Keep screen on (prevent screen dimming)
+- Date overlay.
+- Clock overlay.
+- Weather overlay.
+- Photo information overlay.
 
-**Sync & Network:**
-- Sync timeout (how long to wait for network requests before timing out)
-- Wi-Fi only (only fetch cloud sources on Wi-Fi)
+### Schedule & Timer
 
-**Appearance:**
-- Background color
-- Cache limit (preset or custom MB value)
-- Clear cache
+- Autostart schedule.
+- Autostop schedule.
+- Auto-exit timeout.
 
-**Advanced:**
-- Exit trigger (touch, remote button, shake, or voice command)
+### Display & Power
 
-These are accessed via **Menu → Settings**.
+- Screen rotation.
+- Keep screen on.
+- Background color.
+- Exit trigger.
+
+### Sync & Network
+
+- Sync timeout.
+- Wi-Fi only cloud loading. Ethernet also satisfies network-only cloud loading.
+- Cache limit and clear-cache action.
 
 ## Sources
 
 ### Gallery
 
-Shows photo folders from your device (Camera, Screenshots, Downloads, etc.). No permissions needed on Android 13+. On older Android, grants photo read permission.
+Shows photo folders from your device, such as Camera, Screenshots, and Downloads. Android 13+ uses scoped photo access; older Android versions may require photo read permission.
 
 ### Google Drive
 
-Shows folders from your Google Drive account. Requires Google account authentication. The app requests **read-only** access to your Drive files - it cannot modify or delete anything.
+Shows folders from one or more Google Drive accounts. The app requests read-only access and cannot modify or delete Drive files.
+
+Authenticated source cards must show `Signed in as [account email]`.
 
 ### Dropbox
 
-Shows folders from your Dropbox account. The app can cache thumbnails and downloaded media locally so selected Dropbox photos and videos can load faster after the first access.
+Shows folders from Dropbox. The app can cache thumbnails and downloaded media locally so selected Dropbox photos and videos load faster after first access.
 
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| Activation card still shows after selecting | Close and reopen the app to refresh detection |
-| Screensaver doesn't start | Check that "Android Screensaver" is selected in system screen saver settings |
-| No photos showing | Verify folders are selected and contain photos |
-| Google Drive sign-in fails | Check that your device has a Google account added |
-| 403 Error when adding Google account | If the app is unpublished, the Google account email must be added to the "Test users" list in Google Cloud Console (APIs & Services > OAuth consent screen). |
-| Gallery shows empty | Ensure device has photos and permission is granted |
+| Activation card still shows after selecting | Close and reopen the app to refresh detection. |
+| Screensaver does not start | Check that **Android Screensaver** is selected in system screen saver settings. |
+| No photos showing | Verify folders are selected and contain photos or videos matching the Content Type filter. |
+| Google Drive sign-in fails | Check that your device has a Google account added. |
+| 403 error when adding Google account | If the app is unpublished, add the Google account email to Google Cloud Console test users. |
+| Gallery shows empty | Ensure the device has photos and permission is granted. |

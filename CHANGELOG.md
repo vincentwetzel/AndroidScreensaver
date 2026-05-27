@@ -2,6 +2,10 @@
 
 ## 1.11.0 (In Progress)
 
+### Documentation
+- Removed `PROGRESS.md` and consolidated active planning into `TODO.md`; release history remains in this changelog.
+- Cleaned up duplicated documentation-agent rules and corrected corrupted punctuation/checklist glyphs in project markdown.
+
 ### Build System
 - **Updated Android Gradle Plugin to 9.2.1** - Bumped the root `com.android.application` plugin from AGP 9.2.0 to 9.2.1.
 

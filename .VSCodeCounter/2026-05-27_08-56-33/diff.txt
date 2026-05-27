@@ -1,0 +1,32 @@
+Date : 2026-05-27 08:56:33
+Directory : e:\coding_workspaces\Kotlin\AndroidScreensaver
+Total : 8 files,  -165 codes, 0 comments, 16 blanks, all -149 lines
+
+Languages
++----------+------------+------------+------------+------------+------------+
+| language | files      | code       | comment    | blank      | total      |
++----------+------------+------------+------------+------------+------------+
+| Markdown |          8 |       -165 |          0 |         16 |       -149 |
++----------+------------+------------+------------+------------+------------+
+
+Directories
++----------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                           | files      | code       | comment    | blank      | total      |
++----------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                              |          8 |       -165 |          0 |         16 |       -149 |
++----------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++----------------------------------------------------------------+----------+------------+------------+------------+------------+
+| filename                                                       | language | code       | comment    | blank      | total      |
++----------------------------------------------------------------+----------+------------+------------+------------+------------+
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\AGENTS.md       | Markdown |        -30 |          0 |         -3 |        -33 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\ARCHITECTURE.md | Markdown |        -16 |          0 |          4 |        -12 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\BUILD.md        | Markdown |          1 |          0 |         24 |         25 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\CHANGELOG.md    | Markdown |         12 |          0 |          2 |         14 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\PROGRESS.md     | Markdown |        -36 |          0 |        -11 |        -47 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\README.md       | Markdown |         -4 |          0 |          0 |         -4 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\TODO.md         | Markdown |        -94 |          0 |         -6 |       -100 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\USER_GUIDE.md   | Markdown |          2 |          0 |          6 |          8 |
+| Total                                                          |          |       -165 |          0 |         16 |       -149 |
++----------------------------------------------------------------+----------+------------+------------+------------+------------+

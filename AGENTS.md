@@ -1,45 +1,50 @@
 # Agents
 
-This file describes the roles/agents that can work on this project.
+This file describes the roles and operating rules for coding agents working on this project.
 
 ## General Developer
-- Handles general Kotlin/Android development tasks
-- Implements features and fixes bugs
-- Follows Android best practices and MVVM architecture
+
+- Handles general Kotlin/Android development tasks.
+- Implements features and fixes bugs.
+- Follows Android best practices and MVVM architecture.
 
 ## Cloud Integration Specialist
-- Implements OAuth2 authentication flows for cloud providers
-- Handles API integrations for Dropbox, Google Drive, Google Photos, OneDrive
-- Manages token storage and refresh logic
+
+- Implements OAuth2 authentication flows for cloud providers.
+- Handles API integrations for Dropbox, Google Drive, Google Photos, and OneDrive.
+- Manages token storage and refresh logic.
 
 ## UI/UX Developer
-- Implements Material Design components
-- Creates responsive layouts for different screen sizes
-- Ensures accessibility compliance
-- **Remote source status always shows account email** — When a user is authenticated to a remote source (Google Drive, Dropbox, OneDrive, Google Photos, etc.), the status text MUST display "Signed in as [account email]" — never just "Authenticated" or "Connected". The toast notification on sign-in MUST also show "Successfully signed in as [account email]". Use `GoogleSignInAccount.email`, NOT `displayName`.
+
+- Implements Material Design components.
+- Creates responsive layouts for different screen sizes.
+- Ensures accessibility compliance.
+- **Remote source status always shows account email** - When a user is authenticated to a remote source, the status text MUST display `Signed in as [account email]`, never just `Authenticated` or `Connected`. The toast notification on sign-in MUST show `Successfully signed in as [account email]`. Use `GoogleSignInAccount.email`, not `displayName`.
 
 ## Android Systems Specialist
-- Implements Daydream/DreamService functionality
-- Handles Android settings integration
-- Manages background services and permissions
-- Optimizes for TV devices (NVidia Shield)
+
+- Implements Daydream/DreamService functionality.
+- Handles Android settings integration.
+- Manages background services and permissions.
+- Optimizes for TV devices such as NVidia Shield.
 
 ---
 
-## 🚫 CRITICAL: No Legacy Code / Zero Backward Compatibility
+## Critical: No Legacy Code / Zero Backward Compatibility
 
-**This project is pre-release. There is ZERO guaranteed compatibility with previous versions.**
+This project is pre-release. There is zero guaranteed compatibility with previous versions.
+
 - Do NOT write migration code for old settings formats.
-- Do NOT keep "legacy" fallbacks for backwards compatibility.
+- Do NOT keep legacy fallbacks for backwards compatibility.
 - If a data structure changes, break it and use the new one. Old structures should be deleted entirely.
 
 ---
 
-## ⚠️ Documentation Rule (MANDATORY)
+## Documentation Rule
 
-**Any coding agent that adds, removes, or modifies a feature MUST update all relevant markdown files in this project before completing the task.**
+Any coding agent that adds, removes, or modifies a feature MUST update all relevant markdown files before completing the task.
 
-Do NOT rely on your own memory or assumptions about what the app does. The MD files are the **single source of truth** for any agent that picks up this project.
+Do not rely on memory or assumptions about what the app does. The markdown files are the source of truth for agents that pick up this project later.
 
 ### Files to Check When Making Changes
 
@@ -48,110 +53,72 @@ Do NOT rely on your own memory or assumptions about what the app does. The MD fi
 | `README.md` | Adding/removing features, changing tech stack |
 | `ARCHITECTURE.md` | Adding new layers, changing patterns, new key classes |
 | `CHANGELOG.md` | Every feature addition, bug fix, or breaking change |
-| `PROGRESS.md` | Completing or starting any task |
-| `TODO.md` | Adding new tasks, completing existing ones |
-| `BUILD.md` | Changing build config, adding new setup steps, troubleshooting steps |
-| `GOOGLE_CLOUD_SETUP.md` | Changing OAuth config or setup steps |
-| `SETTINGS.md` | Adding/removing settings |
+| `TODO.md` | Adding new tasks, completing existing tasks, changing quality status |
+| `BUILD.md` | Changing build config, setup steps, or troubleshooting steps |
+| `GOOGLE_CLOUD_SETUP.md` | Changing OAuth config or setup steps, if this file exists |
+| `SETTINGS.md` | Adding/removing settings, if this file exists |
 | `USER_GUIDE.md` | Changing user-facing flows or features |
-| `RELEASE_NOTES.md` | Preparing a release |
+| `RELEASE_NOTES.md` | Preparing a release, if this file exists |
+
+### Documentation Ownership
+
+- `CHANGELOG.md` is the release/history log.
+- `TODO.md` is the active backlog and quality checklist.
+- `README.md`, `ARCHITECTURE.md`, `BUILD.md`, and `USER_GUIDE.md` describe durable product, technical, build, and user-facing behavior.
+- Do not recreate `PROGRESS.md`; it was removed because it duplicated `TODO.md` and `CHANGELOG.md`.
 
 ### Before Finishing a Task
 
-1. Read the relevant MD file(s)
-2. Update them to reflect the changes made
-3. Do NOT assume the next agent knows what you did — document it
-
-### Why This Matters
-
-- Any agent should be able to open this project and understand it from the MD files alone
-- Agents don't share conversation history — only these files persist between sessions
-- Outdated docs are worse than no docs
+1. Read the relevant markdown file(s).
+2. Update them to reflect the changes made.
+3. Do not assume the next agent knows what you did; document it in the correct place.
 
 ---
 
-## 🚫 CRITICAL: Git Actions Are STRICTLY FORBIDDEN Unless Explicitly Requested
+## Git Actions Are Forbidden Unless Explicitly Requested
 
-**You MUST NOT perform ANY git actions unless the user explicitly tells you to.**
+You MUST NOT perform any git actions unless the user explicitly tells you to.
 
 This includes but is not limited to:
+
 - `git commit`
 - `git push`
 - `git pull`
 - `git merge`
 - `git reset`
 - `git rebase`
-- `git checkout` (branch switching)
+- `git checkout` for branch switching
 - Any other git command that modifies repository state
 
-**What you CAN do:**
-- `git status` (to check state)
-- `git diff` (to review changes)
-- `git log` (to review history)
-- `git add` (staging only, if preparing for a commit the user requested)
+Allowed read-only git commands:
 
-**If you accidentally commit or push without permission:**
-1. Inform the user immediately
-2. Do NOT push again until authorized
+- `git status`
+- `git diff`
+- `git log`
 
-### Why This Exists
+`git add` is allowed only when preparing for a commit the user explicitly requested.
 
-- The user controls when changes are shared
-- Premature commits may be incomplete or incorrect
-- The user may want to review changes before they're permanent
-- Git history should be clean and intentional
+If you accidentally commit or push without permission:
+
+1. Inform the user immediately.
+2. Do not push again until authorized.
 
 ---
 
-## 🚫 CRITICAL: Documentation Rule (MANDATORY)
-
-**Any coding agent that adds, removes, or modifies a feature MUST update all relevant markdown files in this project before completing the task.**
-
-Do NOT rely on your own memory or assumptions about what the app does. The MD files are the **single source of truth** for any agent that picks up this project.
-
-### Files to Check When Making Changes
-
-| File | Update When... |
-|------|---------------|
-| `README.md` | Adding/removing features, changing tech stack |
-| `ARCHITECTURE.md` | Adding new layers, changing patterns, new key classes |
-| `CHANGELOG.md` | Every feature addition, bug fix, or breaking change |
-| `PROGRESS.md` | Completing or starting any task |
-| `TODO.md` | Adding new tasks, completing existing ones |
-| `BUILD.md` | Changing build config, adding new setup steps, troubleshooting steps |
-| `GOOGLE_CLOUD_SETUP.md` | Changing OAuth config or setup steps |
-| `SETTINGS.md` | Adding/removing settings |
-| `USER_GUIDE.md` | Changing user-facing flows or features |
-| `RELEASE_NOTES.md` | Preparing a release |
-
-### Before Finishing a Task
-
-1. Read the relevant MD file(s)
-2. Update them to reflect the changes made
-3. Do NOT assume the next agent knows what you did — document it
-
-### Why This Matters
-
-- Any agent should be able to open this project and understand it from the MD files alone
-- Agents don't share conversation history — only these files persist between sessions
-- Outdated docs are worse than no docs
-
----
-
-## 📋 When the User Says "Commit and Push"
+## When the User Says "Commit and Push"
 
 Only then may you proceed, and you MUST follow this checklist:
 
-1. ✅ **Update all relevant MD files** to reflect the changes made
-2. ✅ **Verify the app builds successfully** (`./gradlew assembleDebug`)
-3. ✅ **Review your changes** (`git diff HEAD`) to ensure nothing is missed
-4. ✅ **Write a clear, descriptive commit message** (focus on WHY, not just WHAT)
-5. ✅ **Commit** (`git add -A && git commit -m "message"`)
-6. ✅ **Push** (`git push`)
+1. Update all relevant markdown files to reflect the changes made.
+2. Verify the app builds successfully with `./gradlew assembleDebug`.
+3. Review changes with `git diff HEAD`.
+4. Write a clear, descriptive commit message focused on why the change was made.
+5. Commit with `git add -A && git commit -m "message"`.
+6. Push with `git push`.
 
 ### Checklist Before `git commit && git push`
 
-```
+```text
 □ CHANGELOG.md updated with all changes
 □ TODO.md updated if tasks were added/completed
 □ README.md updated if features changed

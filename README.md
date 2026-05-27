@@ -1,55 +1,46 @@
 # Android Screensaver
 
-A photo slideshow screensaver app for Android phones, tablets, and TV devices. Displays photos from multiple sources as a fullscreen screensaver.
+A photo slideshow screensaver app for Android phones, tablets, and TV devices. Displays photos and videos from local and cloud sources as a fullscreen Android DreamService.
 
 ## Features
 
-- **Multiple Photo Sources**
-  - **Gallery** - Browse and select folders from device photos (via MediaStore API)
-  - **Google Drive** - Browse and select folders from Google Drive (OAuth2 authenticated)
-  - **Dropbox** - Browse and select Dropbox folders with thumbnail/local cache support
-  - *More sources planned: Google Photos, OneDrive, Local Network*
+- **Multiple photo sources**
+  - **Gallery** - Browse and select folders from device photos via MediaStore.
+  - **Google Drive** - Browse and select folders from one or more Google accounts with OAuth2 authentication.
+  - **Dropbox** - Browse and select Dropbox folders with thumbnail and local cache support.
+  - Planned: Google Photos, OneDrive, and local network sources.
 
-- **Customizable Slideshow**
-  - Shuffle/random order
-  - Configurable slide duration
-  - Multiple transition effects with crossfade animation
-  - Display effects (crop-to-fit, scale-to-fit, zoom, pan)
-  - Photo ordering (date, name, size)
-  - Content Type filter (Images Only, Videos Only, or Both)
-  - Background color, screen rotation, keep-screen-on settings
-  - Match device orientation (FIT_CENTER for mismatched photos)
-  - Wi-Fi only mode for cloud sources
-  - Cloud fetching works on Wi-Fi or Ethernet when network-only mode is enabled
-  - Touch exit trigger to dismiss screensaver
+- **Customizable slideshow**
+  - Shuffle/random order, configurable slide duration, and multiple transition effects.
+  - Display effects including crop-to-fit, scale-to-fit, zoom, and pan.
+  - Photo ordering by date, name, or size.
+  - Content Type filter for images only, videos only, or both.
+  - Background color, screen rotation, keep-screen-on, match-orientation, and touch-exit settings.
+  - Network-only cloud loading works on Wi-Fi or Ethernet.
 
-- **Video Playback**
-  - Videos play with ExoPlayer (Media3) and auto-advance when finished
-  - Audio modes: Mute, System Volume, or Custom Volume (absolute device volume)
-  - Min/Max video duration to exclude short or overly long videos
-  - Short videos loop automatically
-  - Optional playback controls
+- **Video playback**
+  - Videos play with Media3/ExoPlayer and auto-advance when finished.
+  - Audio modes: mute, system volume, or custom absolute device volume.
+  - Minimum and maximum video duration filters.
+  - Short videos loop automatically.
 
-- **Testing & Debugging**
-  - **TEST button** — Instantly preview the screensaver without waiting for screen timeout
-  - Informative "No Photos" screen when no sources are configured
-
-- **Screensaver Activation**
-  - System DreamService (screensaver) — configure via **Settings → Display → Screen saver**
-  - Activation card on main screen guides users through setup; auto-hides when active
+- **Screensaver activation**
+  - Android DreamService integration, configurable from **Settings > Display > Screen saver**.
+  - Activation card on the main screen guides users through setup and auto-hides once active.
+  - Preview button instantly launches the screensaver for testing.
 
 - **Modern UI**
-  - Material Design 3 components
-  - Phone/tablet and TV (leanback) layouts
-  - Dark/light theme support
+  - Material Design 3 components.
+  - Phone/tablet and TV-oriented layouts.
+  - Dark/light theme support.
 
 ## Quick Start
 
-1. **Build and run** in Android Studio or via `./gradlew installDebug`
-2. **Enable a photo source** — Toggle Gallery or Google Drive ON
-3. **Select folders** — Tap the source to browse and select folders
-4. **Activate screensaver** — The activation card at the top will guide you. Tap "Open Screensaver Settings", select "Android Screensaver", return to the app and the card will disappear.
-5. **Configure** — Set when to start (while charging, while docked, etc.) in system settings.
+1. Build and run in Android Studio or with `./gradlew installDebug`.
+2. Enable a source such as Gallery, Google Drive, or Dropbox.
+3. Tap the source card and select folders. Folder selections save immediately.
+4. Tap **Open Screensaver Settings**, select **Android Screensaver**, then return to the app.
+5. Adjust slideshow, video, schedule, overlay, and cache settings from the app settings menu.
 
 ## Tech Stack
 
@@ -57,40 +48,43 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
 - **Architecture:** MVVM with Repository pattern
 - **DI:** Hilt
 - **Async:** Kotlin Coroutines + Flow
-- **Storage:** DataStore (preferences)
+- **Storage:** DataStore Preferences
 - **Image Loading:** Coil
+- **Video:** Media3/ExoPlayer
 - **Build:** Android Gradle Plugin 9.2.1 with Gradle 9.4.1
 - **Min SDK:** 26 (Android 8.0)
 - **Target SDK:** 34 (Android 14)
 
 ## Project Structure
 
-```
+```text
 app/src/main/java/com/vincentwetzel/androidscreensaver/
-├── data/
-│   ├── model/          # Data classes (Photo, PhotoFolder, SourceType, etc.)
-│   └── repository/     # PhotoRepository implementations
-├── di/                 # Hilt dependency injection modules
-├── dream/              # DreamService (screensaver service), SlideshowManager
-├── ui/
-│   ├── main/           # MainActivity (source selection)
-│   ├── settings/       # Settings activities
-│   ├── slideshow/      # SlideshowView (photo display with transitions), NoSourcesView
-│   └── sources/        # Source auth + folder browser activities
-├── utils/              # Utilities (SettingsManager, OAuth config)
-└── viewmodel/          # ViewModels (MainViewModel, GalleryViewModel, GoogleDriveViewModel)
+|-- data/
+|   |-- model/          # Data classes
+|   `-- repository/     # PhotoRepository implementations
+|-- di/                 # Hilt dependency injection modules
+|-- dream/              # DreamService and SlideshowManager
+|-- ui/
+|   |-- main/           # MainActivity and source cards
+|   |-- settings/       # Settings screens
+|   |-- slideshow/      # SlideshowView and NoSourcesView
+|   `-- sources/        # Source auth and folder browser screens
+|-- utils/              # SettingsManager, OAuth config, account helpers
+`-- viewmodel/          # Main, Gallery, Google Drive, and source ViewModels
 ```
 
 ## Documentation
 
 | File | Purpose |
 |------|---------|
-| [BUILD.md](BUILD.md) | Build commands, Google Drive OAuth setup, troubleshooting |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Architecture, design patterns, key classes, settings reference |
-| [CHANGELOG.md](CHANGELOG.md) | Version history and changes |
-| [TODO.md](TODO.md) | Backlog and current progress |
+| [BUILD.md](BUILD.md) | Build commands, OAuth setup notes, and troubleshooting |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Architecture, design patterns, key classes, and settings reference |
+| [CHANGELOG.md](CHANGELOG.md) | Release history and completed changes |
+| [TODO.md](TODO.md) | Active backlog and quality checklist |
 | [USER_GUIDE.md](USER_GUIDE.md) | User-facing setup and usage guide |
-| [AGENTS.md](AGENTS.md) | Developer roles, contributing guidelines, documentation rules |
+| [AGENTS.md](AGENTS.md) | Developer roles, documentation rules, and git restrictions |
+
+`PROGRESS.md` was removed because it duplicated `TODO.md` and `CHANGELOG.md`. Use `TODO.md` for current/planned work and `CHANGELOG.md` for completed change history.
 
 ## License
 
