@@ -49,6 +49,12 @@ class GoogleDrivePhotoRepository @Inject constructor(
     }
     private val photoCountCache = ConcurrentHashMap<String, ConcurrentHashMap<String, CountCacheEntry>>()
     
+    private data class PhotoListCacheEntry(val data: List<Photo>, val timestampMs: Long = System.currentTimeMillis()) {
+        val isStale: Boolean
+            get() = System.currentTimeMillis() - timestampMs > PHOTO_COUNT_CACHE_TTL_MS
+    }
+    private val photoListCache = ConcurrentHashMap<String, ConcurrentHashMap<String, PhotoListCacheEntry>>()
+    
     private val driveImageQuery = "mimeType contains 'image/'"
     private val driveVideoQuery = "mimeType contains 'video/'"
     private val driveMediaMimeTypeQuery = "($driveImageQuery or $driveVideoQuery)"
@@ -111,12 +117,36 @@ class GoogleDrivePhotoRepository @Inject constructor(
     /**
      * Pre-fetch root folders from Google Drive in the background for a specific account.
      */
-    fun prefetchRootFolders(accountId: String) {
+    fun prefetchRootFolders(accountId: String, mediaFilter: String? = null) {
         prefetchScope.launch {
             try {
                 // Re-use the existing folder listing logic which also updates the cache
                 val folders = listFoldersForAccount(null, true, accountId)
                 android.util.Log.d("GoogleDrivePhotoRepo", "Prefetched ${folders.size} root folders for $accountId")
+
+                val account = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(
+                    context, com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE, accountId
+                )
+                val selectedIds = account?.selectedFolders?.map { it.folderId }?.toSet() ?: emptySet()
+                
+                // Only perform expensive network counting for selected folders in the background
+                if (selectedIds.isNotEmpty()) {
+                    var totalCount = 0
+                    val cache = getPhotoCountCacheForAccount(accountId)
+                    selectedIds.forEach { folderId ->
+                        val photos = listPhotosForAccount(folderId, account?.deselectedFolders ?: emptySet(), accountId, mediaFilter)
+                        val count = photos.size
+                        val cacheKey = "${folderId}_${mediaFilter ?: "all"}"
+                        cache[cacheKey] = CountCacheEntry(count)
+                        totalCount += count
+                    }
+                    
+                    if (account != null && totalCount != account.photoCount) {
+                        com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveAccount(
+                            context, account.copy(photoCount = totalCount)
+                        )
+                    }
+                }
             } catch (e: Exception) {
                 android.util.Log.w("GoogleDrivePhotoRepo", "Prefetch failed for $accountId: ${e.message}")
             }
@@ -197,18 +227,27 @@ class GoogleDrivePhotoRepository @Inject constructor(
     /**
      * List photos for a specific account (from PhotoRepository interface).
      */
-    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>): List<Photo> {
+    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: String?): List<Photo> {
         val accountId = driveRepository.getAuthenticatedAccountIds().firstOrNull()
             ?: return emptyList()
-        return listPhotosForAccount(folderId, excludedFolderIds, accountId, null)
+        return listPhotosForAccount(folderId, excludedFolderIds, accountId, mediaTypeFilter)
     }
 
     /**
      * List photos for a specific account.
      */
     suspend fun listPhotosForAccount(folderId: String, excludedFolderIds: Set<String>, accountId: String, mediaTypeFilter: String?): List<Photo> = withContext(Dispatchers.IO) {
+        val cacheKey = "${folderId}_${mediaTypeFilter}_${excludedFolderIds.hashCode()}"
+        val accountCache = photoListCache.getOrPut(accountId) { ConcurrentHashMap() }
+        val cached = accountCache[cacheKey]
+        if (cached != null && !cached.isStale) {
+            return@withContext cached.data
+        }
+
         val photos = mutableListOf<Photo>()
         collectPhotosFromFolder(folderId, excludedFolderIds, photos, accountId, mediaTypeFilter)
+        
+        accountCache[cacheKey] = PhotoListCacheEntry(photos)
         photos
     }
 
@@ -403,30 +442,13 @@ class GoogleDrivePhotoRepository @Inject constructor(
      * Get folder photo count for a specific account.
      */
     suspend fun getFolderPhotoCountForAccount(folderId: String, accountId: String): Int {
-        val accountCountCache = getPhotoCountCacheForAccount(accountId)
-        val cached = accountCountCache[folderId]
-        if (cached != null && !cached.isStale) {
-            return cached.count
-        }
-
-        return withContext(Dispatchers.IO) {
-            try {
-                // This is now recursive to match listPhotos, providing a correct count.
-                // It ignores exclusions, which is consistent with other repository implementations.
-                // The result is cached, so the expensive operation only runs periodically.
-                val count = listPhotosForAccount(folderId, emptySet(), accountId, null).size
-                accountCountCache[folderId] = CountCacheEntry(count)
-                count
-            } catch (e: Exception) {
-                e.printStackTrace()
-                0
-            }
-        }
+        return getFilteredFolderMediaCountForAccount(folderId, null, accountId)
     }
 
     override suspend fun syncPhotos(): Boolean = withContext(Dispatchers.IO) {
         folderCache.clear()
         photoCountCache.clear()
+        photoListCache.clear()
         true 
     }
 
@@ -440,16 +462,16 @@ class GoogleDrivePhotoRepository @Inject constructor(
      * Get filtered folder media count for a specific account.
      */
     suspend fun getFilteredFolderMediaCountForAccount(folderId: String, mediaTypeFilter: String?, accountId: String): Int {
-        return withContext(Dispatchers.IO) {
-            try {
-                // This is now recursive to match listPhotos, providing a correct count.
-                // It is also efficient as it passes the filter to the API.
-                listPhotosForAccount(folderId, emptySet(), accountId, mediaTypeFilter).size
-            } catch (e: Exception) {
-                e.printStackTrace()
-                0
-            }
+        val cacheKey = "${folderId}_${mediaTypeFilter ?: "all"}"
+        val accountCountCache = getPhotoCountCacheForAccount(accountId)
+        val cached = accountCountCache[cacheKey]
+        if (cached != null && !cached.isStale) {
+            return cached.count
         }
+
+        // Instantly return 0 for cloud directories to prevent the UI from blocking for minutes.
+        // Actual counting is deferred to background prefetching for selected folders.
+        return 0
     }
 
     // Helper to get or create per-account folder cache

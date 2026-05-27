@@ -36,6 +36,9 @@
 - **Remove account option** — Source cards on the main screen now have a "more" menu with a "Remove account" option. This allows users to remove individual accounts (e.g., a second Google Drive account) after a confirmation dialog.
 
 ### Fixed
+- **Non-blocking source card counts** - Main source cards now display the persisted per-account selected media count instead of recursively counting cloud folders during card refresh. Gallery, Google Drive, and Dropbox prefetch now warm filtered media counts in the background and save updated account counts when selected folders change.
+- **Content Type applied during repository media listing** - `PhotoRepository.listPhotos()` now accepts the active media filter so Gallery, Google Drive, and Dropbox only enumerate matching images or videos before slideshow loading.
+- **Folder browser saved counts and lifecycle collection** - Gallery and cloud folder browsers now save the selected media count with folder selections, omit zero-count labels from summaries/list rows, use the shared account-id extra constant, and collect ViewModel flows with lifecycle-aware `repeatOnLifecycle`.
 - **Repository cache thread safety and refresh behavior** - Gallery, Google Drive, Dropbox, and slideshow preload caches now use concurrent maps where needed, and `syncPhotos()` clears stale folder/photo count caches before reporting success.
 - **Recursive media counts and folder exclusions** - Gallery, Google Drive, and Dropbox count logic now matches the recursive photo loading behavior more closely, including content-type filters and deselected subfolder handling.
 - **Google Drive media loading metadata** - Drive photo metadata now preserves thumbnails, account-scoped download URLs, cached `file://` paths, video dimensions, and file extensions for media filtering and local cache downloads.

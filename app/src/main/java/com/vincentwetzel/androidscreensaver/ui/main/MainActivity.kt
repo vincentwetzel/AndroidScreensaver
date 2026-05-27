@@ -92,7 +92,8 @@ class MainActivity : AppCompatActivity() {
             buildSourceCards() // Rebuild cards with new account
             refreshSourceCards()
             // Pre-fetch folders now that auth succeeded
-            googleDrivePhotoRepository.prefetchRootFolders(accountId)
+            val mediaFilter = getContentFilterFilter()
+            googleDrivePhotoRepository.prefetchRootFolders(accountId, mediaFilter)
             showSnackbar("Google Drive connected!")
             openFolderBrowser(accountId)
         }
@@ -438,55 +439,22 @@ class MainActivity : AppCompatActivity() {
                 setStatusIndicatorColor(cardData.info.statusIndicator, SourceStatus.CONNECTED)
                 cardData.info.statusText.text = account.accountEmail
 
-                // Fetch photo count in background for this specific account
-                this@MainActivity.lifecycleScope.launch {
-                    val label = getContentFilterLabel()
-                    val mediaFilter = getContentFilterFilter()
-                    val photoCount = when (cardData.sourceType) {
-                        SourceCardType.GOOGLE_DRIVE -> {
-                            try {
-                                val selectedFolders = account.selectedFolders
-                                if (selectedFolders.isEmpty()) {
-                                    // Count root folders
-                                    val folders = googleDrivePhotoRepository.listFoldersForAccount(null, false, cardData.accountId!!)
-                                    folders.sumOf { folder ->
-                                        try {
-                                            googleDrivePhotoRepository.getFilteredFolderMediaCountForAccount(folder.id, mediaFilter, cardData.accountId)
-                                        } catch (e: Exception) { 0 }
-                                    }
-                                } else {
-                                    selectedFolders.sumOf { sf ->
-                                        try {
-                                            googleDrivePhotoRepository.getFilteredFolderMediaCountForAccount(sf.folderId, mediaFilter, cardData.accountId)
-                                        } catch (e: Exception) { 0 }
-                                    }
-                                }
-                            } catch (e: Exception) { 0 }
-                        }
-                        SourceCardType.GALLERY -> {
-                            try {
-                                val selectedFolders = account.selectedFolders
-                                if (selectedFolders.isEmpty()) {
-                                    val folders = galleryPhotoRepository.listFolders(null, false)
-                                    folders.sumOf { folder ->
-                                        try {
-                                            galleryPhotoRepository.getFilteredFolderMediaCount(folder.id, mediaFilter)
-                                        } catch (e: Exception) { 0 }
-                                    }
-                                } else {
-                                    selectedFolders.sumOf { sf ->
-                                        try {
-                                            galleryPhotoRepository.getFilteredFolderMediaCount(sf.folderId, mediaFilter)
-                                        } catch (e: Exception) { 0 }
-                                    }
-                                }
-                            } catch (e: Exception) { 0 }
-                        }
-                        else -> 0
-                    }
+                val label = getContentFilterLabel()
+                val photoCount = account.photoCount
+                
+                cardData.info.photoCountText.visibility = if (photoCount > 0) View.VISIBLE else View.GONE
+                cardData.info.photoCountText.text = if (photoCount > 0) "$photoCount $label available" else ""
 
-                    cardData.info.photoCountText.visibility = if (photoCount > 0) View.VISIBLE else View.GONE
-                    cardData.info.photoCountText.text = if (photoCount > 0) "$photoCount $label available" else ""
+                // Pre-fetch root folders in the background to warm the cache so the browser opens instantly
+                if (account.enabled) {
+                    cardData.accountId?.let { id ->
+                        val filter = getContentFilterFilter()
+                        when (cardData.sourceType) {
+                            SourceCardType.GOOGLE_DRIVE -> googleDrivePhotoRepository.prefetchRootFolders(id, filter)
+                            SourceCardType.GALLERY -> galleryPhotoRepository.prefetchRootFolders(filter)
+                            else -> {}
+                        }
+                    }
                 }
             } else {
                 cardData.info.statusIndicator.visibility = View.VISIBLE
@@ -512,40 +480,6 @@ class MainActivity : AppCompatActivity() {
             }
             val color = getColor(colorRes)
             it.background?.setTint(color)
-        }
-    }
-
-    private suspend fun getPhotoCountForSource(source: SourceCardType): Int {
-        return try {
-            val selectedFolders = sourceTypeToDreamSourceType(source)?.let { SettingsManager.getSelectedFolders(this, it) } ?: emptyList()
-
-            if (selectedFolders.isEmpty()) return 0
-
-            // Get the current content filter to show accurate counts
-            val mediaFilter = getContentFilterFilter()
-
-            when (source) {
-                SourceCardType.GALLERY -> {
-                    selectedFolders.sumOf { folder ->
-                        try {
-                            galleryPhotoRepository.getFilteredFolderMediaCount(folder.id, mediaFilter)
-                        } catch (e: Exception) {
-                            0
-                        }
-                    }
-                }
-                SourceCardType.GOOGLE_DRIVE -> {
-                    selectedFolders.sumOf { folder ->
-                        try {
-                            googleDrivePhotoRepository.getFilteredFolderMediaCount(folder.id, mediaFilter)
-                        } catch (e: Exception) {
-                            0
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            0
         }
     }
 
@@ -673,7 +607,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun openFolderBrowser(accountId: String? = null) {
         val intent = android.content.Intent(this, FolderBrowserActivity::class.java).apply {
-            accountId?.let { putExtra("account_id", it) }
+            accountId?.let { putExtra(FolderBrowserActivity.EXTRA_ACCOUNT_ID, it) }
         }
         folderLauncher.launch(intent)
     }

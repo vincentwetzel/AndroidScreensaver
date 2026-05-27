@@ -21,6 +21,7 @@ After enabling a source, tap it to browse folders:
 - Deselect a nested folder to exclude it.
 - Pull down to refresh and detect new or removed folders.
 - Use **Select All** and **Deselect All** for quick selection.
+- Source cards show the last saved selected-folder media count while refreshed counts are prepared in the background.
 
 Selections save immediately; there are no Save or Cancel buttons.
 

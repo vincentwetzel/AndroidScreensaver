@@ -55,6 +55,12 @@ class GalleryPhotoRepository @Inject constructor(
     }
     private val photoCountCache = ConcurrentHashMap<String, CountCacheEntry>()
 
+    private data class PhotoListCacheEntry(val data: List<Photo>, val timestampMs: Long = System.currentTimeMillis()) {
+        val isStale: Boolean
+            get() = System.currentTimeMillis() - timestampMs > PHOTO_COUNT_CACHE_TTL_MS
+    }
+    private val photoListCache = ConcurrentHashMap<String, PhotoListCacheEntry>()
+
     // Supported image file extensions
     private val imageMimeTypes = setOf(
         "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp",
@@ -77,12 +83,38 @@ class GalleryPhotoRepository @Inject constructor(
      * Results are cached so subsequent listFolders(null) calls return immediately.
      * Safe to call multiple times — respects the folder cache TTL.
      */
-    fun prefetchRootFolders() {
+    fun prefetchRootFolders(mediaFilter: String? = null) {
         prefetchScope.launch {
             try {
                 // Re-use existing listFolders logic which populates the cache
                 val folders = listFolders(null, forceRefresh = true)
                 android.util.Log.d("GalleryPhotoRepo", "Prefetched ${folders.size} Gallery folders")
+                
+                val account = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccountsForSource(
+                    context, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
+                ).firstOrNull()
+                
+                val selectedIds = account?.selectedFolders?.map { it.folderId }?.toSet() ?: emptySet()
+                
+                if (selectedIds.isNotEmpty()) {
+                    var totalCount = 0
+                    selectedIds.forEach { folderId ->
+                        val photos = listPhotos(folderId, account?.deselectedFolders ?: emptySet(), mediaFilter)
+                        val count = photos.size
+                        val cacheKey = "${folderId}_${mediaFilter ?: "all"}"
+                        photoCountCache[cacheKey] = CountCacheEntry(count)
+                        totalCount += count
+                    }
+                    if (account != null && totalCount != account.photoCount) {
+                        com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveAccount(
+                            context, account.copy(photoCount = totalCount)
+                        )
+                    }
+                } else {
+                    folders.forEach { folder ->
+                        getFilteredFolderMediaCount(folder.id, mediaFilter)
+                    }
+                }
             } catch (e: Exception) {
                 android.util.Log.w("GalleryPhotoRepo", "Prefetch failed: ${e.message}")
             }
@@ -197,7 +229,13 @@ class GalleryPhotoRepository @Inject constructor(
         }
     }
 
-    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>): List<Photo> = withContext(Dispatchers.IO) {
+    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: String?): List<Photo> = withContext(Dispatchers.IO) {
+        val cacheKey = "${folderId}_${mediaTypeFilter}_${excludedFolderIds.hashCode()}"
+        val cached = photoListCache[cacheKey]
+        if (cached != null && !cached.isStale) {
+            return@withContext cached.data
+        }
+
         val photos = mutableListOf<Photo>()
 
         try {
@@ -235,25 +273,36 @@ class GalleryPhotoRepository @Inject constructor(
             } else {
                 emptyList()
             }
+            
+            val imageType = MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString()
+            val videoType = MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString()
+            
+            val mediaTypeSelection = when(mediaTypeFilter) {
+                "images" -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ?"
+                "videos" -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ?"
+                else -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
+            }
+            val mediaTypeArgs = when(mediaTypeFilter) {
+                "images" -> arrayOf(imageType)
+                "videos" -> arrayOf(videoType)
+                else -> arrayOf(imageType, videoType)
+            }
 
             val (selection, selectionArgs) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && folderRelativePath != null) {
                 if (excludedRelativePaths.isNotEmpty()) {
-                    // Include photos from this folder AND subfolders, minus excluded paths
                     val excludeClause = excludedRelativePaths.joinToString(" AND ") { path ->
                         "${MediaStore.Files.FileColumns.RELATIVE_PATH} NOT LIKE ?"
                     }
-                    val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ? AND ${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?) AND ($excludeClause)"
+                    val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ? AND $mediaTypeSelection AND ($excludeClause)"
                     val excludeArgs = excludedRelativePaths.map { "$it%" }
-                    selection to arrayOf("$folderRelativePath%", MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(), MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString()) + excludeArgs.toTypedArray()
+                    selection to arrayOf("$folderRelativePath%") + mediaTypeArgs + excludeArgs.toTypedArray()
                 } else {
-                    // Include photos from this folder AND all subfolders using RELATIVE_PATH
-                    val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ? AND ${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
-                    selection to arrayOf("$folderRelativePath%", MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(), MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString())
+                    val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ? AND $mediaTypeSelection"
+                    selection to arrayOf("$folderRelativePath%") + mediaTypeArgs
                 }
             } else {
-                // Fallback: only exact bucket match (Android < 10 or no RELATIVE_PATH available)
-                val selection = "${MediaStore.Files.FileColumns.BUCKET_ID} = ? AND ${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
-                selection to arrayOf(folderId, MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(), MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString())
+                val selection = "${MediaStore.Files.FileColumns.BUCKET_ID} = ? AND $mediaTypeSelection"
+                selection to arrayOf(folderId) + mediaTypeArgs
             }
 
             val sortOrder = "${MediaStore.Files.FileColumns.DATE_ADDED} DESC"
@@ -315,6 +364,7 @@ class GalleryPhotoRepository @Inject constructor(
             throw Exception("Failed to list photos: ${e.message}")
         }
 
+        photoListCache[cacheKey] = PhotoListCacheEntry(photos)
         return@withContext photos
     }
 
@@ -412,26 +462,23 @@ class GalleryPhotoRepository @Inject constructor(
     }
 
     override suspend fun getFolderPhotoCount(folderId: String): Int {
-        // Check cache first (only if fresh)
-        val cached = photoCountCache[folderId]
-        if (cached != null && !cached.isStale) {
-            return cached.count
-        }
-
-        // Reuse the existing filtered query logic by passing null for mediaTypeFilter
-        val count = getFilteredFolderMediaCount(folderId, null)
-        
-        photoCountCache[folderId] = CountCacheEntry(count)
-        return count
+        return getFilteredFolderMediaCount(folderId, null)
     }
 
     override suspend fun syncPhotos(): Boolean = withContext(Dispatchers.IO) {
         folderCache.clear()
         photoCountCache.clear()
+        photoListCache.clear()
         true
     }
 
     override suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: String?): Int {
+        val cacheKey = "${folderId}_${mediaTypeFilter ?: "all"}"
+        val cached = photoCountCache[cacheKey]
+        if (cached != null && !cached.isStale) {
+            return cached.count
+        }
+
         return withContext(Dispatchers.IO) {
             try {
                 val contentResolver = context.contentResolver
@@ -465,7 +512,9 @@ class GalleryPhotoRepository @Inject constructor(
                 val projection = arrayOf(MediaStore.Files.FileColumns._ID)
 
                 val cursor = contentResolver.query(collection, projection, selection, selectionArgs, null)
-                cursor?.use { it.count } ?: 0
+                val count = cursor?.use { it.count } ?: 0
+                photoCountCache[cacheKey] = CountCacheEntry(count)
+                count
             } catch (e: Exception) {
                 e.printStackTrace()
                 0

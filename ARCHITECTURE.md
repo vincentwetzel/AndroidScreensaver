@@ -23,9 +23,9 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 ### Data Layer (`data/`)
 
 - **PhotoRepository** - Unified contract for all photo sources.
-- **GalleryPhotoRepository** - MediaStore access for local photos and videos.
-- **GoogleDrivePhotoRepository** - Google Drive media access with account-scoped routing, recursive folder traversal, thumbnail metadata, and local cache paths.
-- **DropboxPhotoRepository** - Dropbox media access with recursive listing, paginated folder search, thumbnails, and local cache support.
+- **GalleryPhotoRepository** - MediaStore access for local photos and videos, with cached folder/media counts and content-type-aware media listing.
+- **GoogleDrivePhotoRepository** - Google Drive media access with account-scoped routing, recursive folder traversal, background count prefetching, thumbnail metadata, and local cache paths.
+- **DropboxPhotoRepository** - Dropbox media access with recursive listing, paginated folder search, background count prefetching, thumbnails, and local cache support.
 - **GoogleDriveRepository** - Delegates auth and Drive service creation to `GoogleAccountManager`.
 - **SettingsManager** - DataStore-backed preferences for slideshow config, source state, selected folders, and account configs.
 
@@ -51,7 +51,7 @@ User selects folders
 Preview or DreamService starts
 -> SlideshowManager loads fresh config
 -> SlideshowManager checks enabled sources and selected folders
--> Repositories load media
+-> Repositories load media with the active Content Type filter
 -> SlideshowManager filters, deduplicates, sorts/shuffles
 -> SlideshowView renders media with Coil and ExoPlayer
 -> SlideshowView advances based on slideshow/video settings
@@ -77,10 +77,11 @@ Preview or DreamService starts
 ## Threading
 
 - Repository API calls use `withContext(Dispatchers.IO)`.
-- Folder lists and photo counts are cached in repository singletons.
+- Folder lists, photo lists, and photo counts are cached in repository singletons.
 - Shared repository caches use concurrent maps where background prefetch and slideshow loading can overlap.
 - `SlideshowManager` chunk-loads selected folders in small concurrent batches to limit memory/API spikes.
 - ViewModel work runs in `viewModelScope`.
+- Main source cards read persisted per-account selected media counts so card refreshes do not block on recursive cloud API counts; repository prefetch refreshes those counts in the background.
 
 ## Screensaver Implementation
 

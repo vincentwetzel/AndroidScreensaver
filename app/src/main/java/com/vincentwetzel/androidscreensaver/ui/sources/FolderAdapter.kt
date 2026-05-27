@@ -20,7 +20,6 @@ class FolderAdapter(
     private val onSelectionChanged: (Set<String>) -> Unit,
     private val onFolderClick: (String) -> Unit,
     private val onDeselectionChanged: ((Set<String>) -> Unit)? = null,
-    private val onFolderChecked: (String, Boolean) -> Unit = { _, _ -> },
     private val mediaFilter: String? = null
 ) : RecyclerView.Adapter<FolderAdapter.FolderViewHolder>() {
 
@@ -93,25 +92,6 @@ class FolderAdapter(
         else -> "items"
     }
 
-    /**
-     * Cascade selection: when a folder is checked/unchecked, add/remove all its
-     * visible child folder IDs to/from the selected set.
-     */
-    fun cascadeSelection(folderId: String, isChecked: Boolean, childFolderIds: Set<String>) {
-        if (isChecked) {
-            // Add all children to selected, remove from deselected
-            selectedFolderIds.addAll(childFolderIds)
-            deselectedFolderIds.removeAll(childFolderIds)
-        } else {
-            // Remove all children from selected, add to deselected
-            selectedFolderIds.removeAll(childFolderIds)
-            deselectedFolderIds.addAll(childFolderIds)
-        }
-        notifyDataSetChanged()
-        onSelectionChanged(selectedFolderIds)
-        onDeselectionChanged?.invoke(deselectedFolderIds)
-    }
-
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): FolderViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_folder_checkbox, parent, false)
@@ -132,7 +112,13 @@ class FolderAdapter(
 
         fun bind(folder: PhotoFolder) {
             tvFolderName.text = folder.name
-            tvPhotoCount.text = "${folder.photoCount} ${getMediaLabel()}"
+            
+            if (folder.photoCount > 0) {
+                tvPhotoCount.visibility = View.VISIBLE
+                tvPhotoCount.text = "${folder.photoCount} ${getMediaLabel()}"
+            } else {
+                tvPhotoCount.visibility = View.GONE
+            }
 
             // Auto-check subfolders when their parent folder is selected
             val isInheritedSelection = currentParentFolderId != null &&
@@ -169,7 +155,6 @@ class FolderAdapter(
                 }
                 onSelectionChanged(selectedFolderIds)
                 onDeselectionChanged?.invoke(deselectedFolderIds)
-                onFolderChecked(folder.id, isNowChecked)
             }
 
             // Clicking anywhere on the row navigates into the folder

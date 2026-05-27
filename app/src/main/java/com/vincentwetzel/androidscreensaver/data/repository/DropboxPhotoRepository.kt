@@ -52,6 +52,12 @@ class DropboxPhotoRepository @Inject constructor(
             get() = System.currentTimeMillis() - timestampMs > PHOTO_COUNT_CACHE_TTL_MS
     }
     private val photoCountCache = ConcurrentHashMap<String, ConcurrentHashMap<String, CountCacheEntry>>()
+    
+    private data class PhotoListCacheEntry(val data: List<Photo>, val timestampMs: Long = System.currentTimeMillis()) {
+        val isStale: Boolean
+            get() = System.currentTimeMillis() - timestampMs > PHOTO_COUNT_CACHE_TTL_MS
+    }
+    private val photoListCache = ConcurrentHashMap<String, ConcurrentHashMap<String, PhotoListCacheEntry>>()
 
     // region PhotoRepository Interface Implementation
     override fun isAuthenticated(): Boolean {
@@ -64,10 +70,10 @@ class DropboxPhotoRepository @Inject constructor(
         return listFoldersForAccount(parentFolderId, forceRefresh, accountId)
     }
 
-    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>): List<Photo> {
+    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: String?): List<Photo> {
         val accountId = dropboxRepository.getAuthenticatedAccountIds().firstOrNull()
             ?: return emptyList()
-        return listPhotosForAccount(folderId, excludedFolderIds, accountId)
+        return listPhotosForAccount(folderId, excludedFolderIds, accountId, mediaTypeFilter)
     }
 
     override suspend fun getPhotoMetadata(photoId: String): Photo? {
@@ -109,6 +115,7 @@ class DropboxPhotoRepository @Inject constructor(
     override suspend fun syncPhotos(): Boolean = withContext(Dispatchers.IO) {
         folderCache.clear()
         photoCountCache.clear()
+        photoListCache.clear()
         true
     }
     // endregion
@@ -168,7 +175,14 @@ class DropboxPhotoRepository @Inject constructor(
         }
     }
 
-    suspend fun listPhotosForAccount(folderId: String, excludedFolderIds: Set<String>, accountId: String): List<Photo> = withContext(Dispatchers.IO) {
+    suspend fun listPhotosForAccount(folderId: String, excludedFolderIds: Set<String>, accountId: String, mediaTypeFilter: String?): List<Photo> = withContext(Dispatchers.IO) {
+        val cacheKey = "${folderId}_${mediaTypeFilter}_${excludedFolderIds.hashCode()}"
+        val accountCache = photoListCache.getOrPut(accountId) { ConcurrentHashMap() }
+        val cached = accountCache[cacheKey]
+        if (cached != null && !cached.isStale) {
+            return@withContext cached.data
+        }
+
         val photos = mutableListOf<Photo>()
         // Dropbox paths start with '/'
         val rootPath = if (folderId.startsWith("/")) folderId else "/$folderId"
@@ -199,7 +213,13 @@ class DropboxPhotoRepository @Inject constructor(
                         val isImage = dropboxImageExtensions.contains(extension)
                         val isVideo = dropboxVideoExtensions.contains(extension)
 
-                        if (isImage || isVideo) {
+                        val matchesFilter = when (mediaTypeFilter) {
+                            "images" -> isImage
+                            "videos" -> isVideo
+                            else -> isImage || isVideo
+                        }
+
+                        if (matchesFilter) {
                             val safeFileName = entry.pathLower.replace("/", "_")
                             val photoCacheDir = File(context.cacheDir, "dropbox_photos")
                             val photoCacheFile = File(photoCacheDir, "${accountId}_$safeFileName")
@@ -241,6 +261,7 @@ class DropboxPhotoRepository @Inject constructor(
             throw e
         }
         
+        accountCache[cacheKey] = PhotoListCacheEntry(photos)
         photos
     }
 
@@ -397,48 +418,14 @@ class DropboxPhotoRepository @Inject constructor(
         return total
     }
 
-    suspend fun getFilteredFolderMediaCountForAccount(folderId: String, mediaTypeFilter: String?, accountId: String): Int = withContext(Dispatchers.IO) {
-        val client = dropboxRepository.getDbxClientV2(accountId)
-            ?: return@withContext 0
-
-        var total = 0
-        try {
-            val rootPath = if (folderId.startsWith("/")) folderId else "/$folderId"
-            var result: ListFolderResult
-            var cursor: String? = null
-
-            do {
-                result = if (cursor == null) {
-                    client.files().listFolderBuilder(rootPath)
-                        .withRecursive(true)
-                        .start()
-                } else {
-                    client.files().listFolderContinue(cursor)
-                }
-
-                for (entry in result.entries) {
-                    if (entry is FileMetadata) {
-                        val extension = entry.name.substringAfterLast('.', "").lowercase()
-                        val isImage = dropboxImageExtensions.contains(extension)
-                        val isVideo = dropboxVideoExtensions.contains(extension)
-
-                        val matchesFilter = when (mediaTypeFilter) {
-                            "images" -> isImage
-                            "videos" -> isVideo
-                            else -> isImage || isVideo
-                        }
-
-                        if (matchesFilter) {
-                            total++
-                        }
-                    }
-                }
-                cursor = result.cursor
-            } while (result.hasMore)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to get filtered Dropbox photo count", e)
+    suspend fun getFilteredFolderMediaCountForAccount(folderId: String, mediaTypeFilter: String?, accountId: String): Int {
+        val cacheKey = "${folderId}_${mediaTypeFilter ?: "all"}"
+        val accountCountCache = getPhotoCountCacheForAccount(accountId)
+        val cached = accountCountCache[cacheKey]
+        if (cached != null && !cached.isStale) {
+            return cached.count
         }
-        total
+        return 0 // Instantly return 0 to prevent the UI from blocking. Actual counting is done in prefetch.
     }
 
     suspend fun downloadPhotoToLocalCache(photoId: String, accountId: String): String? = withContext(Dispatchers.IO) {
@@ -479,11 +466,33 @@ class DropboxPhotoRepository @Inject constructor(
         }
     }
 
-    fun prefetchRootFolders(accountId: String) {
+    fun prefetchRootFolders(accountId: String, mediaFilter: String? = null) {
         prefetchScope.launch {
             try {
                 listFoldersForAccount(null, true, accountId)
                 Log.d(TAG, "Prefetched root folders for $accountId")
+                
+                val account = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(
+                    context, com.vincentwetzel.androidscreensaver.dream.SourceType.DROPBOX, accountId
+                )
+                val selectedIds = account?.selectedFolders?.map { it.folderId }?.toSet() ?: emptySet()
+                
+                if (selectedIds.isNotEmpty()) {
+                    var totalCount = 0
+                    val cache = getPhotoCountCacheForAccount(accountId)
+                    selectedIds.forEach { folderId ->
+                        val photos = listPhotosForAccount(folderId, account?.deselectedFolders ?: emptySet(), accountId, mediaFilter)
+                        val count = photos.size
+                        val cacheKey = "${folderId}_${mediaFilter ?: "all"}"
+                        cache[cacheKey] = CountCacheEntry(count)
+                        totalCount += count
+                    }
+                    if (account != null && totalCount != account.photoCount) {
+                        com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveAccount(
+                            context, account.copy(photoCount = totalCount)
+                        )
+                    }
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Prefetch failed for $accountId: ${e.message}")
             }

@@ -23,7 +23,7 @@ interface PhotoRepository {
     /**
      * List all photos in a folder, optionally excluding subfolders by ID
      */
-    suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String> = emptySet()): List<Photo>
+    suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String> = emptySet(), mediaTypeFilter: String? = null): List<Photo>
     
     /**
      * Get photo metadata

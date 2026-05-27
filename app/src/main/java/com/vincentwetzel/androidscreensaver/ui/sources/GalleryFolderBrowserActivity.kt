@@ -144,17 +144,6 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
             onDeselectionChanged = { deselectedIds ->
                 saveSelections()
             },
-            onFolderChecked = { folderId, isChecked ->
-                // Cascade: fetch subfolder IDs and apply cascade
-                lifecycleScope.launch {
-                    val childIds = viewModel.getSubfolderIds(folderId).toSet()
-                    if (childIds.isNotEmpty()) {
-                        adapter.cascadeSelection(folderId, isChecked, childIds)
-                        saveSelections()
-                        updateSummary(adapter.getSelectedFolders().size, adapter.getPhotoCount())
-                    }
-                }
-            },
             mediaFilter = mediaFilter
         )
         binding.recyclerFolders.layoutManager = LinearLayoutManager(this)
@@ -201,7 +190,8 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                             folderId = folderId, folderName = folderId, path = folderId, isSelected = true
                         )
                     },
-                    deselectedFolders = adapter.getDeselectedFolders()
+                    deselectedFolders = adapter.getDeselectedFolders(),
+                    photoCount = adapter.getPhotoCount()
                 )
                 com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveAccount(this, updated)
             }
@@ -263,12 +253,16 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
     }
 
     private fun updateSummary(folderCount: Int, itemCount: Int) {
-        val label = when (getContentFilter()) {
-            "images" -> "photos"
-            "videos" -> "videos"
-            else -> "items"
+        if (itemCount > 0) {
+            val label = when (getContentFilter()) {
+                "images" -> "photos"
+                "videos" -> "videos"
+                else -> "items"
+            }
+            binding.summaryText.text = "$folderCount folders selected, $itemCount $label"
+        } else {
+            binding.summaryText.text = "$folderCount folders selected"
         }
-        binding.summaryText.text = "$folderCount folders selected, $itemCount $label"
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -285,7 +279,8 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
 
             override fun onQueryTextChange(newText: String?): Boolean {
                 if (newText.isNullOrBlank()) {
-                    viewModel.loadFolders()
+                    val mediaFilter = getContentFilter()
+                    viewModel.loadFolders(mediaFilter = mediaFilter)
                 }
                 return true
             }
