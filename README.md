@@ -5,9 +5,10 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
 ## Features
 
 - **Multiple Photo Sources**
-  - **Gallery** — Browse and select folders from device photos (via MediaStore API)
-  - **Google Drive** — Browse and select folders from Google Drive (OAuth2 authenticated)
-  - *More sources planned: Dropbox, Google Photos, OneDrive, Local Network*
+  - **Gallery** - Browse and select folders from device photos (via MediaStore API)
+  - **Google Drive** - Browse and select folders from Google Drive (OAuth2 authenticated)
+  - **Dropbox** - Browse and select Dropbox folders with thumbnail/local cache support
+  - *More sources planned: Google Photos, OneDrive, Local Network*
 
 - **Customizable Slideshow**
   - Shuffle/random order
@@ -19,6 +20,7 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
   - Background color, screen rotation, keep-screen-on settings
   - Match device orientation (FIT_CENTER for mismatched photos)
   - Wi-Fi only mode for cloud sources
+  - Cloud fetching works on Wi-Fi or Ethernet when network-only mode is enabled
   - Touch exit trigger to dismiss screensaver
 
 - **Video Playback**
@@ -57,7 +59,7 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
 - **Async:** Kotlin Coroutines + Flow
 - **Storage:** DataStore (preferences)
 - **Image Loading:** Coil
-- **Build:** Android Gradle Plugin 9.2.0 with Gradle 9.4.1
+- **Build:** Android Gradle Plugin 9.2.1 with Gradle 9.4.1
 - **Min SDK:** 26 (Android 8.0)
 - **Target SDK:** 34 (Android 14)
 

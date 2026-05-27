@@ -12,6 +12,7 @@
 
 ### DreamService Lifecycle
 - [x] **onDetachedFromWindow cleanup**: Nulls out slideshowView and gestureDetector references
+- [x] **Receiver and timeout cleanup**: DreamService registers receivers through AndroidX compatibility APIs, guards unregister cleanup, clears timeout callbacks, and applies battery-saver pause immediately on start.
 
 ### SlideshowView
 - [x] **Video double-advance**: Added `isAdvancing` guard flag to prevent ExoPlayer + auto-advance race
@@ -42,6 +43,8 @@
 - [x] **Folder thumbnail previews**: Folder items now show first photo as thumbnail using Coil (Gallery photos via content:// URIs, Google Drive falls back to folder icon)
 - [x] **Just-in-Time Photo Loading**: Eliminated the front-loaded mass download bottleneck for Google Drive. Photos are now loaded instantly via remote URLs with OAuth headers injected by a Coil Interceptor.
 - [x] **SlideshowView Cache Fix**: Switched to singleton `context.imageLoader` to restore proper memory caching and connection pooling.
+- [x] **Slideshow load hardening**: Chunked selected-folder loading, source/account-aware deduplication, title-based media filtering, Ethernet support for network-only mode, and repository-routed remote preloads.
+- [x] **Repository cache/count reliability**: Gallery, Google Drive, and Dropbox now clear caches on sync, use concurrent cache maps where needed, and align recursive media counts with loading/filter behavior.
 
 ## New Features
 - [x] Multiple accounts per source type — Google Drive now supports signing in to multiple accounts simultaneously (e.g., 2 Google Drive accounts). Each account has independent folder selection, enable/disable toggle, and photo loading. The slideshow combines photos from all enabled accounts. UI shows one card per account with "Signed in as [email]" status.
@@ -75,6 +78,7 @@
 - [ ] Unit tests for repositories
 - [ ] Instrumentation tests for folder browser
 - [x] Re-run `:app:assembleDebug` after the AGP 9.2.0 bump and confirm the app still runs
+- [ ] Re-run `:app:assembleDebug` after the AGP 9.2.1 bump and confirm the app still runs
 - [ ] Lint checks passing
 - [ ] Memory leak detection (LeakCanary)
 

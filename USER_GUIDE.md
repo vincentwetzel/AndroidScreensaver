@@ -6,8 +6,9 @@
 
 Open the app and toggle ON the sources you want to use:
 
-- **Gallery** — Photos stored on your device. No sign-in required.
-- **Google Drive** — Photos stored in your Google Drive. Requires Google account sign-in.
+- **Gallery** - Photos stored on your device. No sign-in required.
+- **Google Drive** - Photos stored in your Google Drive. Requires Google account sign-in.
+- **Dropbox** - Photos stored in Dropbox. Requires Dropbox sign-in.
 
 ### 2. Select Folders
 
@@ -16,7 +17,7 @@ After enabling a source, tap it to browse folders:
 - **Check boxes** next to folders you want to include (selections are saved automatically)
 - **Tap a folder name** to open it and see subfolders
 - Use the **back arrow** in the toolbar to go up one level
-- Toggle **"Include subfolders"** to also include photos in nested folders
+- Selected folders include nested subfolders automatically. You can deselect a nested folder to exclude it.
 - **Pull down** to refresh and detect new/removed folders from the source
 - **Select All / Deselect All** buttons for quick selection
 - Selections are saved **immediately** — no Save/Cancel buttons needed
@@ -42,7 +43,7 @@ Within the app, you can customize:
 
 **Media & Content:**
 - Media order (shuffle, date, name sorting)
-- Content filter (Images Only, Videos Only, or Both)
+- Content Type filter (Images Only, Videos Only, or Both)
 - Match device orientation (shows letterboxed photos when orientation differs)
 
 **Slideshow:**
@@ -88,7 +89,11 @@ Shows photo folders from your device (Camera, Screenshots, Downloads, etc.). No 
 
 ### Google Drive
 
-Shows folders from your Google Drive account. Requires Google account authentication. The app requests **read-only** access to your Drive files — it cannot modify or delete anything.
+Shows folders from your Google Drive account. Requires Google account authentication. The app requests **read-only** access to your Drive files - it cannot modify or delete anything.
+
+### Dropbox
+
+Shows folders from your Dropbox account. The app can cache thumbnails and downloaded media locally so selected Dropbox photos and videos can load faster after the first access.
 
 ## Troubleshooting
 

@@ -5,7 +5,7 @@
 - Android Studio Hedgehog or newer
 - JDK 17 (configured in project)
 - Android SDK 34 (compileSdk), minSdk 26
-- Android Gradle Plugin 9.2.0 with Gradle 9.4.1 wrapper
+- Android Gradle Plugin 9.2.1 with Gradle 9.4.1 wrapper
 
 ## Build Commands
 
@@ -68,7 +68,7 @@ During development, all logcat output is automatically mirrored to a file for ea
 This feature is developer-only and will NOT be active in release builds.
 
 ### Kotlin Plugin Conflict with AGP 9.1+
-With AGP 9.1+ (including the current AGP 9.2.0 setup), Kotlin is now built-in and the explicit `org.jetbrains.kotlin.android` plugin should **NOT** be applied. This project has been migrated:
+With AGP 9.1+ (including the current AGP 9.2.1 setup), Kotlin is now built-in and the explicit `org.jetbrains.kotlin.android` plugin should **NOT** be applied. This project has been migrated:
 - Removed `id("org.jetbrains.kotlin.android")` from both root and app `build.gradle.kts`
 - Replaced deprecated `kotlinOptions { jvmTarget = "17" }` with modern `kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }`
 - Added `android.disallowKotlinSourceSets=false` to allow KSP to generate Kotlin sources

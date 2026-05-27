@@ -2,9 +2,16 @@
 
 ## Current Status
 
-All settings are fully wired and audited. The app is stable with all features properly implemented. Recent work focused on fixing video playback custom volume, simplifying video settings UI, and ensuring all settings summaries refresh correctly.
+All settings are fully wired and audited. The app is stable with all features properly implemented. Recent work focused on slideshow/repository reliability, recursive media counting, cloud cache behavior, DreamService lifecycle cleanup, and the AGP 9.2.1 build plugin bump.
 
 ## Recent Fixes (Latest Session)
+- **AGP 9.2.1 update**: Root Android Gradle Plugin was bumped from 9.2.0 to 9.2.1.
+- **Repository cache hardening**: Gallery, Google Drive, Dropbox, and preload caches now use concurrent maps where background and slideshow work can overlap. Repository `syncPhotos()` clears folder/count caches.
+- **Recursive counts and filters**: Gallery, Google Drive, and Dropbox media counts now align with recursive loading and content-type filters more closely, including Android 10+ `RELATIVE_PATH` handling for Gallery.
+- **Cloud media cache paths**: Google Drive and Dropbox now emit cached `file://` paths when available, preserve thumbnail metadata, and use safer filenames to avoid cache collisions.
+- **Slideshow load reliability**: Folder loading is chunked, deduplication includes source and account, media filtering uses photo titles as well as URIs, Ethernet is allowed for network-only cloud loading, and remote preload goes through repository cache downloads.
+- **DreamService lifecycle cleanup**: Receiver registration uses AndroidX compatibility APIs, unregister calls are guarded, timeouts clear fully, and battery saver pause applies immediately at startup.
+- **Weather parsing resilience**: Weather JSON parsing uses optional fields with defaults, and network testing calls a valid Open-Meteo forecast endpoint.
 - **AGP 9.2 build validation**: Root Android Gradle Plugin was bumped to 9.2.0 and the app was confirmed to still build and run successfully with the Gradle 9.4.1 wrapper.
 - **Debug Kotlin compile cleanup**: Repaired malformed imports, the missing `SlideshowView` function brace, Dropbox SDK 5.4 thumbnail/search usage, the missing `dream.SourceType` alias, and the photo info background enum mismatch used by overlay styling.
 - **Slideshow remote cache routing**: `SlideshowView` now asks `SlideshowManager` to download cacheable remote photos, keeping repository-specific cache calls out of the view layer.
@@ -32,7 +39,7 @@ All settings are fully wired and audited. The app is stable with all features pr
 
 ## Build Status
 
-- Debug build: confirmed successful after the Android Gradle Plugin 9.2.0 bump; app was also run successfully
+- Debug build: previously confirmed successful after the Android Gradle Plugin 9.2.0 bump; AGP is now 9.2.1 and should be revalidated with `./gradlew assembleDebug`
 - No known source-level compilation errors after the import, brace, SourceType alias, Dropbox SDK, photo info background mapping, and SlideshowManager routing fixes
 - Only pre-existing warnings (deprecated APIs, unused variables in repos)
 

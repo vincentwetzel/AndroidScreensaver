@@ -10,7 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import javax.inject.Inject
 import javax.inject.Singleton
 import com.dropbox.core.v2.files.FolderMetadata
@@ -20,7 +19,7 @@ import com.dropbox.core.v2.files.ListFolderResult
 import com.dropbox.core.v2.files.ThumbnailFormat
 import com.dropbox.core.v2.files.ThumbnailSize
 import java.io.File
-import okhttp3.Request
+import java.util.concurrent.ConcurrentHashMap
 
 @Singleton
 class DropboxPhotoRepository @Inject constructor(
@@ -35,12 +34,10 @@ class DropboxPhotoRepository @Inject constructor(
         private const val FOLDER_CACHE_TTL_MS = 60_000L
         private const val PHOTO_COUNT_CACHE_TTL_MS = 300_000L
 
-        private val httpClient = OkHttpClient()
-
-        private val dropboxImageExtensions = listOf(
+        private val dropboxImageExtensions = setOf(
             "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif", "tiff", "tif", "svg"
         )
-        private val dropboxVideoExtensions = listOf(
+        private val dropboxVideoExtensions = setOf(
             "mp4", "mov", "avi", "wmv", "flv", "mkv", "webm", "m4v"
         )
     }
@@ -49,14 +46,12 @@ class DropboxPhotoRepository @Inject constructor(
         val isStale: Boolean
             get() = System.currentTimeMillis() - timestampMs > FOLDER_CACHE_TTL_MS
     }
-    private val folderCache = mutableMapOf<String, MutableMap<String?, CacheEntry<List<PhotoFolder>>>>()
+    private val folderCache = ConcurrentHashMap<String, ConcurrentHashMap<String, CacheEntry<List<PhotoFolder>>>>()
     private data class CountCacheEntry(val count: Int, val timestampMs: Long = System.currentTimeMillis()) {
         val isStale: Boolean
             get() = System.currentTimeMillis() - timestampMs > PHOTO_COUNT_CACHE_TTL_MS
     }
-    private val photoCountCache = mutableMapOf<String, MutableMap<String, CountCacheEntry>>()
-
-    private val thumbnailCache = mutableMapOf<String, String>()
+    private val photoCountCache = ConcurrentHashMap<String, ConcurrentHashMap<String, CountCacheEntry>>()
 
     // region PhotoRepository Interface Implementation
     override fun isAuthenticated(): Boolean {
@@ -112,16 +107,17 @@ class DropboxPhotoRepository @Inject constructor(
     }
 
     override suspend fun syncPhotos(): Boolean = withContext(Dispatchers.IO) {
-        // For Dropbox, syncing might involve refreshing caches.
-        // For now, return true.
+        folderCache.clear()
+        photoCountCache.clear()
         true
     }
     // endregion
 
     // region Dropbox-specific methods
     suspend fun listFoldersForAccount(parentFolderId: String?, forceRefresh: Boolean, accountId: String): List<PhotoFolder> {
+        val cacheKey = parentFolderId ?: "ROOT"
         val accountCache = getFolderCacheForAccount(accountId)
-        val cached = accountCache[parentFolderId]
+        val cached = accountCache[cacheKey]
         if (!forceRefresh && cached != null && !cached.isStale) {
             Log.d(TAG, "Returning cached folders for account $accountId, folder $parentFolderId")
             return cached.data
@@ -167,7 +163,8 @@ class DropboxPhotoRepository @Inject constructor(
                 throw e
             }
 
-            folders.also { accountCache[parentFolderId] = CacheEntry(it) }
+            folders.sortBy { it.name.lowercase() }
+            folders.also { accountCache[cacheKey] = CacheEntry(it) }
         }
     }
 
@@ -175,18 +172,8 @@ class DropboxPhotoRepository @Inject constructor(
         val photos = mutableListOf<Photo>()
         // Dropbox paths start with '/'
         val rootPath = if (folderId.startsWith("/")) folderId else "/$folderId"
-        collectPhotosFromFolder(rootPath, excludedFolderIds, photos, accountId)
-        photos
-    }
-
-    private suspend fun collectPhotosFromFolder(currentPath: String, excludedFolderIds: Set<String>, photos: MutableList<Photo>, accountId: String) {
         val client = dropboxRepository.getDbxClientV2(accountId)
             ?: throw IllegalStateException("Not authenticated with Dropbox for account $accountId")
-
-        if (excludedFolderIds.contains(currentPath)) {
-            Log.d(TAG, "Skipping excluded folder: $currentPath")
-            return
-        }
 
         try {
             var result: ListFolderResult
@@ -194,36 +181,55 @@ class DropboxPhotoRepository @Inject constructor(
 
             do {
                 result = if (cursor == null) {
-                    client.files().listFolder(currentPath)
+                    client.files().listFolderBuilder(rootPath)
+                        .withRecursive(true)
+                        .start()
                 } else {
                     client.files().listFolderContinue(cursor)
                 }
 
                 for (entry in result.entries) {
-                    when (entry) {
-                        is FileMetadata -> {
-                            val extension = entry.name.substringAfterLast('.', "").lowercase()
-                            val isImage = dropboxImageExtensions.contains(extension)
-                            val isVideo = dropboxVideoExtensions.contains(extension)
-
-                            if (isImage || isVideo) {
-                                val photo = Photo(
-                                    id = entry.pathLower, // Use pathLower as unique ID
-                                    sourceType = SourceType.DROPBOX,
-                                    accountId = accountId,
-                                    uri = entry.pathLower, // Will be resolved to temporary link later
-                                    thumbnailUri = null, // Will be resolved to temporary link later
-                                    title = entry.name,
-                                    dateTaken = entry.clientModified.time,
-                                    width = null, // Dropbox API does not directly provide dimensions in FileMetadata
-                                    height = null,
-                                    fileSize = entry.size
-                                )
-                                photos.add(photo)
-                            }
+                    if (entry is FileMetadata) {
+                        val isExcluded = excludedFolderIds.any { excludedId ->
+                            entry.pathLower.startsWith("$excludedId/") || entry.pathLower == excludedId
                         }
-                        is FolderMetadata -> {
-                            collectPhotosFromFolder(entry.pathLower, excludedFolderIds, photos, accountId)
+                        if (isExcluded) continue
+
+                        val extension = entry.name.substringAfterLast('.', "").lowercase()
+                        val isImage = dropboxImageExtensions.contains(extension)
+                        val isVideo = dropboxVideoExtensions.contains(extension)
+
+                        if (isImage || isVideo) {
+                            val safeFileName = entry.pathLower.replace("/", "_")
+                            val photoCacheDir = File(context.cacheDir, "dropbox_photos")
+                            val photoCacheFile = File(photoCacheDir, "${accountId}_$safeFileName")
+                            val uri = if (photoCacheFile.exists()) {
+                                "file://${photoCacheFile.absolutePath}"
+                            } else {
+                                entry.pathLower // Will be resolved to temporary link later
+                            }
+
+                            val thumbCacheDir = File(context.cacheDir, "dropbox_thumbnails")
+                            val thumbCacheFile = File(thumbCacheDir, "${accountId}_${safeFileName}_thumb.jpeg")
+                            val thumbnailUri = if (thumbCacheFile.exists()) {
+                                "file://${thumbCacheFile.absolutePath}"
+                            } else {
+                                null // Will be resolved to temporary link later
+                            }
+
+                            val photo = Photo(
+                                id = entry.pathLower, // Use pathLower as unique ID
+                                sourceType = SourceType.DROPBOX,
+                                accountId = accountId,
+                                uri = uri,
+                                thumbnailUri = thumbnailUri,
+                                title = entry.name,
+                                dateTaken = entry.clientModified.time,
+                                width = null, // Dropbox API does not directly provide dimensions in FileMetadata
+                                height = null,
+                                fileSize = entry.size
+                            )
+                            photos.add(photo)
                         }
                     }
                 }
@@ -231,9 +237,11 @@ class DropboxPhotoRepository @Inject constructor(
             } while (result.hasMore)
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to collect Dropbox photos for $accountId, path $currentPath", e)
+            Log.e(TAG, "Failed to collect Dropbox photos for $accountId, path $rootPath", e)
             throw e
         }
+        
+        photos
     }
 
     suspend fun getPhotoMetadataForAccount(photoId: String, accountId: String): Photo? = withContext(Dispatchers.IO) {
@@ -243,16 +251,31 @@ class DropboxPhotoRepository @Inject constructor(
         try {
             val entry = client.files().getMetadata(photoId)
             if (entry is FileMetadata) {
-                val extension = entry.name.substringAfterLast('.', "").lowercase()
-                val isImage = dropboxImageExtensions.contains(extension)
-                val isVideo = dropboxVideoExtensions.contains(extension)
+                // Check for cached full photo
+                val photoCacheDir = File(context.cacheDir, "dropbox_photos")
+                val safeFileName = entry.pathLower.replace("/", "_")
+                val photoCacheFile = File(photoCacheDir, "${accountId}_$safeFileName")
+                val uri = if (photoCacheFile.exists()) {
+                    "file://${photoCacheFile.absolutePath}"
+                } else {
+                    entry.pathLower // Default to path, to be resolved later
+                }
+
+                // Check for cached thumbnail
+                val thumbCacheDir = File(context.cacheDir, "dropbox_thumbnails")
+                val thumbCacheFile = File(thumbCacheDir, "${accountId}_${entry.pathLower.replace("/", "_")}_thumb.jpeg")
+                val thumbnailUri = if (thumbCacheFile.exists()) {
+                    "file://${thumbCacheFile.absolutePath}"
+                } else {
+                    null // Default to null, to be resolved later
+                }
 
                 return@withContext Photo(
                     id = entry.pathLower,
                     sourceType = SourceType.DROPBOX,
                     accountId = accountId,
-                    uri = entry.pathLower, // Will be resolved later
-                    thumbnailUri = null, // Will be resolved later
+                    uri = uri,
+                    thumbnailUri = thumbnailUri,
                     title = entry.name,
                     dateTaken = entry.clientModified.time,
                     width = null,
@@ -295,15 +318,24 @@ class DropboxPhotoRepository @Inject constructor(
             return@withContext "file://${cacheFile.absolutePath}"
         }
 
+        val tempFile = File(cacheDir, "${accountId}_${photoId.replace("/", "_")}_thumb.tmp.${java.util.UUID.randomUUID()}")
         try {
-            client.files().getThumbnailBuilder(photoId)
-                .withFormat(ThumbnailFormat.JPEG)
-                .withSize(ThumbnailSize.W1024H768)
-                .start()
-                .download(cacheFile.outputStream())
+            tempFile.outputStream().use { out ->
+                client.files().getThumbnailBuilder(photoId)
+                    .withFormat(ThumbnailFormat.JPEG)
+                    .withSize(ThumbnailSize.W256H256)
+                    .start()
+                    .download(out)
+            }
+            if (!tempFile.renameTo(cacheFile) && !cacheFile.exists()) {
+                Log.e(TAG, "Failed to rename thumbnail temp file to cache file: ${cacheFile.absolutePath}")
+                return@withContext null
+            }
             return@withContext "file://${cacheFile.absolutePath}"
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get thumbnail for Dropbox photo $photoId, account $accountId", e)
+        } finally {
+            if (tempFile.exists()) tempFile.delete()
         }
         null
     }
@@ -314,7 +346,7 @@ class DropboxPhotoRepository @Inject constructor(
 
         val folders = mutableListOf<PhotoFolder>()
         try {
-            val result = client.files().searchV2Builder(query).withOptions(
+            var result = client.files().searchV2Builder(query).withOptions(
                 com.dropbox.core.v2.files.SearchOptions.newBuilder()
                     .withPath("") // Search entire Dropbox
                     .withFileStatus(com.dropbox.core.v2.files.FileStatus.ACTIVE)
@@ -322,19 +354,26 @@ class DropboxPhotoRepository @Inject constructor(
                     .build()
             ).withIncludeHighlights(false).start()
 
-            result.matches.forEach { match ->
-                val entry = match.metadata.metadataValue
-                if (entry is FolderMetadata) {
-                    folders.add(
-                        PhotoFolder(
-                            id = entry.pathLower,
-                            sourceType = SourceType.DROPBOX,
-                            accountId = accountId,
-                            name = entry.name,
-                            parentFolderId = entry.pathLower.removeSuffix("/${entry.name}").ifEmpty { null },
-                            photoCount = 0
+            while (true) {
+                result.matches.forEach { match ->
+                    val entry = match.metadata.metadataValue
+                    if (entry is FolderMetadata) {
+                        folders.add(
+                            PhotoFolder(
+                                id = entry.pathLower,
+                                sourceType = SourceType.DROPBOX,
+                                accountId = accountId,
+                                name = entry.name,
+                                parentFolderId = entry.pathLower.removeSuffix("/${entry.name}").ifEmpty { null },
+                                photoCount = 0
+                            )
                         )
-                    )
+                    }
+                }
+                if (result.hasMore) {
+                    result = client.files().searchContinueV2(result.cursor)
+                } else {
+                    break
                 }
             }
         } catch (e: Exception) {
@@ -351,24 +390,11 @@ class DropboxPhotoRepository @Inject constructor(
             return cached.count
         }
 
-        return withContext(Dispatchers.IO) {
-            val client = dropboxRepository.getDbxClientV2(accountId)
-                ?: return@withContext 0
-
-            var total = 0
-            val photos = mutableListOf<Photo>() // Temporarily collect photos to count
-
-            try {
-                val rootPath = if (folderId.startsWith("/")) folderId else "/$folderId"
-                collectPhotosFromFolder(rootPath, emptySet(), photos, accountId)
-                total = photos.size
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to get Dropbox photo count for $accountId, folder $folderId", e)
-            }
-
-            accountCountCache[folderId] = CountCacheEntry(total)
-            total
-        }
+        // Reuse the existing filtered query logic by passing null
+        val total = getFilteredFolderMediaCountForAccount(folderId, null, accountId)
+        
+        accountCountCache[folderId] = CountCacheEntry(total)
+        return total
     }
 
     suspend fun getFilteredFolderMediaCountForAccount(folderId: String, mediaTypeFilter: String?, accountId: String): Int = withContext(Dispatchers.IO) {
@@ -376,20 +402,41 @@ class DropboxPhotoRepository @Inject constructor(
             ?: return@withContext 0
 
         var total = 0
-        val photos = mutableListOf<Photo>()
-        val rootPath = if (folderId.startsWith("/")) folderId else "/$folderId"
-        collectPhotosFromFolder(rootPath, emptySet(), photos, accountId)
+        try {
+            val rootPath = if (folderId.startsWith("/")) folderId else "/$folderId"
+            var result: ListFolderResult
+            var cursor: String? = null
 
-        total = when (mediaTypeFilter) {
-            "images" -> photos.count { photo ->
-                val extension = photo.title?.substringAfterLast('.', "")?.lowercase()
-                dropboxImageExtensions.contains(extension)
-            }
-            "videos" -> photos.count { photo ->
-                val extension = photo.title?.substringAfterLast('.', "")?.lowercase()
-                dropboxVideoExtensions.contains(extension)
-            }
-            else -> photos.size // Both images and videos
+            do {
+                result = if (cursor == null) {
+                    client.files().listFolderBuilder(rootPath)
+                        .withRecursive(true)
+                        .start()
+                } else {
+                    client.files().listFolderContinue(cursor)
+                }
+
+                for (entry in result.entries) {
+                    if (entry is FileMetadata) {
+                        val extension = entry.name.substringAfterLast('.', "").lowercase()
+                        val isImage = dropboxImageExtensions.contains(extension)
+                        val isVideo = dropboxVideoExtensions.contains(extension)
+
+                        val matchesFilter = when (mediaTypeFilter) {
+                            "images" -> isImage
+                            "videos" -> isVideo
+                            else -> isImage || isVideo
+                        }
+
+                        if (matchesFilter) {
+                            total++
+                        }
+                    }
+                }
+                cursor = result.cursor
+            } while (result.hasMore)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get filtered Dropbox photo count", e)
         }
         total
     }
@@ -399,40 +446,33 @@ class DropboxPhotoRepository @Inject constructor(
             ?: return@withContext null
 
         try {
-            // Get a temporary link for direct download
-            val temporaryLink = client.files().getTemporaryLink(photoId)
-            val downloadUrl = temporaryLink.link
-
             val cacheDir = File(context.cacheDir, "dropbox_photos")
             if (!cacheDir.exists()) cacheDir.mkdirs()
 
-            // Use the original filename with a safe version for the cache file name
-            val originalFileName = photoId.substringAfterLast('/')
-            val cacheFile = File(cacheDir, "${accountId}_${originalFileName}")
+            // Use the full path with safe character replacement to prevent collisions
+            val safeFileName = photoId.replace("/", "_")
+            val cacheFile = File(cacheDir, "${accountId}_$safeFileName")
 
             if (cacheFile.exists()) {
                 Log.d(TAG, "Photo already in cache: ${cacheFile.absolutePath}")
-                return@withContext cacheFile.absolutePath
+                return@withContext "file://${cacheFile.absolutePath}"
             }
 
-            val request = Request.Builder()
-                .url(downloadUrl)
-                .build()
-
-            val response = httpClient.newCall(request).execute()
-            if (!response.isSuccessful || response.body == null) {
-                Log.e(TAG, "Failed to download photo from Dropbox: ${response.code}")
-                return@withContext null
-            }
-
-            cacheFile.outputStream().use { out ->
-                response.body!!.byteStream().use { input ->
-                    input.copyTo(out)
+            val tempFile = File(cacheDir, "${accountId}_${safeFileName}.tmp.${java.util.UUID.randomUUID()}")
+            try {
+                tempFile.outputStream().use { out ->
+                    client.files().downloadBuilder(photoId).start().download(out)
                 }
+                if (!tempFile.renameTo(cacheFile) && !cacheFile.exists()) {
+                    Log.e(TAG, "Failed to rename temp file to cache file: ${cacheFile.absolutePath}")
+                    return@withContext null
+                }
+            } finally {
+                if (tempFile.exists()) tempFile.delete()
             }
 
             Log.d(TAG, "Downloaded Dropbox photo to local cache: ${cacheFile.absolutePath}")
-            cacheFile.absolutePath
+            "file://${cacheFile.absolutePath}"
         } catch (e: Exception) {
             Log.e(TAG, "Error downloading Dropbox photo $photoId to local cache", e)
             null
@@ -452,12 +492,12 @@ class DropboxPhotoRepository @Inject constructor(
     // endregion
 
     // region Helpers
-    private fun getFolderCacheForAccount(accountId: String): MutableMap<String?, CacheEntry<List<PhotoFolder>>> {
-        return folderCache.getOrPut(accountId) { mutableMapOf() }
+    private fun getFolderCacheForAccount(accountId: String): ConcurrentHashMap<String, CacheEntry<List<PhotoFolder>>> {
+        return folderCache.getOrPut(accountId) { ConcurrentHashMap() }
     }
 
-    private fun getPhotoCountCacheForAccount(accountId: String): MutableMap<String, CountCacheEntry> {
-        return photoCountCache.getOrPut(accountId) { mutableMapOf() }
+    private fun getPhotoCountCacheForAccount(accountId: String): ConcurrentHashMap<String, CountCacheEntry> {
+        return photoCountCache.getOrPut(accountId) { ConcurrentHashMap() }
     }
     // endregion
 }

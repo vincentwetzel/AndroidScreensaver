@@ -3,6 +3,8 @@
 ## 1.11.0 (In Progress)
 
 ### Build System
+- **Updated Android Gradle Plugin to 9.2.1** - Bumped the root `com.android.application` plugin from AGP 9.2.0 to 9.2.1.
+
 - **Updated Android Gradle Plugin to 9.2.0** - Bumped the root `com.android.application` plugin to AGP 9.2.0 and validated that the app still builds and runs successfully with the existing Gradle 9.4.1 wrapper.
 
 - **Removed deprecated Gradle properties** - Cleaned up 7 deprecated options from `gradle.properties`:
@@ -30,6 +32,14 @@
 - **Remove account option** — Source cards on the main screen now have a "more" menu with a "Remove account" option. This allows users to remove individual accounts (e.g., a second Google Drive account) after a confirmation dialog.
 
 ### Fixed
+- **Repository cache thread safety and refresh behavior** - Gallery, Google Drive, Dropbox, and slideshow preload caches now use concurrent maps where needed, and `syncPhotos()` clears stale folder/photo count caches before reporting success.
+- **Recursive media counts and folder exclusions** - Gallery, Google Drive, and Dropbox count logic now matches the recursive photo loading behavior more closely, including content-type filters and deselected subfolder handling.
+- **Google Drive media loading metadata** - Drive photo metadata now preserves thumbnails, account-scoped download URLs, cached `file://` paths, video dimensions, and file extensions for media filtering and local cache downloads.
+- **Dropbox recursive listing and caching** - Dropbox listing now uses recursive API traversal, handles paginated folder search, skips excluded folders, avoids cache filename collisions by using full safe paths, writes thumbnails through temp files, and caches downloaded files with stable `file://` URIs.
+- **Gallery MediaStore URI and counts** - Gallery now resolves image/video URLs through metadata, returns correct thumbnail URIs, treats MediaStore buckets as a flat root list, and uses `RELATIVE_PATH LIKE` for recursive Android 10+ counts.
+- **DreamService lifecycle safety** - Broadcast receivers are registered via `ContextCompat.registerReceiver()`, unregister cleanup is guarded, timeout callbacks are fully cleared, and battery-saver pause is applied immediately when the screensaver starts.
+- **Slideshow filtering and loading reliability** - Media filtering now checks photo titles as well as URIs, deduplication includes source/account IDs, remote preload downloads through repository cache paths, folder loads are chunked to reduce API/memory spikes, and Ethernet satisfies Wi-Fi-only network checks.
+- **Weather API resilience** - Weather parsing now uses optional JSON fields with defaults, and the connectivity test calls a valid Open-Meteo forecast endpoint.
 - **KSP repository map binding failure** - Replaced Hilt `@IntoMap` multibindings for `PhotoRepository` with explicit repository map assembly in `RepositoryModule`. This fixes the KSP error `@Provides methods of type map must declare a map key` during `:app:kspDebugKotlin`.
 - **Add Source dialog filtering** - Automatically hides singleton sources (like Gallery) from the dropdown if they have already been added. This prevents accidental duplicate additions and correctly surfaces Google Drive as the primary option for adding multiple accounts.
 - **Debug Kotlin compile failures** - Fixed malformed Kotlin imports in DreamService, Schedule settings, and SlideshowView; restored the missing SlideshowView brace; aligned Dropbox SDK calls with the 5.4 API; mapped photo info backgrounds to decoration backgrounds for overlay styling; and routed remote photo cache downloads through SlideshowManager instead of direct view-to-repository access.

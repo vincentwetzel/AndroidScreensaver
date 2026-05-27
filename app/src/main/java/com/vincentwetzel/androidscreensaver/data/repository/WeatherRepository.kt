@@ -64,14 +64,14 @@ class WeatherRepository @Inject constructor() {
                     val current = json.getJSONObject("current")
 
                     WeatherData(
-                        temperature = current.getDouble("temperature_2m").toFloat(),
-                        condition = getWeatherCondition(current.getInt("weather_code")),
-                        conditionCode = current.getInt("weather_code"),
-                        humidity = current.getInt("relative_humidity_2m"),
-                        windSpeed = current.getDouble("wind_speed_10m").toFloat(),
-                        precipitationChance = current.getInt("precipitation_probability"),
-                        feelsLike = current.getDouble("apparent_temperature").toFloat(),
-                        isDaytime = current.getInt("is_day") == 1
+                        temperature = current.optDouble("temperature_2m", 0.0).toFloat(),
+                        condition = getWeatherCondition(current.optInt("weather_code", -1)),
+                        conditionCode = current.optInt("weather_code", -1),
+                        humidity = current.optInt("relative_humidity_2m", 0),
+                        windSpeed = current.optDouble("wind_speed_10m", 0.0).toFloat(),
+                        precipitationChance = current.optInt("precipitation_probability", 0),
+                        feelsLike = current.optDouble("apparent_temperature", 0.0).toFloat(),
+                        isDaytime = current.optInt("is_day", 1) == 1
                     )
                 }
             } catch (e: Exception) {
@@ -109,7 +109,7 @@ class WeatherRepository @Inject constructor() {
         return withContext(Dispatchers.IO) {
             try {
                 val request = Request.Builder()
-                    .url("https://api.open-meteo.com")
+                    .url("https://api.open-meteo.com/v1/forecast?latitude=0&longitude=0&current=temperature_2m")
                     .build()
 
                 client.newCall(request).execute().use { response ->

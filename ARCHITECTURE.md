@@ -21,8 +21,8 @@ Android Screensaver uses **MVVM (Model-View-ViewModel)** with a **Repository** p
 ### Data Layer (`data/`)
 - **PhotoRepository** (interface) — Unified contract for all photo sources
   - `GalleryPhotoRepository` - MediaStore API for device photos
-  - `GoogleDrivePhotoRepository` - Google Drive API for cloud photos (per-account routing)
-  - `DropboxPhotoRepository` - Dropbox API photo access, folder search, thumbnail/local cache support
+  - `GoogleDrivePhotoRepository` - Google Drive API for cloud photos with per-account routing, recursive folder traversal, thumbnail metadata, and local file cache paths
+  - `DropboxPhotoRepository` - Dropbox API photo access with recursive listing, paginated folder search, thumbnail/local cache support, and per-account caches
 - **GoogleDriveRepository** - Delegates to GoogleAccountManager for per-account auth; provides per-account Drive API clients
 - **GoogleAccountManager** (`utils/`) - Manages multiple Google accounts simultaneously. Each account has its own Drive service, OAuth credential, and sign-in state. Replaces the previous singleton auth pattern.
 - **SettingsManager** - DataStore-backed preferences (slideshow config, source state, multi-account configs)
@@ -36,8 +36,8 @@ Android Screensaver uses **MVVM (Model-View-ViewModel)** with a **Repository** p
   - Loads photos from all enabled accounts across all source types (Gallery, Google Drive multi-account)
   - Iterates over each enabled Google Drive account, loading and caching photos per-account
   - Owns repository-specific local download routing for cacheable remote photos
-  - Applies shuffle and sort based on user settings
-  - Manages preload cache (partial - Gallery preloading needs wiring)
+  - Applies content-type filtering, deduplication by source/account/photo ID, shuffle, and sort based on user settings
+  - Manages preload cache for Gallery content URIs, cached file URIs, and cloud downloads
 
 ### Dependency Injection (`di/`)
 - **RepositoryModule** — Hilt module providing singletons for all repositories and `SlideshowManager`
@@ -72,7 +72,7 @@ Slideshow runs → SlideshowView loads photos via Coil from content:// URIs
 |-------|---------------|
 | `PhotoRepository` | Interface defining photo source operations |
 | `GalleryPhotoRepository` | MediaStore-based local photo access |
-| `GoogleDrivePhotoRepository` | Google Drive API photo access (metadata only, emits remote URIs) |
+| `GoogleDrivePhotoRepository` | Google Drive API photo access with metadata, account-scoped remote URLs, and local cache paths |
 | `GoogleDriveRepository` | Google Sign-In + Drive service client |
 | `SlideshowManager` | Combines sources, loads photos, applies slideshow config |
 | `SlideshowView` | Custom view that displays photos with crossfade transitions |
@@ -85,7 +85,8 @@ Slideshow runs → SlideshowView loads photos via Coil from content:// URIs
 ## Threading
 
 - All repository API calls use `withContext(Dispatchers.IO)` to avoid blocking the main thread
-- Folder lists are cached in repositories (`@Singleton`) to avoid re-fetching on Activity recreation
+- Folder lists and photo counts are cached in repositories (`@Singleton`) with TTLs; repository caches use concurrent maps where background prefetch and slideshow loading can overlap
+- `SlideshowManager` chunk-loads selected folders in small concurrent batches to limit memory/API spikes
 - ViewModel coroutines use `viewModelScope.launch` for lifecycle-aware async
 
 ## Screensaver Implementation
@@ -153,6 +154,8 @@ Settings are loaded from DataStore via `SettingsManager.getSlideshowConfig()` an
 - `SlideshowView.showPhoto()` adjusts `scaleType` when `matchDeviceOrientation` is enabled
 - `SlideshowView.startAutoAdvance()` reloads config each cycle so setting changes take effect mid-slideshow
 - DreamService uses `GestureDetector` to handle touch exit when `exitOnTrigger` is TOUCH
+- DreamService registers receivers through `ContextCompat.registerReceiver()`, guards unregister cleanup, clears timeout callbacks on reset/detach, and immediately pauses when battery saver is already active and `respectBatterySaver` is enabled
+- `wifiOnly` permits Wi-Fi and Ethernet transports for cloud loading
 
 ### Accessing Settings
 

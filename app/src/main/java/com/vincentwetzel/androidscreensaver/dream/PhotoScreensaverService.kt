@@ -12,6 +12,7 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.WindowManager
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger
 import com.vincentwetzel.androidscreensaver.data.model.TimeoutMinutes
 import com.vincentwetzel.androidscreensaver.data.model.TimeoutUnit
@@ -62,8 +63,18 @@ class PhotoScreensaverService : DreamService() {
         super.onAttachedToWindow()
         android.util.Log.d("PhotoScreensaver", "onAttachedToWindow - screensaver started!")
         
-        registerReceiver(stopReceiver, IntentFilter("com.vincentwetzel.androidscreensaver.STOP_DREAM"), RECEIVER_NOT_EXPORTED)
-        registerReceiver(powerSaveReceiver, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED), RECEIVER_NOT_EXPORTED)
+        ContextCompat.registerReceiver(
+            this, 
+            stopReceiver, 
+            IntentFilter("com.vincentwetzel.androidscreensaver.STOP_DREAM"), 
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        ContextCompat.registerReceiver(
+            this, 
+            powerSaveReceiver, 
+            IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED), 
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         isInteractive = false
         isScreenBright = false
@@ -135,6 +146,14 @@ class PhotoScreensaverService : DreamService() {
 
         setContentView(slideshowView)
 
+        // Immediately apply battery saver check if applicable
+        if (slideshowManager.config.respectBatterySaver) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (powerManager.isPowerSaveMode) {
+                slideshowView?.post { slideshowView?.pause() }
+            }
+        }
+
         // Setup exit trigger handling
         setupExitTrigger()
 
@@ -172,6 +191,9 @@ class PhotoScreensaverService : DreamService() {
     private fun setupTimeout() {
         val timerConfig = slideshowManager.config.timerConfig
         
+        // Cancel existing timeout if method is called multiple times
+        timeoutHandler?.removeCallbacksAndMessages(null)
+
         android.util.Log.d(TAG, "setupTimeout called - timeout=${timerConfig.timeoutMinutes}")
         
         // Only setup timeout if not disabled
@@ -216,15 +238,19 @@ class PhotoScreensaverService : DreamService() {
         super.onDetachedFromWindow()
         android.util.Log.d(TAG, "onDetachedFromWindow")
         
-        unregisterReceiver(stopReceiver)
-        unregisterReceiver(powerSaveReceiver)
+        try {
+            unregisterReceiver(stopReceiver)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "stopReceiver not registered")
+        }
+        try {
+            unregisterReceiver(powerSaveReceiver)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "powerSaveReceiver not registered")
+        }
         
         // Clean up timeout handler
-        timeoutHandler?.let { handler ->
-            timeoutRunnable?.let { runnable ->
-                handler.removeCallbacks(runnable)
-            }
-        }
+        timeoutHandler?.removeCallbacksAndMessages(null)
         timeoutHandler = null
         timeoutRunnable = null
         

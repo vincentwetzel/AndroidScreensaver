@@ -20,8 +20,11 @@ import com.vincentwetzel.androidscreensaver.utils.SettingsManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manages slideshow configuration and photo loading.
@@ -41,7 +44,11 @@ class SlideshowManager @Inject constructor(
     private var loadedPhotos: List<Photo> = emptyList()
 
     // Preloaded photo cache
-    private val preloadCache = mutableMapOf<String, Boolean>()
+    private val preloadCache = ConcurrentHashMap<String, Boolean>()
+
+    private class ReverseString(val str: String) : Comparable<ReverseString> {
+        override fun compareTo(other: ReverseString) = other.str.compareTo(this.str)
+    }
 
     init {
         // Load config from settings
@@ -67,7 +74,7 @@ class SlideshowManager @Inject constructor(
     suspend fun downloadPhotoToLocalCache(photo: Photo): String? {
         val accountId = photo.accountId ?: return null
         return when (val repository = photoRepositories[photo.sourceType]) {
-            is GoogleDrivePhotoRepository -> repository.downloadPhotoToLocalCache(photo.id, accountId)
+            is GoogleDrivePhotoRepository -> repository.downloadPhotoToLocalCache(photo.id, accountId, photo.title)
             is DropboxPhotoRepository -> repository.downloadPhotoToLocalCache(photo.id, accountId)
             else -> null
         }
@@ -81,6 +88,9 @@ class SlideshowManager @Inject constructor(
     suspend fun loadPhotos(): List<Photo> {
         return withContext(Dispatchers.IO) {
             val allPhotos = mutableListOf<Photo>()
+            
+            // Clear previous preloads to prevent memory leaks over time
+            preloadCache.clear()
 
             // Iterate over all available source types
             SourceType.entries.forEach { sourceType ->
@@ -135,10 +145,16 @@ class SlideshowManager @Inject constructor(
                                 selectedFolders
                             }
 
-                            for (folder in foldersToLoad) {
-                                val folderPhotos = photoRepository.listPhotos(folder.id, excludedFolderIds)
-                                allPhotos.addAll(folderPhotos)
+                            // Chunk execution to prevent OOM spikes and Rate Limiting on dozens of folders
+                            val folderPhotosList = mutableListOf<List<Photo>>()
+                            foldersToLoad.chunked(5).forEach { chunk ->
+                                val results = chunk.map { folder ->
+                                    async { photoRepository.listPhotos(folder.id, excludedFolderIds) }
+                                }.awaitAll()
+                                folderPhotosList.addAll(results)
                             }
+
+                            folderPhotosList.forEach { allPhotos.addAll(it) }
 
                             android.util.Log.d(TAG, "Loaded ${allPhotos.size} photos so far from $sourceType account: ${account.accountId}")
                         } catch (e: Exception) {
@@ -151,7 +167,7 @@ class SlideshowManager @Inject constructor(
             // Deduplicate photos by ID (can happen when a parent folder is cascade-selected
             // along with its subfolders — listPhotos recurses into subfolders, so the same
             // photo can be loaded from both the parent and child folder entries)
-            val uniquePhotos = allPhotos.distinctBy { it.id }
+            val uniquePhotos = allPhotos.distinctBy { "${it.sourceType}_${it.accountId}_${it.id}" }
             android.util.Log.d(TAG, "Total photos loaded: ${allPhotos.size}, unique: ${uniquePhotos.size}")
 
             loadedPhotos = uniquePhotos
@@ -159,9 +175,9 @@ class SlideshowManager @Inject constructor(
             // Apply media type filter
             val filteredPhotos = when (config.mediaTypeFilter) {
                 com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY ->
-                    uniquePhotos.filter { isImage(it.uri) }
+                    uniquePhotos.filter { isImage(it) }
                 com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY ->
-                    uniquePhotos.filter { isVideo(it.uri) }
+                    uniquePhotos.filter { isVideo(it) }
                 else -> uniquePhotos
             }
 
@@ -176,31 +192,22 @@ class SlideshowManager @Inject constructor(
     }
 
     /**
-     * Check if a URI points to an image file
+     * Check if a photo represents an image file
      */
-    private fun isImage(uri: String): Boolean {
-        val lower = uri.lowercase()
-        // File extension check (Google Drive cached photos)
-        val hasImageExtension = lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") ||
-               lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".bmp") ||
-               lower.endsWith(".heic") || lower.endsWith(".heif") || lower.endsWith(".svg") ||
-               lower.endsWith(".tiff") || lower.endsWith(".tif")
-        // Content URI check (Gallery photos - MediaStore path)
-        val isImageContentUri = lower.contains("/images/media/") || lower.contains("media_type_image")
+    private fun isImage(photo: Photo): Boolean {
+        val nameToCheck = photo.title ?: photo.uri
+        val hasImageExtension = IMAGE_EXTENSIONS.any { nameToCheck.endsWith(it, ignoreCase = true) }
+        val isImageContentUri = photo.uri.contains("/images/media/", ignoreCase = true) || photo.uri.contains("media_type_image", ignoreCase = true)
         return hasImageExtension || isImageContentUri
     }
 
     /**
-     * Check if a URI points to a video file
+     * Check if a photo represents a video file
      */
-    private fun isVideo(uri: String): Boolean {
-        val lower = uri.lowercase()
-        // File extension check (Google Drive cached photos)
-        val hasVideoExtension = lower.endsWith(".mp4") || lower.endsWith(".avi") || lower.endsWith(".mov") ||
-               lower.endsWith(".mkv") || lower.endsWith(".webm") || lower.endsWith(".wmv") ||
-               lower.endsWith(".flv") || lower.endsWith(".m4v")
-        // Content URI check (Gallery photos - MediaStore path)
-        val isVideoContentUri = lower.contains("/video/media/") || lower.contains("media_type_video")
+    private fun isVideo(photo: Photo): Boolean {
+        val nameToCheck = photo.title ?: photo.uri
+        val hasVideoExtension = VIDEO_EXTENSIONS.any { nameToCheck.endsWith(it, ignoreCase = true) }
+        val isVideoContentUri = photo.uri.contains("/video/media/", ignoreCase = true) || photo.uri.contains("media_type_video", ignoreCase = true)
         return hasVideoExtension || isVideoContentUri
     }
 
@@ -216,7 +223,7 @@ class SlideshowManager @Inject constructor(
             com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.NAME_A_Z ->
                 photo.title ?: ""
             com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.NAME_Z_A ->
-                (photo.title ?: "").reversed()
+                ReverseString(photo.title ?: "")
             com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.SIZE_LARGEST_FIRST ->
                 -(photo.fileSize ?: 0L)
             com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.SIZE_SMALLEST_FIRST ->
@@ -248,22 +255,15 @@ class SlideshowManager @Inject constructor(
                     // Google Drive cached photos: file:// URIs - already downloaded
                     preloadCache[photo.id] = true
                     android.util.Log.d(TAG, "Preloaded cached Drive photo: ${photo.uri}")
-                } else if (photo.uri.startsWith("http")) {
-                    // Remote URLs (Google Drive, Dropbox, etc.) - need to handle caching/downloading if not already local
-                    val accountId = photo.accountId
-                    if (accountId != null) {
-                        // For Google Drive, the download is handled by GoogleDrivePhotoRepository
-                        // For Dropbox, it will be handled by DropboxPhotoRepository
-                        val url = photoRepository.getPhotoUrl(photo.id) // This should trigger the download/cache logic if needed
-                        if (url != null) {
-                            preloadCache[photo.id] = true
-                            android.util.Log.d(TAG, "Preloaded remote photo from ${photo.sourceType}: ${photo.uri}")
-                        } else {
-                            android.util.Log.w(TAG, "Failed to get URL for ${photo.sourceType} photo: ${photo.id}")
-                        }
-                    }
                 } else {
-                    android.util.Log.w(TAG, "Unknown URI scheme for preloading: ${photo.uri}")
+                    // Remote URLs or Cloud IDs (Google Drive, Dropbox, etc.)
+                    val localPath = downloadPhotoToLocalCache(photo)
+                    if (localPath != null) {
+                        preloadCache[photo.id] = true
+                        android.util.Log.d(TAG, "Preloaded remote photo from ${photo.sourceType}: $localPath")
+                    } else {
+                        android.util.Log.w(TAG, "Failed to download/preload ${photo.sourceType} photo: ${photo.id}")
+                    }
                 }
             } catch (e: Exception) {
                 android.util.Log.e(TAG, "Error preloading photo: ${photo.uri}", e)
@@ -293,26 +293,31 @@ class SlideshowManager @Inject constructor(
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = connectivityManager.activeNetwork ?: return false
         val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || 
+               capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
     }
 
     /**
      * Check if the app has permission to read Gallery photos
      */
     fun hasGalleryPermission(): Boolean {
-        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_IMAGES
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val hasImage = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+            val hasVideo = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
+            val hasPermission = hasImage || hasVideo
+            if (!hasPermission) Log.w(TAG, "Gallery permission not granted (needs READ_MEDIA_IMAGES or READ_MEDIA_VIDEO)")
+            return hasPermission
         } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
+            val permission = Manifest.permission.READ_EXTERNAL_STORAGE
+            val hasPermission = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+            if (!hasPermission) Log.w(TAG, "Gallery permission not granted: $permission")
+            return hasPermission
         }
-        val hasPermission = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
-        if (!hasPermission) {
-            Log.w(TAG, "Gallery permission not granted: $permission")
-        }
-        return hasPermission
     }
 
     companion object {
         private const val TAG = "SlideshowManager"
+        private val IMAGE_EXTENSIONS = listOf(".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif", ".svg", ".tiff", ".tif")
+        private val VIDEO_EXTENSIONS = listOf(".mp4", ".avi", ".mov", ".mkv", ".webm", ".wmv", ".flv", ".m4v")
     }
 }
