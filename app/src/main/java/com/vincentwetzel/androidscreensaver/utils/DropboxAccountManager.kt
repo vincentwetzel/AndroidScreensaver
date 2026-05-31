@@ -82,7 +82,7 @@ class DropboxAccountManager @Inject constructor(
                 }
 
                 accountStates[accountId] = AccountState(accountId, accessToken, client, email)
-                Log.d("DropboxAccountManager", "Authenticated Dropbox account: $accountId (Email: $email)")
+                Log.d("DropboxAccountManager", "Authenticated Dropbox account: $accountId")
 
                 // Save accessToken securely
                 sharedPreferences.edit()
@@ -107,15 +107,15 @@ class DropboxAccountManager @Inject constructor(
         for (accountId in savedAccountIds) {
             // Skip email auxiliary keys during the main iteration
             if (accountId.endsWith("_email")) continue
-
+            
             val savedAccessToken = sharedPreferences.getString(accountId, null)
             if (!savedAccessToken.isNullOrEmpty()) {
                 val config = DbxRequestConfig.newBuilder("android-screensaver").build()
                 val client = DbxClientV2(config, savedAccessToken)
                 val email = sharedPreferences.getString("${accountId}_email", null)
-
+                
                 accountStates[accountId] = AccountState(accountId, savedAccessToken, client, email)
-                Log.d("DropboxAccountManager", "Restored existing Dropbox account: $accountId (Email: $email)")
+                Log.d("DropboxAccountManager", "Restored existing Dropbox account: $accountId")
             }
         }
     }

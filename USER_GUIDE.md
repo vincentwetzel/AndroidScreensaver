@@ -4,11 +4,13 @@
 
 ### 1. Enable a Photo Source
 
-Open the app and toggle on the sources you want to use:
+Open the app and add or toggle on the sources you want to use:
 
 - **Gallery** - Photos stored on your device. No sign-in required.
 - **Google Drive** - Photos stored in Google Drive. Requires Google account sign-in.
 - **Dropbox** - Photos stored in Dropbox. Requires Dropbox sign-in.
+
+Google Drive and Dropbox can each be added multiple times for separate accounts.
 
 ### 2. Select Folders
 
@@ -97,7 +99,7 @@ Authenticated source cards must show `Signed in as [account email]`.
 
 ### Dropbox
 
-Shows folders from Dropbox. The app can cache thumbnails and downloaded media locally so selected Dropbox photos and videos load faster after first access.
+Shows folders from one or more Dropbox accounts. The app uses the Dropbox OAuth browser flow, then opens the shared cloud folder browser for the signed-in account. It can cache thumbnails and downloaded media locally so selected Dropbox photos and videos load faster after first access.
 
 Authenticated source cards must show `Signed in as [account email]`.
 

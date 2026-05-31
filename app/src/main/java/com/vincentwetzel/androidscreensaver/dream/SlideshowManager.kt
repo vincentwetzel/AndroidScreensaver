@@ -50,15 +50,10 @@ class SlideshowManager @Inject constructor(
         override fun compareTo(other: ReverseString) = other.str.compareTo(this.str)
     }
 
-    init {
-        // Load config from settings
-        loadConfig()
-    }
-
     /**
      * Load configuration from settings
      */
-    fun loadConfig() {
+    suspend fun loadConfig() {
         config = SettingsManager.getSlideshowConfig(context)
         android.util.Log.d(TAG, "Config loaded: videoAudioMode=${config.videoAudioMode}, videoCustomVolume=${config.videoCustomVolume}")
     }
@@ -66,7 +61,7 @@ class SlideshowManager @Inject constructor(
     /**
      * Update configuration
      */
-    fun updateConfig(newConfig: SlideshowConfig) {
+    suspend fun updateConfig(newConfig: SlideshowConfig) {
         config = newConfig
         SettingsManager.saveSlideshowConfig(context, newConfig)
     }
@@ -280,7 +275,7 @@ class SlideshowManager @Inject constructor(
     /**
      * Check if a source is enabled (legacy: checks if any account exists for the source)
      */
-    private fun isSourceEnabled(sourceType: SourceType): Boolean {
+    private suspend fun isSourceEnabled(sourceType: SourceType): Boolean {
         val accounts = SettingsManager.getAccountsForSource(context, sourceType)
         return accounts.any { it.enabled }
     }
@@ -288,7 +283,7 @@ class SlideshowManager @Inject constructor(
     /**
      * Get selected folders for a source (legacy: returns combined from all accounts)
      */
-    private fun getSelectedFolders(sourceType: SourceType): List<com.vincentwetzel.androidscreensaver.data.model.PhotoFolder> {
+    private suspend fun getSelectedFolders(sourceType: SourceType): List<com.vincentwetzel.androidscreensaver.data.model.PhotoFolder> {
         return SettingsManager.getSelectedFolders(context, sourceType)
     }
 

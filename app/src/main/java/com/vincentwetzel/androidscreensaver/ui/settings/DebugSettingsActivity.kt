@@ -4,9 +4,14 @@ import android.os.Bundle
 import android.view.MenuItem
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.pm.PackageInfoCompat
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.vincentwetzel.androidscreensaver.databinding.ActivityDebugSettingsBinding
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * Debug Settings Activity
@@ -47,8 +52,14 @@ class DebugSettingsActivity : AppCompatActivity() {
             appendLine("Used Memory: ${usedMemory} MB")
             appendLine("Free Memory: ${freeMemory} MB")
             appendLine("")
-            appendLine("App Version: ${packageManager.getPackageInfo(packageName, 0).versionName}")
-            appendLine("Build Code: ${packageManager.getPackageInfo(packageName, 0).longVersionCode}")
+            val packageInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0L))
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getPackageInfo(packageName, 0)
+            }
+            appendLine("App Version: ${packageInfo.versionName}")
+            appendLine("Build Code: ${PackageInfoCompat.getLongVersionCode(packageInfo)}")
         }
     }
 
@@ -69,12 +80,24 @@ class DebugSettingsActivity : AppCompatActivity() {
         binding.btnResetSettings.setOnClickListener {
             AlertDialog.Builder(this)
                 .setTitle("Reset All Settings?")
-                .setMessage("This will reset all settings to their default values. This cannot be undone.")
+                .setMessage("This will reset all settings to their default values and exit the app to clear memory. This cannot be undone.")
                 .setPositiveButton("Reset") { _, _ ->
-                    // Clear DataStore preferences
-                    getSharedPreferences("screensaver_settings", MODE_PRIVATE).edit().clear().apply()
-                    Snackbar.make(binding.root, "All settings reset to defaults", Snackbar.LENGTH_LONG).show()
-                    finish()
+                    // Brute-force clear DataStore and EncryptedSharedPreferences directories
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        File(filesDir, "datastore").deleteRecursively()
+                        val sharedPrefsDir = File(applicationInfo.dataDir, "shared_prefs")
+                        if (sharedPrefsDir.exists()) {
+                            sharedPrefsDir.listFiles()?.forEach { file ->
+                                file.delete()
+                            }
+                        }
+                        kotlinx.coroutines.withContext(Dispatchers.Main) {
+                            Snackbar.make(binding.root, "Settings reset. Exiting app...", Snackbar.LENGTH_LONG).show()
+                            binding.root.postDelayed({
+                                kotlin.system.exitProcess(0)
+                            }, 1500)
+                        }
+                    }
                 }
                 .setNegativeButton("Cancel", null)
                 .show()

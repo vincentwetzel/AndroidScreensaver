@@ -5,8 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.vincentwetzel.androidscreensaver.data.model.FolderError
 import com.vincentwetzel.androidscreensaver.data.model.FolderError.Companion.fromException
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
-import com.vincentwetzel.androidscreensaver.data.repository.GoogleDrivePhotoRepository
-import com.vincentwetzel.androidscreensaver.data.repository.GoogleDriveRepository
+import com.vincentwetzel.androidscreensaver.data.model.SourceType
+import com.vincentwetzel.androidscreensaver.data.repository.PhotoRepository
+import com.vincentwetzel.androidscreensaver.data.repository.BaseCloudPhotoRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,17 +19,17 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
- * ViewModel for Google Drive folder browsing.
+ * Generic ViewModel for cloud folder browsing (Google Drive, Dropbox, etc.).
  * Now supports per-account operations via accountId parameter.
  */
 @HiltViewModel
-class GoogleDriveViewModel @Inject constructor(
-    private val driveRepository: GoogleDriveRepository,
-    private val photoRepository: GoogleDrivePhotoRepository
+class CloudFolderViewModel @Inject constructor(
+    private val photoRepositories: Map<SourceType, @JvmSuppressWildcards PhotoRepository>
 ) : ViewModel() {
 
     // Account ID for per-account routing (null = first available account)
     private var accountId: String? = null
+    private var sourceType: SourceType? = null
 
     // Folder state
     private val _folders = MutableStateFlow<List<PhotoFolder>>(emptyList())
@@ -55,19 +56,28 @@ class GoogleDriveViewModel @Inject constructor(
     val error: StateFlow<FolderError?> = _error.asStateFlow()
 
     /**
-     * Set the account ID for this ViewModel instance. Must be called before loading folders.
+     * Set the source type and account ID for this ViewModel instance. Must be called before loading folders.
      */
-    fun setAccountId(id: String) {
+    fun setSourceContext(type: SourceType, id: String) {
+        sourceType = type
         accountId = id
     }
 
+    private fun getRepository(): BaseCloudPhotoRepository {
+        val type = sourceType ?: throw IllegalStateException("SourceType not set")
+        val repo = photoRepositories[type] ?: throw IllegalStateException("No repository configured for $type")
+        // Cast to BaseCloudPhotoRepository to access the unified multi-account folder methods
+        return repo as? BaseCloudPhotoRepository 
+            ?: throw IllegalStateException("Repository for $type must implement BaseCloudPhotoRepository")
+    }
+
     /**
-     * Load folders from Google Drive for the configured account.
+     * Load folders from the cloud source for the configured account.
      */
     fun loadFolders(parentFolderId: String? = null, forceRefresh: Boolean = false, addToBackStack: Boolean = true, mediaFilter: String? = currentMediaFilter) {
         currentMediaFilter = mediaFilter
         val id = accountId ?: run {
-            _error.value = FolderError.UnknownError("No account configured for Google Drive folder browsing")
+            _error.value = FolderError.UnknownError("No account configured for folder browsing")
             return
         }
 
@@ -81,11 +91,13 @@ class GoogleDriveViewModel @Inject constructor(
                     _navigationBackStack.add(_currentFolderId.value)
                 }
                 _currentFolderId.value = parentFolderId
-                val folderList = photoRepository.listFoldersForAccount(parentFolderId, forceRefresh, id)
+                
+                val repo = getRepository()
+                val folderList = repo.listFoldersForAccount(parentFolderId, forceRefresh, id)
 
                 // Get media counts for each folder, filtered by the content filter
                 val foldersWithCounts = folderList.map { folder ->
-                    val count = photoRepository.getFilteredFolderMediaCountForAccount(folder.id, mediaFilter, id)
+                    val count = repo.getFilteredFolderMediaCountForAccount(folder.id, mediaFilter, id)
                     folder.copy(photoCount = count)
                 }
 
@@ -131,11 +143,11 @@ class GoogleDriveViewModel @Inject constructor(
     }
 
     /**
-     * Search folders by name for the configured account.
+     * Search folders by name for the configured source/account.
      */
     fun searchFolders(query: String) {
         val id = accountId ?: run {
-            _error.value = FolderError.UnknownError("No account configured for Google Drive folder browsing")
+            _error.value = FolderError.UnknownError("No account configured for folder browsing")
             return
         }
 
@@ -148,7 +160,7 @@ class GoogleDriveViewModel @Inject constructor(
 
             _isLoading.value = true
             try {
-                _folders.value = photoRepository.searchFoldersForAccount(query, id)
+                _folders.value = getRepository().searchFoldersForAccount(query, id)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -183,6 +195,6 @@ class GoogleDriveViewModel @Inject constructor(
      */
     suspend fun getSubfolderIds(folderId: String): List<String> = withContext(Dispatchers.IO) {
         val id = accountId ?: return@withContext emptyList()
-        photoRepository.getSubfolderIdsForAccount(folderId, id)
+        getRepository().getSubfolderIdsForAccount(folderId, id)
     }
 }

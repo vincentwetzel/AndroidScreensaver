@@ -20,6 +20,10 @@ import com.vincentwetzel.androidscreensaver.ui.slideshow.NoSourcesView
 import com.vincentwetzel.androidscreensaver.ui.slideshow.SlideshowView
 import com.vincentwetzel.androidscreensaver.utils.SettingsManager
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -35,6 +39,7 @@ class PhotoScreensaverService : DreamService() {
     private var gestureDetector: GestureDetector? = null
     private var timeoutHandler: Handler? = null
     private var timeoutRunnable: Runnable? = null
+    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     
     private val stopReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -79,28 +84,30 @@ class PhotoScreensaverService : DreamService() {
         isInteractive = false
         isScreenBright = false
 
-        // Check if any sources are configured
-        val hasSources = SettingsManager.hasAnySourceConfigured(this)
-        
-        if (!hasSources) {
-            // Show "no sources configured" message
-            setContentView(NoSourcesView(this).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-            })
-            android.util.Log.d("PhotoScreensaver", "No sources configured - showing setup message")
-        } else {
-            // Create and show the slideshow
-            startSlideshow()
+        serviceScope.launch {
+            // Check if any sources are configured
+            val hasSources = SettingsManager.hasAnySourceConfigured(this@PhotoScreensaverService)
+            
+            if (!hasSources) {
+                // Show "no sources configured" message
+                setContentView(NoSourcesView(this@PhotoScreensaverService).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                })
+                android.util.Log.d("PhotoScreensaver", "No sources configured - showing setup message")
+            } else {
+                // Create and show the slideshow
+                startSlideshow()
+            }
         }
     }
     
     /**
      * Start the photo slideshow
      */
-    private fun startSlideshow() {
+    private suspend fun startSlideshow() {
         // Reload config to ensure we have the latest settings
         slideshowManager.loadConfig()
 
@@ -248,6 +255,7 @@ class PhotoScreensaverService : DreamService() {
         } catch (e: Exception) {
             android.util.Log.w(TAG, "powerSaveReceiver not registered")
         }
+        serviceScope.cancel()
         
         // Clean up timeout handler
         timeoutHandler?.removeCallbacksAndMessages(null)

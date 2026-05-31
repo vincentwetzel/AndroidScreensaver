@@ -12,6 +12,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -58,13 +59,15 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 if (!cacheDir.exists()) cacheDir.mkdirs()
 
                 val ext = title?.substringAfterLast('.', "")?.takeIf { it.isNotEmpty() } ?: "jpg"
-                val cacheFile = File(cacheDir, "${accountId}_${photoId}.$ext")
+                val safeAccountId = accountId.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
+                val safePhotoId = photoId.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
+                val cacheFile = File(cacheDir, "${safeAccountId}_${safePhotoId}.$ext")
                 if (cacheFile.exists()) return@withContext "file://${cacheFile.absolutePath}"
 
                 val driveService = driveRepository.getDriveService(accountId)
                     ?: return@withContext null
 
-                val tempFile = File(cacheDir, "${accountId}_${photoId}.$ext.tmp.${java.util.UUID.randomUUID()}")
+                val tempFile = File(cacheDir, "${safeAccountId}_${safePhotoId}.$ext.tmp.${java.util.UUID.randomUUID()}")
                 try {
                     tempFile.outputStream().use { out ->
                         driveService.files().get(photoId).executeMediaAndDownloadTo(out)
@@ -110,7 +113,8 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 query.append(" and trashed=false")
 
                 if (parentFolderId != null) {
-                    query.append(" and '$parentFolderId' in parents")
+                    val safeParentId = parentFolderId.replace("'", "\\'")
+                    query.append(" and '$safeParentId' in parents")
                 } else {
                     query.append(" and 'root' in parents")
                 }
@@ -126,9 +130,10 @@ class GoogleDrivePhotoRepository @Inject constructor(
                         .execute()
 
                     files.files?.forEach { file ->
+                        val fileId = file.id ?: return@forEach
                         folders.add(
                             PhotoFolder(
-                                id = file.id ?: "",
+                                id = fileId,
                                 sourceType = SourceType.GOOGLE_DRIVE,
                                 accountId = accountId,
                                 name = file.name ?: "Unknown",
@@ -140,7 +145,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
                     nextPageToken = files.nextPageToken
                 } while (nextPageToken != null)
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("GoogleDrivePhotoRepo", "Failed to list folders for $accountId: ${e.message}")
                 throw Exception("Failed to list folders: ${e.message}")
             }
 
@@ -153,7 +158,8 @@ class GoogleDrivePhotoRepository @Inject constructor(
      */
     override suspend fun listPhotosForAccount(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: String?, accountId: String): List<Photo> = withContext(Dispatchers.IO) {
         val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
-        val cacheKey = "${accountId}_${folderId}_${normalizedFilter}_${excludedFolderIds.hashCode()}"
+        val exclusionsKey = if (excludedFolderIds.isEmpty()) "none" else excludedFolderIds.sorted().joinToString(",")
+        val cacheKey = "${accountId}_${folderId}_${normalizedFilter}_${exclusionsKey}"
         val cached = photoListCache[cacheKey]
         if (cached != null && !cached.isStale) {
             return@withContext cached.data
@@ -169,7 +175,15 @@ class GoogleDrivePhotoRepository @Inject constructor(
     /**
      * Recursively collects photos from a folder and all its subfolders for a specific account.
      */
-    private fun collectPhotosFromFolder(folderId: String, excludedFolderIds: Set<String>, photos: MutableList<Photo>, accountId: String, mediaTypeFilter: String?) {
+    private fun collectPhotosFromFolder(
+        folderId: String,
+        excludedFolderIds: Set<String>,
+        photos: MutableList<Photo>,
+        accountId: String,
+        mediaTypeFilter: String?,
+        visited: MutableSet<String> = mutableSetOf()
+    ) {
+        if (!visited.add(folderId)) return // Prevent infinite recursion from Drive shortcut loops
         val driveService = driveRepository.getDriveService(accountId)
             ?: throw IllegalStateException("Not authenticated with Google Drive for account $accountId")
 
@@ -179,7 +193,8 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 "videos" -> "($driveVideoQuery)"
                 else -> "($driveMediaMimeTypeQuery)"
             }
-            val query = "(($mediaQuery) or mimeType='application/vnd.google-apps.folder') and trashed=false and '$folderId' in parents"
+            val safeFolderId = folderId.replace("'", "\\'")
+            val query = "(($mediaQuery) or mimeType='application/vnd.google-apps.folder') and trashed=false and '$safeFolderId' in parents"
 
             var nextPageToken: String? = null
             val subfoldersToRecurse = mutableListOf<String>()
@@ -194,22 +209,28 @@ class GoogleDrivePhotoRepository @Inject constructor(
                     .execute()
 
                 files.files?.forEach { file ->
+                    val fileId = file.id ?: return@forEach
                     if (file.mimeType == "application/vnd.google-apps.folder") {
-                        if (file.id !in excludedFolderIds) {
-                            subfoldersToRecurse.add(file.id)
+                        if (fileId !in excludedFolderIds) {
+                            subfoldersToRecurse.add(fileId)
                         }
                     } else {
                         val isVideo = file.mimeType?.startsWith("video/") == true
-                        val originalExt = file.name?.substringAfterLast('.', "")?.takeIf { it.isNotEmpty() }
-                        val ext = originalExt ?: if (isVideo) "mp4" else "jpg"
-                        val finalTitle = if (originalExt != null) file.name else "${file.name}.$ext"
+                        val name = file.name ?: "Untitled"
+                        val originalExt = name.substringAfterLast('.', "")
+                        val ext = originalExt.takeIf { it.isNotEmpty() } ?: if (isVideo) "mp4" else "jpg"
+                        val finalTitle = if (originalExt.isNotEmpty()) name else "$name.$ext"
+                        
+                        val encodedAccountId = URLEncoder.encode(accountId, "UTF-8")
+                        val safeAccountId = accountId.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
+                        val safeFileId = fileId.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
                         val cacheDir = File(context.cacheDir, "drive_photos")
-                        val cacheFile = File(cacheDir, "${accountId}_${file.id}.$ext")
-                        val uri = if (cacheFile.exists()) "file://${cacheFile.absolutePath}" else "https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&accountId=$accountId"
+                        val cacheFile = File(cacheDir, "${safeAccountId}_${safeFileId}.$ext")
+                        val uri = if (cacheFile.exists()) "file://${cacheFile.absolutePath}" else "https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&accountId=$encodedAccountId"
                         val thumbnail = file.thumbnailLink
                         photos.add(
                             Photo(
-                                id = file.id ?: "",
+                                id = fileId,
                                 sourceType = SourceType.GOOGLE_DRIVE,
                                 accountId = accountId,
                                 uri = uri,
@@ -228,11 +249,11 @@ class GoogleDrivePhotoRepository @Inject constructor(
             } while (nextPageToken != null)
 
             for (subfolderId in subfoldersToRecurse) {
-                collectPhotosFromFolder(subfolderId, excludedFolderIds, photos, accountId, mediaTypeFilter)
+                collectPhotosFromFolder(subfolderId, excludedFolderIds, photos, accountId, mediaTypeFilter, visited)
             }
 
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("GoogleDrivePhotoRepo", "Failed to list photos for $accountId: ${e.message}")
             throw Exception("Failed to list photos: ${e.message}")
         }
     }
@@ -250,16 +271,20 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 .execute()
 
             val isVideo = file.mimeType?.startsWith("video/") == true
-            val originalExt = file.name?.substringAfterLast('.', "")?.takeIf { it.isNotEmpty() }
-            val ext = originalExt ?: if (isVideo) "mp4" else "jpg"
-            val finalTitle = if (originalExt != null) file.name else "${file.name}.$ext"
-
+            val name = file.name ?: "Untitled"
+            val originalExt = name.substringAfterLast('.', "")
+            val ext = originalExt.takeIf { it.isNotEmpty() } ?: if (isVideo) "mp4" else "jpg"
+            val finalTitle = if (originalExt.isNotEmpty()) name else "$name.$ext"
+            
+            val encodedAccountId = URLEncoder.encode(accountId, "UTF-8")
+            val safeAccountId = accountId.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
+            val safeFileId = file.id?.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_") ?: "unknown"
             val cacheDir = File(context.cacheDir, "drive_photos")
-            val cacheFile = File(cacheDir, "${accountId}_${file.id}.$ext")
+            val cacheFile = File(cacheDir, "${safeAccountId}_${safeFileId}.$ext")
             val uri = if (cacheFile.exists()) {
                 "file://${cacheFile.absolutePath}"
             } else {
-                "https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&accountId=$accountId"
+                "https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&accountId=$encodedAccountId"
             }
 
             Photo(
@@ -275,18 +300,20 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 fileSize = file.size?.toString()?.toLongOrNull()
             )
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("GoogleDrivePhotoRepo", "Failed to get photo metadata for $photoId: ${e.message}")
             null
         }
     }
 
     override suspend fun getPhotoUrlForAccount(photoId: String, accountId: String): String? {
-        return "https://www.googleapis.com/drive/v3/files/$photoId?alt=media&accountId=$accountId"
+        val encodedAccountId = URLEncoder.encode(accountId, "UTF-8")
+        return "https://www.googleapis.com/drive/v3/files/$photoId?alt=media&accountId=$encodedAccountId"
     }
 
     override suspend fun getThumbnailUrlForAccount(photoId: String, accountId: String): String? {
         // Google Drive v3 API does not have a /thumbnail endpoint.
         // We must return the thumbnailLink from the file's metadata.
+        return getPhotoMetadataForAccount(photoId, accountId)?.thumbnailUri
     }
 
     /**
@@ -312,9 +339,10 @@ class GoogleDrivePhotoRepository @Inject constructor(
                     .execute()
 
                 files.files?.forEach { file ->
+                    val fileId = file.id ?: return@forEach
                     folders.add(
                         PhotoFolder(
-                            id = file.id ?: "",
+                            id = fileId,
                             sourceType = SourceType.GOOGLE_DRIVE,
                             accountId = accountId,
                             name = file.name ?: "Unknown",
@@ -326,7 +354,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 nextPageToken = files.nextPageToken
             } while (nextPageToken != null)
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("GoogleDrivePhotoRepo", "Failed to search folders for $accountId: ${e.message}")
         }
 
         return@withContext folders
@@ -355,9 +383,11 @@ class GoogleDrivePhotoRepository @Inject constructor(
         result
     }
 
-    private fun collectSubfolderIds(parentId: String, driveService: Drive, result: MutableList<String>) {
+    private fun collectSubfolderIds(parentId: String, driveService: Drive, result: MutableList<String>, visited: MutableSet<String> = mutableSetOf()) {
+        if (!visited.add(parentId)) return // Prevent infinite recursion from Drive shortcut loops
         try {
-            val query = "mimeType='application/vnd.google-apps.folder' and trashed=false and '$parentId' in parents"
+            val safeParentId = parentId.replace("'", "\\'")
+            val query = "mimeType='application/vnd.google-apps.folder' and trashed=false and '$safeParentId' in parents"
             var nextPageToken: String? = null
             do {
                 val files = driveService.files().list()
@@ -369,7 +399,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 files.files?.forEach { file ->
                     file.id?.let {
                         result.add(it)
-                        collectSubfolderIds(it, driveService, result)
+                        collectSubfolderIds(it, driveService, result, visited)
                     }
                 }
                 nextPageToken = files.nextPageToken

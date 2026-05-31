@@ -88,165 +88,161 @@ object SettingsManager {
     /**
      * Get slideshow configuration from settings
      */
-    fun getSlideshowConfig(context: Context): SlideshowConfig {
-        return runBlocking {
-            val preferences = context.dataStore.data.first()
+    suspend fun getSlideshowConfig(context: Context): SlideshowConfig {
+        val preferences = context.dataStore.data.first()
 
-            val cacheEnabled = preferences[PreferencesKeys.ENABLE_CACHE] ?: true
+        val cacheEnabled = preferences[PreferencesKeys.ENABLE_CACHE] ?: true
 
-            SlideshowConfig(
-                // Display time
-                slideDurationSeconds = preferences[PreferencesKeys.SLIDE_DURATION] ?: 5,
+        return SlideshowConfig(
+            // Display time
+            slideDurationSeconds = preferences[PreferencesKeys.SLIDE_DURATION] ?: 5,
 
-                // Shuffle & order
-                shuffle = preferences[PreferencesKeys.SHUFFLE] ?: true,
-                photoOrder = enumValueOfOrNull<PhotoOrder>(
-                    preferences[PreferencesKeys.PHOTO_ORDER] ?: PhotoOrder.DATE_NEWEST_FIRST.name
-                ) ?: PhotoOrder.DATE_NEWEST_FIRST,
+            // Shuffle & order
+            shuffle = preferences[PreferencesKeys.SHUFFLE] ?: true,
+            photoOrder = enumValueOfOrNull<PhotoOrder>(
+                preferences[PreferencesKeys.PHOTO_ORDER] ?: PhotoOrder.DATE_NEWEST_FIRST.name
+            ) ?: PhotoOrder.DATE_NEWEST_FIRST,
 
-                // Content filter
-                mediaTypeFilter = enumValueOfOrNull<MediaTypeFilter>(
-                    preferences[PreferencesKeys.MEDIA_TYPE_FILTER] ?: MediaTypeFilter.IMAGES_ONLY.name
-                ) ?: MediaTypeFilter.IMAGES_ONLY,
-                matchDeviceOrientation = preferences[PreferencesKeys.MATCH_ORIENTATION] ?: false,
+            // Content filter
+            mediaTypeFilter = enumValueOfOrNull<MediaTypeFilter>(
+                preferences[PreferencesKeys.MEDIA_TYPE_FILTER] ?: MediaTypeFilter.IMAGES_ONLY.name
+            ) ?: MediaTypeFilter.IMAGES_ONLY,
+            matchDeviceOrientation = preferences[PreferencesKeys.MATCH_ORIENTATION] ?: false,
 
-                // Display effects
-                displayEffect = enumValueOfOrNull<DisplayEffect>(
-                    preferences[PreferencesKeys.DISPLAY_EFFECT] ?: DisplayEffect.CROP_TO_FIT.name
-                ) ?: DisplayEffect.CROP_TO_FIT,
-                panDirection = enumValueOfOrNull<PanDirection>(
-                    preferences[PreferencesKeys.PAN_DIRECTION] ?: PanDirection.RANDOM.name
-                ) ?: PanDirection.RANDOM,
+            // Display effects
+            displayEffect = enumValueOfOrNull<DisplayEffect>(
+                preferences[PreferencesKeys.DISPLAY_EFFECT] ?: DisplayEffect.CROP_TO_FIT.name
+            ) ?: DisplayEffect.CROP_TO_FIT,
+            panDirection = enumValueOfOrNull<PanDirection>(
+                preferences[PreferencesKeys.PAN_DIRECTION] ?: PanDirection.RANDOM.name
+            ) ?: PanDirection.RANDOM,
 
-                // Transition effects
-                transitionEffect = enumValueOfOrNull<TransitionEffect>(
-                    preferences[PreferencesKeys.TRANSITION_EFFECT] ?: TransitionEffect.FADE.name
-                ) ?: TransitionEffect.FADE,
-                transitionDurationMs = preferences[PreferencesKeys.TRANSITION_DURATION] ?: 1000,
-                transitionEasing = enumValueOfOrNull<TransitionEasing>(
-                    preferences[PreferencesKeys.TRANSITION_EASING] ?: TransitionEasing.EASE_IN_OUT.name
-                ) ?: TransitionEasing.EASE_IN_OUT,
-                transitionDirection = enumValueOfOrNull<TransitionDirection>(
-                    preferences[PreferencesKeys.TRANSITION_DIRECTION] ?: TransitionDirection.LEFT.name
-                ) ?: TransitionDirection.LEFT,
+            // Transition effects
+            transitionEffect = enumValueOfOrNull<TransitionEffect>(
+                preferences[PreferencesKeys.TRANSITION_EFFECT] ?: TransitionEffect.FADE.name
+            ) ?: TransitionEffect.FADE,
+            transitionDurationMs = preferences[PreferencesKeys.TRANSITION_DURATION] ?: 1000,
+            transitionEasing = enumValueOfOrNull<TransitionEasing>(
+                preferences[PreferencesKeys.TRANSITION_EASING] ?: TransitionEasing.EASE_IN_OUT.name
+            ) ?: TransitionEasing.EASE_IN_OUT,
+            transitionDirection = enumValueOfOrNull<TransitionDirection>(
+                preferences[PreferencesKeys.TRANSITION_DIRECTION] ?: TransitionDirection.LEFT.name
+            ) ?: TransitionDirection.LEFT,
 
-                // Appearance
-                backgroundColor = preferences[PreferencesKeys.BACKGROUND_COLOR] ?: 0xFF000000.toInt(),
-                screenOrientation = enumValueOfOrNull<ScreenOrientation>(
-                    preferences[PreferencesKeys.SCREEN_ORIENTATION] ?: ScreenOrientation.SYSTEM_DEFAULT.name
-                ) ?: ScreenOrientation.SYSTEM_DEFAULT,
-                keepScreenOn = preferences[PreferencesKeys.KEEP_SCREEN_ON] ?: false,
+            // Appearance
+            backgroundColor = preferences[PreferencesKeys.BACKGROUND_COLOR] ?: 0xFF000000.toInt(),
+            screenOrientation = enumValueOfOrNull<ScreenOrientation>(
+                preferences[PreferencesKeys.SCREEN_ORIENTATION] ?: ScreenOrientation.SYSTEM_DEFAULT.name
+            ) ?: ScreenOrientation.SYSTEM_DEFAULT,
+            keepScreenOn = preferences[PreferencesKeys.KEEP_SCREEN_ON] ?: false,
 
-                // Decorations
-                dateDecoration = if (preferences[PreferencesKeys.DECORATION_DATE] == true) DecorationConfig() else null,
-                clockDecoration = if (preferences[PreferencesKeys.DECORATION_CLOCK] == true) ClockDecorationConfig() else null,
-                weatherDecoration = if (preferences[PreferencesKeys.DECORATION_WEATHER] == true) WeatherDecorationConfig() else null,
+            // Decorations
+            dateDecoration = if (preferences[PreferencesKeys.DECORATION_DATE] == true) DecorationConfig() else null,
+            clockDecoration = if (preferences[PreferencesKeys.DECORATION_CLOCK] == true) ClockDecorationConfig() else null,
+            weatherDecoration = if (preferences[PreferencesKeys.DECORATION_WEATHER] == true) WeatherDecorationConfig() else null,
 
-                // Photo info
-                photoInfoConfig = PhotoInfoConfig(
-                    enabled = preferences[PreferencesKeys.PHOTO_INFO_ENABLED] ?: false,
-                    fadeOutAfterSeconds = preferences[PreferencesKeys.PHOTO_INFO_FADE] ?: 5,
-                ),
+            // Photo info
+            photoInfoConfig = PhotoInfoConfig(
+                enabled = preferences[PreferencesKeys.PHOTO_INFO_ENABLED] ?: false,
+                fadeOutAfterSeconds = preferences[PreferencesKeys.PHOTO_INFO_FADE] ?: 5,
+            ),
 
-                // Video playback
-                videoAudioMode = enumValueOfOrNull<VideoAudioMode>(
-                    preferences[PreferencesKeys.VIDEO_AUDIO_MODE] ?: VideoAudioMode.SYSTEM_VOLUME.name
-                ) ?: VideoAudioMode.SYSTEM_VOLUME,
-                videoCustomVolume = preferences[PreferencesKeys.VIDEO_CUSTOM_VOLUME] ?: 75,
-                videoMinDurationSeconds = preferences[PreferencesKeys.VIDEO_MIN_DURATION] ?: 0,
-                videoMaxDurationSeconds = preferences[PreferencesKeys.VIDEO_MAX_DURATION] ?: 120,
-                videoAutoPlay = preferences[PreferencesKeys.VIDEO_AUTO_PLAY] ?: true,
-                videoShowControls = preferences[PreferencesKeys.VIDEO_SHOW_CONTROLS] ?: false,
-                videoLoopShort = preferences[PreferencesKeys.VIDEO_LOOP_SHORT] ?: true,
-                videoDisplayMode = enumValueOfOrNull<VideoDisplayMode>(
-                    preferences[PreferencesKeys.VIDEO_DISPLAY_MODE] ?: VideoDisplayMode.PLAY_FULL.name
-                ) ?: VideoDisplayMode.PLAY_FULL,
-                videoFixedPlaySeconds = preferences[PreferencesKeys.VIDEO_FIXED_SECONDS] ?: 30,
-                videoStillTimestamp = enumValueOfOrNull<VideoStillTimestamp>(
-                    preferences[PreferencesKeys.VIDEO_STILL_TIMESTAMP] ?: VideoStillTimestamp.BEGINNING.name
-                ) ?: VideoStillTimestamp.BEGINNING,
+            // Video playback
+            videoAudioMode = enumValueOfOrNull<VideoAudioMode>(
+                preferences[PreferencesKeys.VIDEO_AUDIO_MODE] ?: VideoAudioMode.SYSTEM_VOLUME.name
+            ) ?: VideoAudioMode.SYSTEM_VOLUME,
+            videoCustomVolume = preferences[PreferencesKeys.VIDEO_CUSTOM_VOLUME] ?: 75,
+            videoMinDurationSeconds = preferences[PreferencesKeys.VIDEO_MIN_DURATION] ?: 0,
+            videoMaxDurationSeconds = preferences[PreferencesKeys.VIDEO_MAX_DURATION] ?: 120,
+            videoAutoPlay = preferences[PreferencesKeys.VIDEO_AUTO_PLAY] ?: true,
+            videoShowControls = preferences[PreferencesKeys.VIDEO_SHOW_CONTROLS] ?: false,
+            videoLoopShort = preferences[PreferencesKeys.VIDEO_LOOP_SHORT] ?: true,
+            videoDisplayMode = enumValueOfOrNull<VideoDisplayMode>(
+                preferences[PreferencesKeys.VIDEO_DISPLAY_MODE] ?: VideoDisplayMode.PLAY_FULL.name
+            ) ?: VideoDisplayMode.PLAY_FULL,
+            videoFixedPlaySeconds = preferences[PreferencesKeys.VIDEO_FIXED_SECONDS] ?: 30,
+            videoStillTimestamp = enumValueOfOrNull<VideoStillTimestamp>(
+                preferences[PreferencesKeys.VIDEO_STILL_TIMESTAMP] ?: VideoStillTimestamp.BEGINNING.name
+            ) ?: VideoStillTimestamp.BEGINNING,
 
-                // Cache
-                cacheConfig = CacheConfig(
-                    enabled = cacheEnabled,
-                    cacheSizeLimitMB = preferences[PreferencesKeys.CACHE_LIMIT] ?: 500,
-                    usePresetLimit = preferences[PreferencesKeys.CACHE_USE_PRESET] ?: true,
-                ),
+            // Cache
+            cacheConfig = CacheConfig(
+                enabled = cacheEnabled,
+                cacheSizeLimitMB = preferences[PreferencesKeys.CACHE_LIMIT] ?: 500,
+                usePresetLimit = preferences[PreferencesKeys.CACHE_USE_PRESET] ?: true,
+            ),
 
-                // Network
-                wifiOnly = preferences[PreferencesKeys.WIFI_ONLY] ?: true,
-                networkTimeoutSeconds = preferences[PreferencesKeys.NETWORK_TIMEOUT] ?: 30,
+            // Network
+            wifiOnly = preferences[PreferencesKeys.WIFI_ONLY] ?: true,
+            networkTimeoutSeconds = preferences[PreferencesKeys.NETWORK_TIMEOUT] ?: 30,
 
-                // Timer
-                timerConfig = TimerConfig(
-                    enabled = preferences[PreferencesKeys.TIMER_ENABLED] ?: false,
-                    timeoutMinutes = parseTimeoutMinutes(preferences[PreferencesKeys.TIMER_TIMEOUT_MINUTES] ?: "30"),
-                    customTimeoutValue = preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_MINUTES] ?: 30,
-                    customTimeoutUnit = enumValueOfOrNull<TimeoutUnit>(
-                        preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_UNIT] ?: TimeoutUnit.MINUTES.name
-                    ) ?: TimeoutUnit.MINUTES,
-                ),
-            )
-        }
+            // Timer
+            timerConfig = TimerConfig(
+                enabled = preferences[PreferencesKeys.TIMER_ENABLED] ?: false,
+                timeoutMinutes = parseTimeoutMinutes(preferences[PreferencesKeys.TIMER_TIMEOUT_MINUTES] ?: "MINUTES_30"),
+                customTimeoutValue = preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_MINUTES] ?: 30,
+                customTimeoutUnit = enumValueOfOrNull<TimeoutUnit>(
+                    preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_UNIT] ?: TimeoutUnit.MINUTES.name
+                ) ?: TimeoutUnit.MINUTES,
+            ),
+        )
     }
 
     /**
      * Save slideshow configuration
      */
-    fun saveSlideshowConfig(context: Context, config: SlideshowConfig) {
-        runBlocking {
-            context.dataStore.edit { preferences ->
-                preferences[PreferencesKeys.SLIDE_DURATION] = config.slideDurationSeconds
-                preferences[PreferencesKeys.SHUFFLE] = config.shuffle
-                preferences[PreferencesKeys.PHOTO_ORDER] = config.photoOrder.name
-                preferences[PreferencesKeys.MEDIA_TYPE_FILTER] = config.mediaTypeFilter.name
-                preferences[PreferencesKeys.MATCH_ORIENTATION] = config.matchDeviceOrientation
-                preferences[PreferencesKeys.DISPLAY_EFFECT] = config.displayEffect.name
-                preferences[PreferencesKeys.PAN_DIRECTION] = config.panDirection.name
-                preferences[PreferencesKeys.TRANSITION_EFFECT] = config.transitionEffect.name
-                preferences[PreferencesKeys.TRANSITION_DURATION] = config.transitionDurationMs
-                preferences[PreferencesKeys.TRANSITION_EASING] = config.transitionEasing.name
-                preferences[PreferencesKeys.TRANSITION_DIRECTION] = config.transitionDirection.name
-                preferences[PreferencesKeys.BACKGROUND_COLOR] = config.backgroundColor
-                preferences[PreferencesKeys.SCREEN_ORIENTATION] = config.screenOrientation.name
-                preferences[PreferencesKeys.KEEP_SCREEN_ON] = config.keepScreenOn
+    suspend fun saveSlideshowConfig(context: Context, config: SlideshowConfig) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.SLIDE_DURATION] = config.slideDurationSeconds
+            preferences[PreferencesKeys.SHUFFLE] = config.shuffle
+            preferences[PreferencesKeys.PHOTO_ORDER] = config.photoOrder.name
+            preferences[PreferencesKeys.MEDIA_TYPE_FILTER] = config.mediaTypeFilter.name
+            preferences[PreferencesKeys.MATCH_ORIENTATION] = config.matchDeviceOrientation
+            preferences[PreferencesKeys.DISPLAY_EFFECT] = config.displayEffect.name
+            preferences[PreferencesKeys.PAN_DIRECTION] = config.panDirection.name
+            preferences[PreferencesKeys.TRANSITION_EFFECT] = config.transitionEffect.name
+            preferences[PreferencesKeys.TRANSITION_DURATION] = config.transitionDurationMs
+            preferences[PreferencesKeys.TRANSITION_EASING] = config.transitionEasing.name
+            preferences[PreferencesKeys.TRANSITION_DIRECTION] = config.transitionDirection.name
+            preferences[PreferencesKeys.BACKGROUND_COLOR] = config.backgroundColor
+            preferences[PreferencesKeys.SCREEN_ORIENTATION] = config.screenOrientation.name
+            preferences[PreferencesKeys.KEEP_SCREEN_ON] = config.keepScreenOn
 
-                // Decorations
-                preferences[PreferencesKeys.DECORATION_DATE] = config.dateDecoration != null
-                preferences[PreferencesKeys.DECORATION_CLOCK] = config.clockDecoration != null
-                preferences[PreferencesKeys.DECORATION_WEATHER] = config.weatherDecoration != null
+            // Decorations
+            preferences[PreferencesKeys.DECORATION_DATE] = config.dateDecoration != null
+            preferences[PreferencesKeys.DECORATION_CLOCK] = config.clockDecoration != null
+            preferences[PreferencesKeys.DECORATION_WEATHER] = config.weatherDecoration != null
 
-                // Photo info
-                preferences[PreferencesKeys.PHOTO_INFO_ENABLED] = config.photoInfoConfig.enabled
-                preferences[PreferencesKeys.PHOTO_INFO_FADE] = config.photoInfoConfig.fadeOutAfterSeconds
+            // Photo info
+            preferences[PreferencesKeys.PHOTO_INFO_ENABLED] = config.photoInfoConfig.enabled
+            preferences[PreferencesKeys.PHOTO_INFO_FADE] = config.photoInfoConfig.fadeOutAfterSeconds
 
-                // Video playback
-                preferences[PreferencesKeys.VIDEO_AUDIO_MODE] = config.videoAudioMode.name
-                preferences[PreferencesKeys.VIDEO_CUSTOM_VOLUME] = config.videoCustomVolume
-                preferences[PreferencesKeys.VIDEO_MIN_DURATION] = config.videoMinDurationSeconds
-                preferences[PreferencesKeys.VIDEO_MAX_DURATION] = config.videoMaxDurationSeconds
-                preferences[PreferencesKeys.VIDEO_AUTO_PLAY] = config.videoAutoPlay
-                preferences[PreferencesKeys.VIDEO_SHOW_CONTROLS] = config.videoShowControls
-                preferences[PreferencesKeys.VIDEO_LOOP_SHORT] = config.videoLoopShort
-                preferences[PreferencesKeys.VIDEO_DISPLAY_MODE] = config.videoDisplayMode.name
-                preferences[PreferencesKeys.VIDEO_FIXED_SECONDS] = config.videoFixedPlaySeconds
-                preferences[PreferencesKeys.VIDEO_STILL_TIMESTAMP] = config.videoStillTimestamp.name
+            // Video playback
+            preferences[PreferencesKeys.VIDEO_AUDIO_MODE] = config.videoAudioMode.name
+            preferences[PreferencesKeys.VIDEO_CUSTOM_VOLUME] = config.videoCustomVolume
+            preferences[PreferencesKeys.VIDEO_MIN_DURATION] = config.videoMinDurationSeconds
+            preferences[PreferencesKeys.VIDEO_MAX_DURATION] = config.videoMaxDurationSeconds
+            preferences[PreferencesKeys.VIDEO_AUTO_PLAY] = config.videoAutoPlay
+            preferences[PreferencesKeys.VIDEO_SHOW_CONTROLS] = config.videoShowControls
+            preferences[PreferencesKeys.VIDEO_LOOP_SHORT] = config.videoLoopShort
+            preferences[PreferencesKeys.VIDEO_DISPLAY_MODE] = config.videoDisplayMode.name
+            preferences[PreferencesKeys.VIDEO_FIXED_SECONDS] = config.videoFixedPlaySeconds
+            preferences[PreferencesKeys.VIDEO_STILL_TIMESTAMP] = config.videoStillTimestamp.name
 
-                // Cache
-                preferences[PreferencesKeys.ENABLE_CACHE] = config.cacheConfig.enabled
-                preferences[PreferencesKeys.CACHE_LIMIT] = config.cacheConfig.cacheSizeLimitMB
-                preferences[PreferencesKeys.CACHE_USE_PRESET] = config.cacheConfig.usePresetLimit
+            // Cache
+            preferences[PreferencesKeys.ENABLE_CACHE] = config.cacheConfig.enabled
+            preferences[PreferencesKeys.CACHE_LIMIT] = config.cacheConfig.cacheSizeLimitMB
+            preferences[PreferencesKeys.CACHE_USE_PRESET] = config.cacheConfig.usePresetLimit
 
-                // Network
-                preferences[PreferencesKeys.WIFI_ONLY] = config.wifiOnly
-                preferences[PreferencesKeys.NETWORK_TIMEOUT] = config.networkTimeoutSeconds
+            // Network
+            preferences[PreferencesKeys.WIFI_ONLY] = config.wifiOnly
+            preferences[PreferencesKeys.NETWORK_TIMEOUT] = config.networkTimeoutSeconds
 
-                // Timer
-                preferences[PreferencesKeys.TIMER_ENABLED] = config.timerConfig.enabled
-                preferences[PreferencesKeys.TIMER_TIMEOUT_MINUTES] = config.timerConfig.timeoutMinutes.name
-                preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_MINUTES] = config.timerConfig.customTimeoutValue
-                preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_UNIT] = config.timerConfig.customTimeoutUnit.name
-            }
+            // Timer
+            preferences[PreferencesKeys.TIMER_ENABLED] = config.timerConfig.enabled
+            preferences[PreferencesKeys.TIMER_TIMEOUT_MINUTES] = config.timerConfig.timeoutMinutes.name
+            preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_MINUTES] = config.timerConfig.customTimeoutValue
+            preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_UNIT] = config.timerConfig.customTimeoutUnit.name
         }
     }
 
@@ -254,57 +250,51 @@ object SettingsManager {
      * Check if a source is enabled (checks if ANY account for the source is enabled).
      * For multi-account support, checks if at least one account is enabled.
      */
-    fun isSourceEnabled(context: Context, sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType): Boolean {
-        return runBlocking {
-            val preferences = context.dataStore.data.first()
-            val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
-            if (accountsJson.isEmpty()) return@runBlocking false
-
-            val accounts = parseAccountsJson(accountsJson)
-            val matchingAccounts = accounts.filter {
-                it.sourceType == sourceType.toModelSourceType()
-            }
-            return@runBlocking matchingAccounts.any { it.enabled && it.isAuthenticated }
+    suspend fun isSourceEnabled(context: Context, sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType): Boolean {
+        val preferences = context.dataStore.data.first()
+        val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+        if (accountsJson.isEmpty()) return false
+        
+        val accounts = parseAccountsJson(accountsJson)
+        val matchingAccounts = accounts.filter {
+            it.sourceType == sourceType.toModelSourceType()
         }
+        return matchingAccounts.any { it.enabled && it.isAuthenticated }
     }
 
     /**
      * Check if any sources are configured with selected folders.
      * Returns true if at least one account is enabled AND has folders selected.
      */
-    fun hasAnySourceConfigured(context: Context): Boolean {
-        return runBlocking {
-            val preferences = context.dataStore.data.first()
-            val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
-            if (accountsJson.isEmpty()) return@runBlocking false
+    suspend fun hasAnySourceConfigured(context: Context): Boolean {
+        val preferences = context.dataStore.data.first()
+        val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+        if (accountsJson.isEmpty()) return false
 
-            val accounts = parseAccountsJson(accountsJson)
-            val enabledAccounts = accounts.filter { it.enabled && it.isAuthenticated }
-            return@runBlocking enabledAccounts.any { it.selectedFolders.isNotEmpty() }
-        }
+        val accounts = parseAccountsJson(accountsJson)
+        val enabledAccounts = accounts.filter { it.enabled && it.isAuthenticated }
+        return enabledAccounts.any { it.selectedFolders.isNotEmpty() }
     }
 
     /**
      * Get selected folders for a source
      */
-    fun getSelectedFolders(
+    suspend fun getSelectedFolders(
         context: Context,
         sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType
     ): List<com.vincentwetzel.androidscreensaver.data.model.PhotoFolder> {
-        return runBlocking {
-            val accounts = getAccountsForSource(context, sourceType)
-            val enabledAccounts = accounts.filter { it.enabled && it.isAuthenticated }
-            enabledAccounts.flatMap { account ->
-                account.selectedFolders.map { sf ->
-                    com.vincentwetzel.androidscreensaver.data.model.PhotoFolder(
-                        id = sf.folderId,
-                        sourceType = account.sourceType,
-                        accountId = account.accountId,
-                        name = sf.folderName,
-                        parentFolderId = null,
-                        photoCount = 0
-                    )
-                }
+        val accounts = getAccountsForSource(context, sourceType)
+        val enabledAccounts = accounts.filter { it.enabled && it.isAuthenticated }
+        return enabledAccounts.flatMap { account ->
+            account.selectedFolders.map { sf ->
+                com.vincentwetzel.androidscreensaver.data.model.PhotoFolder(
+                    id = sf.folderId,
+                    sourceType = account.sourceType,
+                    accountId = account.accountId,
+                    name = sf.folderName,
+                    parentFolderId = null,
+                    photoCount = 0
+                )
             }
         }
     }
@@ -348,72 +338,64 @@ object SettingsManager {
     /**
      * Get all accounts for a specific source type
      */
-    fun getAccountsForSource(
+    suspend fun getAccountsForSource(
         context: Context,
         sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType
     ): List<AccountConfig> {
-        return runBlocking {
-            val preferences = context.dataStore.data.first()
-            val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
-            if (accountsJson.isEmpty()) return@runBlocking emptyList()
+        val preferences = context.dataStore.data.first()
+        val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+        if (accountsJson.isEmpty()) return emptyList()
 
-            val allAccounts = parseAccountsJson(accountsJson)
-            return@runBlocking allAccounts.filter { it.sourceType == sourceType.toModelSourceType() }
-        }
+        val allAccounts = parseAccountsJson(accountsJson)
+        return allAccounts.filter { it.sourceType == sourceType.toModelSourceType() }
     }
 
     /**
      * Add or update an account
      */
-    fun saveAccount(context: Context, account: AccountConfig) {
-        runBlocking {
-            context.dataStore.edit { prefs ->
-                val accountsJson = prefs[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
-                val allAccounts = parseAccountsJson(accountsJson).toMutableList()
-
-                // Remove existing account with same ID if present
-                allAccounts.removeAll { it.accountId == account.accountId }
-                allAccounts.add(account)
-
-                prefs[PreferencesKeys.SOURCE_ACCOUNTS] = serializeAccountsJson(allAccounts)
-            }
+    suspend fun saveAccount(context: Context, account: AccountConfig) {
+        context.dataStore.edit { prefs ->
+            val accountsJson = prefs[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+            val allAccounts = parseAccountsJson(accountsJson).toMutableList()
+            
+            // Remove existing account with same ID if present
+            allAccounts.removeAll { it.accountId == account.accountId }
+            allAccounts.add(account)
+            
+            prefs[PreferencesKeys.SOURCE_ACCOUNTS] = serializeAccountsJson(allAccounts)
         }
     }
 
     /**
      * Remove an account by ID
      */
-    fun removeAccount(
+    suspend fun removeAccount(
         context: Context,
         sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType,
         accountId: String
     ) {
-        runBlocking {
-            context.dataStore.edit { prefs ->
-                val accountsJson = prefs[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
-                val allAccounts = parseAccountsJson(accountsJson).toMutableList()
-
-                allAccounts.removeAll {
-                    it.accountId == accountId && it.sourceType == sourceType.toModelSourceType()
-                }
-
-                prefs[PreferencesKeys.SOURCE_ACCOUNTS] = serializeAccountsJson(allAccounts)
+        context.dataStore.edit { prefs ->
+            val accountsJson = prefs[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+            val allAccounts = parseAccountsJson(accountsJson).toMutableList()
+            
+            allAccounts.removeAll { 
+                it.accountId == accountId && it.sourceType == sourceType.toModelSourceType() 
             }
+            
+            prefs[PreferencesKeys.SOURCE_ACCOUNTS] = serializeAccountsJson(allAccounts)
         }
     }
 
     /**
      * Get a specific account by ID
      */
-    fun getAccount(
+    suspend fun getAccount(
         context: Context,
         sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType,
         accountId: String
     ): AccountConfig? {
-        return runBlocking {
-            val accounts = getAccountsForSource(context, sourceType)
-            accounts.find { it.accountId == accountId }
-        }
+        val accounts = getAccountsForSource(context, sourceType)
+        return accounts.find { it.accountId == accountId }
     }
 
     /**
@@ -421,22 +403,20 @@ object SettingsManager {
      * Performs an atomic transaction to avoid read-modify-write data loss on selected folders
      * if the user alters them in the UI while a long background prefetch is running.
      */
-    fun updateAccountPhotoCount(
+    suspend fun updateAccountPhotoCount(
         context: Context,
         sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType,
         accountId: String,
         photoCount: Int
     ) {
-        runBlocking {
-            context.dataStore.edit { prefs ->
-                val accountsJson = prefs[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
-                val allAccounts = parseAccountsJson(accountsJson).toMutableList()
-
-                val index = allAccounts.indexOfFirst { it.accountId == accountId && it.sourceType == sourceType.toModelSourceType() }
-                if (index != -1) {
-                    allAccounts[index] = allAccounts[index].copy(photoCount = photoCount)
-                    prefs[PreferencesKeys.SOURCE_ACCOUNTS] = serializeAccountsJson(allAccounts)
-                }
+        context.dataStore.edit { prefs ->
+            val accountsJson = prefs[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+            val allAccounts = parseAccountsJson(accountsJson).toMutableList()
+            
+            val index = allAccounts.indexOfFirst { it.accountId == accountId && it.sourceType == sourceType.toModelSourceType() }
+            if (index != -1) {
+                allAccounts[index] = allAccounts[index].copy(photoCount = photoCount)
+                prefs[PreferencesKeys.SOURCE_ACCOUNTS] = serializeAccountsJson(allAccounts)
             }
         }
     }
@@ -448,12 +428,12 @@ object SettingsManager {
      */
     private fun parseAccountsJson(json: String): List<AccountConfig> {
         if (json.isEmpty()) return emptyList()
-
-        return try {
-            json.split(";;").filter { it.isNotEmpty() }.mapNotNull { accountStr ->
+        
+        return json.split(";;").filter { it.isNotEmpty() }.mapNotNull { accountStr ->
+            try {
                 val parts = accountStr.split("|")
                 if (parts.size < 4) return@mapNotNull null
-
+                
                 val accountId = java.net.URLDecoder.decode(parts[0], "UTF-8")
                 val sourceType = try {
                     com.vincentwetzel.androidscreensaver.data.model.SourceType.valueOf(parts[1])
@@ -462,20 +442,30 @@ object SettingsManager {
                 }
                 val email = java.net.URLDecoder.decode(parts[2], "UTF-8")
                 val enabled = parts[3].toBoolean()
-
+                
                 val selectedFolderIds = if (parts.size > 4 && parts[4].isNotEmpty()) {
-                    parts[4].split(",").map { id ->
-                        val decodedId = java.net.URLDecoder.decode(id, "UTF-8")
-                        SelectedFolder(folderId = decodedId, folderName = decodedId, path = decodedId, isSelected = true)
+                    parts[4].split(",").mapNotNull { folderStr ->
+                        val folderParts = folderStr.split("^")
+                        if (folderParts.size == 3) {
+                            SelectedFolder(
+                                folderId = java.net.URLDecoder.decode(folderParts[0], "UTF-8"),
+                                folderName = java.net.URLDecoder.decode(folderParts[1], "UTF-8"),
+                                path = java.net.URLDecoder.decode(folderParts[2], "UTF-8"),
+                                isSelected = true
+                            )
+                        } else if (folderParts.isNotEmpty()) {
+                            val decodedId = java.net.URLDecoder.decode(folderParts[0], "UTF-8")
+                            SelectedFolder(folderId = decodedId, folderName = decodedId, path = decodedId, isSelected = true)
+                        } else null
                     }
                 } else emptyList()
-
+                
                 val deselectedIds = if (parts.size > 5 && parts[5].isNotEmpty()) {
                     parts[5].split(",").map { java.net.URLDecoder.decode(it, "UTF-8") }.toSet()
                 } else emptySet()
-
+                
                 // Local sources do not have auth flows; guarantee they are always authenticated
-                val isAuth = if (sourceType == com.vincentwetzel.androidscreensaver.data.model.SourceType.GALLERY ||
+                val isAuth = if (sourceType == com.vincentwetzel.androidscreensaver.data.model.SourceType.GALLERY || 
                                  sourceType == com.vincentwetzel.androidscreensaver.data.model.SourceType.LOCAL_NETWORK) {
                     true
                 } else if (parts.size > 6) parts[6].toBoolean() else false
@@ -483,7 +473,7 @@ object SettingsManager {
                 val authTime = if (parts.size > 7 && parts[7].isNotEmpty()) parts[7].toLongOrNull() else null
                 val syncTime = if (parts.size > 8 && parts[8].isNotEmpty()) parts[8].toLongOrNull() else null
                 val photoCount = if (parts.size > 9) parts[9].toIntOrNull() ?: 0 else 0
-
+                
                 AccountConfig(
                     accountId = accountId,
                     sourceType = sourceType,
@@ -496,10 +486,10 @@ object SettingsManager {
                     lastSyncTime = syncTime,
                     photoCount = photoCount
                 )
+            } catch (e: Exception) {
+                android.util.Log.e("SettingsManager", "Failed to parse individual account JSON", e)
+                null
             }
-        } catch (e: Exception) {
-            android.util.Log.e("SettingsManager", "Failed to parse accounts JSON", e)
-            emptyList()
         }
     }
 
@@ -508,11 +498,16 @@ object SettingsManager {
      */
     private fun serializeAccountsJson(accounts: List<AccountConfig>): String {
         return accounts.joinToString(";;") { account ->
-            val folderIds = account.selectedFolders.joinToString(",") { java.net.URLEncoder.encode(it.folderId, "UTF-8") }
+            val folderIds = account.selectedFolders.joinToString(",") { 
+                val eId = java.net.URLEncoder.encode(it.folderId, "UTF-8")
+                val eName = java.net.URLEncoder.encode(it.folderName, "UTF-8")
+                val ePath = java.net.URLEncoder.encode(it.path, "UTF-8")
+                "$eId^$eName^$ePath"
+            }
             val deselectedIds = account.deselectedFolders.joinToString(",") { java.net.URLEncoder.encode(it, "UTF-8") }
             val email = java.net.URLEncoder.encode(account.accountEmail, "UTF-8")
             val encodedAccountId = java.net.URLEncoder.encode(account.accountId, "UTF-8")
-
+            
             "$encodedAccountId|${account.sourceType.name}|$email|${account.enabled}|$folderIds|$deselectedIds|${account.isAuthenticated}|${account.lastAuthTime ?: ""}|${account.lastSyncTime ?: ""}|${account.photoCount}"
         }
     }

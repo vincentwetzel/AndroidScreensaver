@@ -7,6 +7,9 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.tabs.TabLayout
+import androidx.lifecycle.lifecycleScope
+import com.google.android.material.slider.Slider
+import kotlinx.coroutines.launch
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.ClockDecorationConfig
 import com.vincentwetzel.androidscreensaver.data.model.ClockFormat
@@ -46,21 +49,22 @@ class DecorationSettingsActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.setTitle("Customize Decorations")
 
-        loadCurrentSettings()
-        setupTabLayout()
-        // Defer tab setup to after initial layout pass so spinner setSelection() renders correctly
-        binding.root.post {
-            setupDateTab()
-            setupClockTab()
-            setupWeatherTab()
+        lifecycleScope.launch {
+            loadCurrentSettings()
+            setupTabLayout()
+            binding.root.post {
+                setupDateTab()
+                setupClockTab()
+                setupWeatherTab()
+            }
         }
     }
 
-    private fun loadCurrentSettings() {
+    private suspend fun loadCurrentSettings() {
         val config = SettingsManager.getSlideshowConfig(this)
-        dateConfig = config.dateDecoration ?: DecorationConfig()
-        clockConfig = config.clockDecoration ?: ClockDecorationConfig()
-        weatherConfig = config.weatherDecoration ?: WeatherDecorationConfig()
+        dateConfig = config.dateDecoration ?: DecorationConfig(enabled = false)
+        clockConfig = config.clockDecoration ?: ClockDecorationConfig(enabled = false)
+        weatherConfig = config.weatherDecoration ?: WeatherDecorationConfig(enabled = false)
     }
 
     private fun setupTabLayout() {
@@ -131,8 +135,13 @@ class DecorationSettingsActivity : AppCompatActivity() {
         updateFontSizeLabel(binding.contentDate.labelFontSize, dateConfig.fontSize)
         binding.contentDate.sliderFontSize.addOnChangeListener { _, value, _ ->
             updateFontSizeLabel(binding.contentDate.labelFontSize, value)
-            saveCurrentSettings()
         }
+        binding.contentDate.sliderFontSize.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                saveCurrentSettings()
+            }
+        })
 
         // Background — auto-save
         setupSpinner(binding.contentDate.spinnerBackground, arrayOf("None", "Semi-Transparent", "Solid"))
@@ -178,15 +187,17 @@ class DecorationSettingsActivity : AppCompatActivity() {
         binding.contentDate.sliderOpacity.value = dateConfig.opacity.toFloat()
         binding.contentDate.sliderPulseMinOpacity.value = dateConfig.pulseMinOpacity.toFloat()
         binding.contentDate.sliderPulseMaxOpacity.value = dateConfig.pulseMaxOpacity.toFloat()
-        binding.contentDate.sliderOpacity.addOnChangeListener { _, _, _ ->
-            saveCurrentSettings()
+        
+        val dateOpacityTouchListener = object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                saveCurrentSettings()
+            }
         }
-        binding.contentDate.sliderPulseMinOpacity.addOnChangeListener { _, _, _ ->
-            saveCurrentSettings()
-        }
-        binding.contentDate.sliderPulseMaxOpacity.addOnChangeListener { _, _, _ ->
-            saveCurrentSettings()
-        }
+        
+        binding.contentDate.sliderOpacity.addOnSliderTouchListener(dateOpacityTouchListener)
+        binding.contentDate.sliderPulseMinOpacity.addOnSliderTouchListener(dateOpacityTouchListener)
+        binding.contentDate.sliderPulseMaxOpacity.addOnSliderTouchListener(dateOpacityTouchListener)
     }
 
     private fun setupClockTab() {
@@ -227,8 +238,13 @@ class DecorationSettingsActivity : AppCompatActivity() {
         updateFontSizeLabel(binding.contentClock.labelFontSize, clockConfig.fontSize)
         binding.contentClock.sliderFontSize.addOnChangeListener { _, value, _ ->
             updateFontSizeLabel(binding.contentClock.labelFontSize, value)
-            saveCurrentSettings()
         }
+        binding.contentClock.sliderFontSize.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                saveCurrentSettings()
+            }
+        })
 
         // Background — auto-save
         setupSpinner(binding.contentClock.spinnerBackground, arrayOf("None", "Semi-Transparent", "Solid"))
@@ -274,15 +290,17 @@ class DecorationSettingsActivity : AppCompatActivity() {
         binding.contentClock.sliderOpacity.value = clockConfig.opacity.toFloat()
         binding.contentClock.sliderPulseMinOpacity.value = clockConfig.pulseMinOpacity.toFloat()
         binding.contentClock.sliderPulseMaxOpacity.value = clockConfig.pulseMaxOpacity.toFloat()
-        binding.contentClock.sliderOpacity.addOnChangeListener { _, _, _ ->
-            saveCurrentSettings()
+        
+        val clockOpacityTouchListener = object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                saveCurrentSettings()
+            }
         }
-        binding.contentClock.sliderPulseMinOpacity.addOnChangeListener { _, _, _ ->
-            saveCurrentSettings()
-        }
-        binding.contentClock.sliderPulseMaxOpacity.addOnChangeListener { _, _, _ ->
-            saveCurrentSettings()
-        }
+        
+        binding.contentClock.sliderOpacity.addOnSliderTouchListener(clockOpacityTouchListener)
+        binding.contentClock.sliderPulseMinOpacity.addOnSliderTouchListener(clockOpacityTouchListener)
+        binding.contentClock.sliderPulseMaxOpacity.addOnSliderTouchListener(clockOpacityTouchListener)
     }
 
     private fun setupWeatherTab() {
@@ -353,8 +371,13 @@ class DecorationSettingsActivity : AppCompatActivity() {
         updateFontSizeLabel(binding.contentWeather.labelFontSize, weatherConfig.fontSize)
         binding.contentWeather.sliderFontSize.addOnChangeListener { _, value, _ ->
             updateFontSizeLabel(binding.contentWeather.labelFontSize, value)
-            saveCurrentSettings()
         }
+        binding.contentWeather.sliderFontSize.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                saveCurrentSettings()
+            }
+        })
 
         // Animation — auto-save
         setupSpinner(binding.contentWeather.spinnerAnimation, arrayOf("Static", "Pulse Softly"))
@@ -386,15 +409,17 @@ class DecorationSettingsActivity : AppCompatActivity() {
         binding.contentWeather.sliderOpacity.value = weatherConfig.opacity.toFloat()
         binding.contentWeather.sliderPulseMinOpacity.value = weatherConfig.pulseMinOpacity.toFloat()
         binding.contentWeather.sliderPulseMaxOpacity.value = weatherConfig.pulseMaxOpacity.toFloat()
-        binding.contentWeather.sliderOpacity.addOnChangeListener { _, _, _ ->
-            saveCurrentSettings()
+        
+        val weatherOpacityTouchListener = object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                saveCurrentSettings()
+            }
         }
-        binding.contentWeather.sliderPulseMinOpacity.addOnChangeListener { _, _, _ ->
-            saveCurrentSettings()
-        }
-        binding.contentWeather.sliderPulseMaxOpacity.addOnChangeListener { _, _, _ ->
-            saveCurrentSettings()
-        }
+        
+        binding.contentWeather.sliderOpacity.addOnSliderTouchListener(weatherOpacityTouchListener)
+        binding.contentWeather.sliderPulseMinOpacity.addOnSliderTouchListener(weatherOpacityTouchListener)
+        binding.contentWeather.sliderPulseMaxOpacity.addOnSliderTouchListener(weatherOpacityTouchListener)
     }
 
     /**
@@ -414,129 +439,131 @@ class DecorationSettingsActivity : AppCompatActivity() {
      * Read current UI values and persist to DataStore
      */
     private fun saveCurrentSettings() {
-        // Save date config (always enabled since user opened this screen for it)
-        val newDateConfig = DecorationConfig(
-            enabled = true,
-            position = when (binding.contentDate.spinnerPosition.selectedItemPosition) {
-                    0 -> ClockPosition.TOP_LEFT
-                    1 -> ClockPosition.TOP_RIGHT
-                    2 -> ClockPosition.BOTTOM_LEFT
-                    3 -> ClockPosition.BOTTOM_RIGHT
-                    4 -> ClockPosition.CENTER
-                    else -> ClockPosition.BOTTOM_LEFT
-                },
-                dateFormat = when (binding.contentDate.spinnerDateFormat.selectedItemPosition) {
-                    0 -> DateFormat.FULL_DATE
-                    1 -> DateFormat.SHORT_DATE
-                    2 -> DateFormat.MONTH_DAY
-                    3 -> DateFormat.NUMERIC_DATE
-                    4 -> DateFormat.ABBREVIATE_MONTH
-                    else -> DateFormat.CUSTOM
-                },
-                fontSize = binding.contentDate.sliderFontSize.value,
-                background = when (binding.contentDate.spinnerBackground.selectedItemPosition) {
-                    0 -> DecorationBackground.NONE
-                    1 -> DecorationBackground.SEMI_TRANSPARENT
-                    2 -> DecorationBackground.SOLID
-                    else -> DecorationBackground.NONE
-                },
-                animation = if (binding.contentDate.spinnerAnimation.selectedItemPosition == 1) 
-                    DecorationAnimation.PULSE_SOFTLY else DecorationAnimation.STATIC,
-                pulseSpeed = when (binding.contentDate.spinnerPulseSpeed.selectedItemPosition) {
-                    0 -> PulseSpeed.SLOW
-                    1 -> PulseSpeed.MEDIUM
-                    2 -> PulseSpeed.FAST
-                    else -> PulseSpeed.MEDIUM
-                },
-                opacity = binding.contentDate.sliderOpacity.value.toInt(),
-                pulseMinOpacity = binding.contentDate.sliderPulseMinOpacity.value.toInt(),
-                pulseMaxOpacity = binding.contentDate.sliderPulseMaxOpacity.value.toInt()
-            )
+        lifecycleScope.launch {
+            // Save date config (preserve user's enabled state)
+            val newDateConfig = dateConfig.copy(
+                enabled = dateConfig.enabled,
+                position = when (binding.contentDate.spinnerPosition.selectedItemPosition) {
+                        0 -> ClockPosition.TOP_LEFT
+                        1 -> ClockPosition.TOP_RIGHT
+                        2 -> ClockPosition.BOTTOM_LEFT
+                        3 -> ClockPosition.BOTTOM_RIGHT
+                        4 -> ClockPosition.CENTER
+                        else -> ClockPosition.BOTTOM_LEFT
+                    },
+                    dateFormat = when (binding.contentDate.spinnerDateFormat.selectedItemPosition) {
+                        0 -> DateFormat.FULL_DATE
+                        1 -> DateFormat.SHORT_DATE
+                        2 -> DateFormat.MONTH_DAY
+                        3 -> DateFormat.NUMERIC_DATE
+                        4 -> DateFormat.ABBREVIATE_MONTH
+                        else -> DateFormat.CUSTOM
+                    },
+                    fontSize = binding.contentDate.sliderFontSize.value,
+                    background = when (binding.contentDate.spinnerBackground.selectedItemPosition) {
+                        0 -> DecorationBackground.NONE
+                        1 -> DecorationBackground.SEMI_TRANSPARENT
+                        2 -> DecorationBackground.SOLID
+                        else -> DecorationBackground.NONE
+                    },
+                    animation = if (binding.contentDate.spinnerAnimation.selectedItemPosition == 1) 
+                        DecorationAnimation.PULSE_SOFTLY else DecorationAnimation.STATIC,
+                    pulseSpeed = when (binding.contentDate.spinnerPulseSpeed.selectedItemPosition) {
+                        0 -> PulseSpeed.SLOW
+                        1 -> PulseSpeed.MEDIUM
+                        2 -> PulseSpeed.FAST
+                        else -> PulseSpeed.MEDIUM
+                    },
+                    opacity = binding.contentDate.sliderOpacity.value.toInt(),
+                    pulseMinOpacity = binding.contentDate.sliderPulseMinOpacity.value.toInt(),
+                    pulseMaxOpacity = binding.contentDate.sliderPulseMaxOpacity.value.toInt()
+                )
 
-        // Save clock config (always enabled)
-        val newClockConfig = ClockDecorationConfig(
-            enabled = true,
-            position = when (binding.contentClock.spinnerPosition.selectedItemPosition) {
-                    0 -> ClockPosition.TOP_LEFT
-                    1 -> ClockPosition.TOP_RIGHT
-                    2 -> ClockPosition.BOTTOM_LEFT
-                    3 -> ClockPosition.BOTTOM_RIGHT
-                    4 -> ClockPosition.CENTER
-                    else -> ClockPosition.BOTTOM_RIGHT
-                },
-                clockFormat = if (binding.contentClock.spinnerFormat.selectedItemPosition == 1) 
-                    ClockFormat.HOUR_24 else ClockFormat.HOUR_12,
-                showSeconds = binding.contentClock.switchShowSeconds.isChecked,
-                fontSize = binding.contentClock.sliderFontSize.value,
-                background = when (binding.contentClock.spinnerBackground.selectedItemPosition) {
-                    0 -> DecorationBackground.NONE
-                    1 -> DecorationBackground.SEMI_TRANSPARENT
-                    2 -> DecorationBackground.SOLID
-                    else -> DecorationBackground.NONE
-                },
-                animation = if (binding.contentClock.spinnerAnimation.selectedItemPosition == 1) 
-                    DecorationAnimation.PULSE_SOFTLY else DecorationAnimation.STATIC,
-                pulseSpeed = when (binding.contentClock.spinnerPulseSpeed.selectedItemPosition) {
-                    0 -> PulseSpeed.SLOW
-                    1 -> PulseSpeed.MEDIUM
-                    2 -> PulseSpeed.FAST
-                    else -> PulseSpeed.MEDIUM
-                },
-                opacity = binding.contentClock.sliderOpacity.value.toInt(),
-                pulseMinOpacity = binding.contentClock.sliderPulseMinOpacity.value.toInt(),
-                pulseMaxOpacity = binding.contentClock.sliderPulseMaxOpacity.value.toInt()
-            )
+            // Save clock config (preserve user's enabled state)
+            val newClockConfig = clockConfig.copy(
+                enabled = clockConfig.enabled,
+                position = when (binding.contentClock.spinnerPosition.selectedItemPosition) {
+                        0 -> ClockPosition.TOP_LEFT
+                        1 -> ClockPosition.TOP_RIGHT
+                        2 -> ClockPosition.BOTTOM_LEFT
+                        3 -> ClockPosition.BOTTOM_RIGHT
+                        4 -> ClockPosition.CENTER
+                        else -> ClockPosition.BOTTOM_RIGHT
+                    },
+                    clockFormat = if (binding.contentClock.spinnerFormat.selectedItemPosition == 1) 
+                        ClockFormat.HOUR_24 else ClockFormat.HOUR_12,
+                    showSeconds = binding.contentClock.switchShowSeconds.isChecked,
+                    fontSize = binding.contentClock.sliderFontSize.value,
+                    background = when (binding.contentClock.spinnerBackground.selectedItemPosition) {
+                        0 -> DecorationBackground.NONE
+                        1 -> DecorationBackground.SEMI_TRANSPARENT
+                        2 -> DecorationBackground.SOLID
+                        else -> DecorationBackground.NONE
+                    },
+                    animation = if (binding.contentClock.spinnerAnimation.selectedItemPosition == 1) 
+                        DecorationAnimation.PULSE_SOFTLY else DecorationAnimation.STATIC,
+                    pulseSpeed = when (binding.contentClock.spinnerPulseSpeed.selectedItemPosition) {
+                        0 -> PulseSpeed.SLOW
+                        1 -> PulseSpeed.MEDIUM
+                        2 -> PulseSpeed.FAST
+                        else -> PulseSpeed.MEDIUM
+                    },
+                    opacity = binding.contentClock.sliderOpacity.value.toInt(),
+                    pulseMinOpacity = binding.contentClock.sliderPulseMinOpacity.value.toInt(),
+                    pulseMaxOpacity = binding.contentClock.sliderPulseMaxOpacity.value.toInt()
+                )
 
-        // Save weather config (always enabled)
-        val newWeatherConfig = WeatherDecorationConfig(
-            enabled = true,
-                position = when (binding.contentWeather.spinnerPosition.selectedItemPosition) {
-                    0 -> ClockPosition.TOP_LEFT
-                    1 -> ClockPosition.TOP_RIGHT
-                    2 -> ClockPosition.BOTTOM_LEFT
-                    3 -> ClockPosition.BOTTOM_RIGHT
-                    4 -> ClockPosition.CENTER
-                    else -> ClockPosition.TOP_RIGHT
-                },
-                useDeviceLocation = binding.contentWeather.switchUseDeviceLocation.isChecked,
-                temperatureUnit = if (binding.contentWeather.spinnerTempUnit.selectedItemPosition == 1) 
-                    TemperatureUnit.CELSIUS else TemperatureUnit.FAHRENHEIT,
-                iconStyle = when (binding.contentWeather.spinnerIconStyle.selectedItemPosition) {
-                    0 -> WeatherIconStyle.MINIMAL
-                    1 -> WeatherIconStyle.DETAILED
-                    2 -> WeatherIconStyle.ANIMATED
-                    else -> WeatherIconStyle.MINIMAL
-                },
-                widgetBackground = when (binding.contentWeather.spinnerWidgetBackground.selectedItemPosition) {
-                    0 -> WeatherWidgetBackground.TRANSPARENT
-                    1 -> WeatherWidgetBackground.FROSTED_GLASS
-                    2 -> WeatherWidgetBackground.SOLID
-                    else -> WeatherWidgetBackground.TRANSPARENT
-                },
-                fontSize = binding.contentWeather.sliderFontSize.value,
-                animation = if (binding.contentWeather.spinnerAnimation.selectedItemPosition == 1) 
-                    DecorationAnimation.PULSE_SOFTLY else DecorationAnimation.STATIC,
-                pulseSpeed = when (binding.contentWeather.spinnerPulseSpeed.selectedItemPosition) {
-                    0 -> PulseSpeed.SLOW
-                    1 -> PulseSpeed.MEDIUM
-                    2 -> PulseSpeed.FAST
-                    else -> PulseSpeed.MEDIUM
-                },
-                opacity = binding.contentWeather.sliderOpacity.value.toInt(),
-                pulseMinOpacity = binding.contentWeather.sliderPulseMinOpacity.value.toInt(),
-                pulseMaxOpacity = binding.contentWeather.sliderPulseMaxOpacity.value.toInt()
-            )
+            // Save weather config (preserve user's enabled state)
+            val newWeatherConfig = weatherConfig.copy(
+                enabled = weatherConfig.enabled,
+                    position = when (binding.contentWeather.spinnerPosition.selectedItemPosition) {
+                        0 -> ClockPosition.TOP_LEFT
+                        1 -> ClockPosition.TOP_RIGHT
+                        2 -> ClockPosition.BOTTOM_LEFT
+                        3 -> ClockPosition.BOTTOM_RIGHT
+                        4 -> ClockPosition.CENTER
+                        else -> ClockPosition.TOP_RIGHT
+                    },
+                    useDeviceLocation = binding.contentWeather.switchUseDeviceLocation.isChecked,
+                    temperatureUnit = if (binding.contentWeather.spinnerTempUnit.selectedItemPosition == 1) 
+                        TemperatureUnit.CELSIUS else TemperatureUnit.FAHRENHEIT,
+                    iconStyle = when (binding.contentWeather.spinnerIconStyle.selectedItemPosition) {
+                        0 -> WeatherIconStyle.MINIMAL
+                        1 -> WeatherIconStyle.DETAILED
+                        2 -> WeatherIconStyle.ANIMATED
+                        else -> WeatherIconStyle.MINIMAL
+                    },
+                    widgetBackground = when (binding.contentWeather.spinnerWidgetBackground.selectedItemPosition) {
+                        0 -> WeatherWidgetBackground.TRANSPARENT
+                        1 -> WeatherWidgetBackground.FROSTED_GLASS
+                        2 -> WeatherWidgetBackground.SOLID
+                        else -> WeatherWidgetBackground.TRANSPARENT
+                    },
+                    fontSize = binding.contentWeather.sliderFontSize.value,
+                    animation = if (binding.contentWeather.spinnerAnimation.selectedItemPosition == 1) 
+                        DecorationAnimation.PULSE_SOFTLY else DecorationAnimation.STATIC,
+                    pulseSpeed = when (binding.contentWeather.spinnerPulseSpeed.selectedItemPosition) {
+                        0 -> PulseSpeed.SLOW
+                        1 -> PulseSpeed.MEDIUM
+                        2 -> PulseSpeed.FAST
+                        else -> PulseSpeed.MEDIUM
+                    },
+                    opacity = binding.contentWeather.sliderOpacity.value.toInt(),
+                    pulseMinOpacity = binding.contentWeather.sliderPulseMinOpacity.value.toInt(),
+                    pulseMaxOpacity = binding.contentWeather.sliderPulseMaxOpacity.value.toInt()
+                )
 
-        // Save all to DataStore
-        val config = SettingsManager.getSlideshowConfig(this)
-        SettingsManager.saveSlideshowConfig(
-            this,
-            config.copy(
-                dateDecoration = newDateConfig,
-                clockDecoration = newClockConfig,
-                weatherDecoration = newWeatherConfig
+            // Save all to DataStore
+            val config = SettingsManager.getSlideshowConfig(this@DecorationSettingsActivity)
+            SettingsManager.saveSlideshowConfig(
+                this@DecorationSettingsActivity,
+                config.copy(
+                    dateDecoration = newDateConfig,
+                    clockDecoration = newClockConfig,
+                    weatherDecoration = newWeatherConfig
+                )
             )
-        )
+        }
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {

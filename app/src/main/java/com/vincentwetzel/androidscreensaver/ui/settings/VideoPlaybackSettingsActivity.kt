@@ -7,6 +7,8 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.google.android.material.slider.Slider
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.VideoAudioMode
@@ -38,8 +40,10 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
         supportActionBar?.setTitle("Video Playback Settings")
 
         setupSpinners()
-        loadCurrentSettings()
-        setupListeners()
+        lifecycleScope.launch {
+            loadCurrentSettings()
+            setupListeners()
+        }
     }
 
     private fun setupSpinners() {
@@ -62,7 +66,7 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
         binding.spinnerPlaybackSpeed.adapter = playbackSpeedAdapter
     }
 
-    private fun loadCurrentSettings() {
+    private suspend fun loadCurrentSettings() {
         val config = SettingsManager.getSlideshowConfig(this)
         Log.d(TAG, "=== LOADING settings from DataStore ===")
         Log.d(TAG, "  videoAudioMode=${config.videoAudioMode}")
@@ -177,62 +181,64 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
      * Read current UI values and persist to DataStore
      */
     private fun saveCurrentSettings() {
-        val videoAudioMode = when (binding.radioAudio.checkedRadioButtonId) {
-            R.id.radio_mute -> VideoAudioMode.MUTE
-            R.id.radio_system_volume -> VideoAudioMode.SYSTEM_VOLUME
-            R.id.radio_custom_volume -> VideoAudioMode.CUSTOM_VOLUME
-            else -> VideoAudioMode.SYSTEM_VOLUME
-        }
-        val videoCustomVolume = binding.sliderVolume.value.toInt()
-        val videoShowControls = binding.switchControls.isChecked
-        val videoMinDurationSeconds = when (binding.spinnerMinDuration.selectedItemPosition) {
-            0 -> 0
-            1 -> 5
-            2 -> 10
-            3 -> 15
-            4 -> 30
-            5 -> 60
-            else -> 0
-        }
-        val videoMaxDurationSeconds = when (binding.spinnerMaxDuration.selectedItemPosition) {
-            0 -> 10
-            1 -> 30
-            2 -> 60
-            3 -> 120
-            4 -> 300
-            else -> Int.MAX_VALUE
-        }
-        val videoPlaybackSpeed = when (binding.spinnerPlaybackSpeed.selectedItemPosition) {
-            0 -> VideoPlaybackSpeed.SLOW_0_5X
-            1 -> VideoPlaybackSpeed.NORMAL
-            2 -> VideoPlaybackSpeed.FAST_1_5X
-            3 -> VideoPlaybackSpeed.FAST_2X
-            else -> VideoPlaybackSpeed.NORMAL
-        }
+        lifecycleScope.launch {
+            val videoAudioMode = when (binding.radioAudio.checkedRadioButtonId) {
+                R.id.radio_mute -> VideoAudioMode.MUTE
+                R.id.radio_system_volume -> VideoAudioMode.SYSTEM_VOLUME
+                R.id.radio_custom_volume -> VideoAudioMode.CUSTOM_VOLUME
+                else -> VideoAudioMode.SYSTEM_VOLUME
+            }
+            val videoCustomVolume = binding.sliderVolume.value.toInt()
+            val videoShowControls = binding.switchControls.isChecked
+            val videoMinDurationSeconds = when (binding.spinnerMinDuration.selectedItemPosition) {
+                0 -> 0
+                1 -> 5
+                2 -> 10
+                3 -> 15
+                4 -> 30
+                5 -> 60
+                else -> 0
+            }
+            val videoMaxDurationSeconds = when (binding.spinnerMaxDuration.selectedItemPosition) {
+                0 -> 10
+                1 -> 30
+                2 -> 60
+                3 -> 120
+                4 -> 300
+                else -> Int.MAX_VALUE
+            }
+            val videoPlaybackSpeed = when (binding.spinnerPlaybackSpeed.selectedItemPosition) {
+                0 -> VideoPlaybackSpeed.SLOW_0_5X
+                1 -> VideoPlaybackSpeed.NORMAL
+                2 -> VideoPlaybackSpeed.FAST_1_5X
+                3 -> VideoPlaybackSpeed.FAST_2X
+                else -> VideoPlaybackSpeed.NORMAL
+            }
 
-        Log.d(TAG, "=== SAVING settings ===")
-        Log.d(TAG, "  videoAudioMode=$videoAudioMode")
-        Log.d(TAG, "  videoCustomVolume=$videoCustomVolume")
-        Log.d(TAG, "  videoPlaybackSpeed=$videoPlaybackSpeed")
+            Log.d(TAG, "=== SAVING settings ===")
+            Log.d(TAG, "  videoAudioMode=$videoAudioMode")
+            Log.d(TAG, "  videoCustomVolume=$videoCustomVolume")
+            Log.d(TAG, "  videoPlaybackSpeed=$videoPlaybackSpeed")
 
-        val config = SettingsManager.getSlideshowConfig(this).copy(
-            videoAudioMode = videoAudioMode,
-            videoCustomVolume = videoCustomVolume,
-            videoAutoPlay = true, // Always autoplay
-            videoLoopShort = true, // Always loop short videos
-            videoShowControls = videoShowControls,
-            videoMinDurationSeconds = videoMinDurationSeconds,
-            videoMaxDurationSeconds = videoMaxDurationSeconds,
-            videoDisplayMode = VideoDisplayMode.PLAY_FULL, // Always play full
-            videoStillTimestamp = VideoStillTimestamp.BEGINNING,
-            videoPlaybackSpeed = videoPlaybackSpeed
-        )
+            val config = SettingsManager.getSlideshowConfig(this@VideoPlaybackSettingsActivity).copy(
+                videoAudioMode = videoAudioMode,
+                videoCustomVolume = videoCustomVolume,
+                videoAutoPlay = true, // Always autoplay
+                videoLoopShort = true, // Always loop short videos
+                videoShowControls = videoShowControls,
+                videoMinDurationSeconds = videoMinDurationSeconds,
+                videoMaxDurationSeconds = videoMaxDurationSeconds,
+                videoDisplayMode = VideoDisplayMode.PLAY_FULL, // Always play full
+                videoStillTimestamp = VideoStillTimestamp.BEGINNING,
+                videoPlaybackSpeed = videoPlaybackSpeed
+            )
 
-        SettingsManager.saveSlideshowConfig(this, config)
-        
-        // Verify save by reading back
-        val verifyConfig = SettingsManager.getSlideshowConfig(this)
-        Log.d(TAG, "  VERIFIED: videoAudioMode=${verifyConfig.videoAudioMode}, videoCustomVolume=${verifyConfig.videoCustomVolume}, videoPlaybackSpeed=${verifyConfig.videoPlaybackSpeed}")
+            SettingsManager.saveSlideshowConfig(this@VideoPlaybackSettingsActivity, config)
+            
+            // Verify save by reading back
+            val verifyConfig = SettingsManager.getSlideshowConfig(this@VideoPlaybackSettingsActivity)
+            Log.d(TAG, "  VERIFIED: videoAudioMode=${verifyConfig.videoAudioMode}, videoCustomVolume=${verifyConfig.videoCustomVolume}, videoPlaybackSpeed=${verifyConfig.videoPlaybackSpeed}")
+        }
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {

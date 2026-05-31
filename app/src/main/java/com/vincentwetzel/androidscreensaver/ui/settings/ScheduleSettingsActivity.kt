@@ -6,6 +6,8 @@ import android.os.Bundle
 import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.tabs.TabLayout
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.DayOfWeek
 import com.vincentwetzel.androidscreensaver.data.model.ScheduleConfig
@@ -28,6 +30,7 @@ class ScheduleSettingsActivity : AppCompatActivity() {
     private var selectedHour = 20
     private var selectedMinute = 0
     private val selectedDays = mutableSetOf<DayOfWeek>()
+    private var isUpdatingUI = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,8 +41,10 @@ class ScheduleSettingsActivity : AppCompatActivity() {
         supportActionBar?.setTitle("Schedule Settings")
 
         setupTabs()
-        loadCurrentSettings()
-        setupListeners()
+        lifecycleScope.launch {
+            loadCurrentSettings()
+            setupListeners()
+        }
     }
 
     private fun setupTabs() {
@@ -47,7 +52,9 @@ class ScheduleSettingsActivity : AppCompatActivity() {
             override fun onTabSelected(tab: TabLayout.Tab?) {
                 isAutostart = tab?.position == 0
                 updateDescription()
-                loadCurrentSettings()
+                lifecycleScope.launch {
+                    loadCurrentSettings()
+                }
             }
             override fun onTabUnselected(tab: TabLayout.Tab?) {}
             override fun onTabReselected(tab: TabLayout.Tab?) {}
@@ -62,7 +69,8 @@ class ScheduleSettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadCurrentSettings() {
+    private suspend fun loadCurrentSettings() {
+        isUpdatingUI = true
         val config = SettingsManager.getSlideshowConfig(this)
         val schedules = if (isAutostart) config.autostartSchedules else config.autostopSchedules
 
@@ -75,10 +83,22 @@ class ScheduleSettingsActivity : AppCompatActivity() {
             selectedDays.addAll(first.daysOfWeek)
             binding.switchRepeat.isChecked = first.repeat
             binding.switchCharging.isChecked = first.onlyWhenCharging
+        } else {
+            binding.switchEnabled.isChecked = false
+            selectedHour = 20
+            selectedMinute = 0
+            selectedDays.clear()
+            selectedDays.addAll(listOf(
+                DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
+                DayOfWeek.THURSDAY, DayOfWeek.FRIDAY
+            ))
+            binding.switchRepeat.isChecked = true
+            binding.switchCharging.isChecked = false
         }
 
         updateTimeButton()
         updateDayCheckboxes()
+        isUpdatingUI = false
     }
 
     private fun setupListeners() {
@@ -134,6 +154,7 @@ class ScheduleSettingsActivity : AppCompatActivity() {
             binding.cbSun to DayOfWeek.SUNDAY
         ).forEach { (checkbox, day) ->
             checkbox.setOnCheckedChangeListener { _, isChecked ->
+                if (isUpdatingUI) return@setOnCheckedChangeListener
                 if (isChecked) {
                     selectedDays.add(day)
                 } else {
@@ -145,15 +166,15 @@ class ScheduleSettingsActivity : AppCompatActivity() {
 
         // Toggle switches — auto-save
         binding.switchEnabled.setOnCheckedChangeListener { _, _ ->
-            saveCurrentSettings()
+            if (!isUpdatingUI) saveCurrentSettings()
         }
 
         binding.switchRepeat.setOnCheckedChangeListener { _, _ ->
-            saveCurrentSettings()
+            if (!isUpdatingUI) saveCurrentSettings()
         }
 
         binding.switchCharging.setOnCheckedChangeListener { _, _ ->
-            saveCurrentSettings()
+            if (!isUpdatingUI) saveCurrentSettings()
         }
     }
 
@@ -161,36 +182,38 @@ class ScheduleSettingsActivity : AppCompatActivity() {
      * Read current UI values and persist to DataStore
      */
     private fun saveCurrentSettings() {
-        val config = SettingsManager.getSlideshowConfig(this)
+        lifecycleScope.launch {
+            val config = SettingsManager.getSlideshowConfig(this@ScheduleSettingsActivity)
 
-        val newSchedule = ScheduleConfig(
-            enabled = binding.switchEnabled.isChecked,
-            timeHour = selectedHour,
-            timeMinute = selectedMinute,
-            daysOfWeek = selectedDays,
-            schedulePreset = if (selectedDays.size == 5 && !selectedDays.contains(DayOfWeek.SATURDAY) && !selectedDays.contains(DayOfWeek.SUNDAY)) {
-                SchedulePreset.WEEKDAYS
-            } else if (selectedDays.size == 2 && selectedDays.contains(DayOfWeek.SATURDAY) && selectedDays.contains(DayOfWeek.SUNDAY)) {
-                SchedulePreset.WEEKENDS
-            } else if (selectedDays.size == 7) {
-                SchedulePreset.EVERY_DAY
+            val newSchedule = ScheduleConfig(
+                enabled = binding.switchEnabled.isChecked,
+                timeHour = selectedHour,
+                timeMinute = selectedMinute,
+                daysOfWeek = selectedDays.toSet(),
+                schedulePreset = if (selectedDays.size == 5 && !selectedDays.contains(DayOfWeek.SATURDAY) && !selectedDays.contains(DayOfWeek.SUNDAY)) {
+                    SchedulePreset.WEEKDAYS
+                } else if (selectedDays.size == 2 && selectedDays.contains(DayOfWeek.SATURDAY) && selectedDays.contains(DayOfWeek.SUNDAY)) {
+                    SchedulePreset.WEEKENDS
+                } else if (selectedDays.size == 7) {
+                    SchedulePreset.EVERY_DAY
+                } else {
+                    SchedulePreset.CUSTOM
+                },
+                repeat = binding.switchRepeat.isChecked,
+                onlyWhenCharging = binding.switchCharging.isChecked
+            )
+
+            val newConfig = if (isAutostart) {
+                config.copy(autostartSchedules = listOf(newSchedule))
             } else {
-                SchedulePreset.CUSTOM
-            },
-            repeat = binding.switchRepeat.isChecked,
-            onlyWhenCharging = binding.switchCharging.isChecked
-        )
+                config.copy(autostopSchedules = listOf(newSchedule))
+            }
 
-        val newConfig = if (isAutostart) {
-            config.copy(autostartSchedules = listOf(newSchedule))
-        } else {
-            config.copy(autostopSchedules = listOf(newSchedule))
+            SettingsManager.saveSlideshowConfig(this@ScheduleSettingsActivity, newConfig)
+            
+            val scheduleIntent = Intent(this@ScheduleSettingsActivity, ScheduleService::class.java)
+            startService(scheduleIntent)
         }
-
-        SettingsManager.saveSlideshowConfig(this, newConfig)
-        
-        val scheduleIntent = Intent(this, ScheduleService::class.java)
-        startService(scheduleIntent)
     }
 
     private fun updateTimeButton() {

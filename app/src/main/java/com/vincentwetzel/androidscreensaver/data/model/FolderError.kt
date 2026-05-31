@@ -17,13 +17,15 @@ sealed class FolderError {
      */
     companion object {
         fun fromException(e: Exception): FolderError {
-            val message = e.message?.lowercase() ?: ""
+            val message = e.message?.lowercase(java.util.Locale.ROOT) ?: ""
             return when {
                 // Network errors
                 message.contains("network") ||
                 message.contains("unable to resolve") ||
                 message.contains("connection") ||
                 message.contains("timeout") ||
+                message.contains("host") ||
+                message.contains("route") ||
                 message.contains("socket") -> NetworkError()
 
                 // Auth errors
@@ -53,17 +55,17 @@ sealed class FolderError {
                 else -> UnknownError(e.message ?: "An unexpected error occurred.")
             }
         }
+    }
 
-        /**
-         * Get the user-friendly message for this error
-         */
-        fun FolderError.userMessage(): String = when (this) {
-            is NetworkError -> message
-            is AuthError -> message
-            is PermissionError -> message
-            is ApiError -> message
-            is EmptyError -> message
-            is UnknownError -> message
-        }
+    /**
+     * Get the user-friendly message for this error
+     */
+    fun userMessage(): String = when (this) {
+        is NetworkError -> message
+        is AuthError -> message
+        is PermissionError -> message
+        is ApiError -> message
+        is EmptyError -> message
+        is UnknownError -> message
     }
 }

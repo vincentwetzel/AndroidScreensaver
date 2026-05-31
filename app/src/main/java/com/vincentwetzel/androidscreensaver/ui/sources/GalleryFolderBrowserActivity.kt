@@ -14,6 +14,8 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.vincentwetzel.androidscreensaver.R
@@ -37,6 +39,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
     private var accountId: String? = null
 
     companion object {
+        const val EXTRA_ACCOUNT_ID = "account_id"
         const val EXTRA_SELECTED_FOLDERS = "selected_folders"
         const val RESULT_SELECTED_FOLDERS = "selected_folders_result"
     }
@@ -44,11 +47,13 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val allGranted = permissions.values.all { it }
-        if (allGranted) {
+        val anyGranted = permissions.values.any { it }
+        if (anyGranted) {
             viewModel.clearNavigationBackStack()
-            val mediaFilter = getContentFilter()
-            viewModel.loadFolders(parentFolderId = null, forceRefresh = true, addToBackStack = false, mediaFilter = mediaFilter)
+            lifecycleScope.launch {
+                val mediaFilter = getContentFilter()
+                viewModel.loadFolders(parentFolderId = null, forceRefresh = true, addToBackStack = false, mediaFilter = mediaFilter)
+            }
         } else {
             Toast.makeText(this, "Photo permission is required to browse Gallery folders", Toast.LENGTH_LONG).show()
             binding.progressBar.visibility = View.GONE
@@ -60,7 +65,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         binding = ActivityFolderBrowserBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        accountId = intent.getStringExtra("account_id")
+        accountId = intent.getStringExtra(EXTRA_ACCOUNT_ID)
 
         setupToolbar()
         setupRecyclerView()
@@ -82,8 +87,10 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         // Check and request permissions before loading folders
         if (hasGalleryPermissions()) {
             viewModel.clearNavigationBackStack()
-            val mediaFilter = getContentFilter()
-            viewModel.loadFolders(parentFolderId = null, forceRefresh = false, addToBackStack = false, mediaFilter = mediaFilter)
+            lifecycleScope.launch {
+                val mediaFilter = getContentFilter()
+                viewModel.loadFolders(parentFolderId = null, forceRefresh = false, addToBackStack = false, mediaFilter = mediaFilter)
+            }
         } else {
             requestGalleryPermissions()
         }
@@ -92,7 +99,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
     /**
      * Get the current content filter setting and map it to a string for the repository.
      */
-    private fun getContentFilter(): String? {
+    private suspend fun getContentFilter(): String? {
         val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(this)
         return when (config.mediaTypeFilter) {
             com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "images"
@@ -103,7 +110,9 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
 
     private fun hasGalleryPermissions(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+            val hasImages = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+            val hasVideo = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
+            hasImages && hasVideo
         } else {
             ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
         }
@@ -132,28 +141,29 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        val mediaFilter = getContentFilter()
-        adapter = FolderAdapter(
-            onSelectionChanged = { selectedIds ->
-                saveSelections()
-                updateSummary(selectedIds.size, adapter.getPhotoCount())
-            },
-            onFolderClick = { folderId ->
-                viewModel.navigateToFolder(folderId)
-            },
-            onDeselectionChanged = { deselectedIds ->
-                saveSelections()
-            },
-            mediaFilter = mediaFilter
-        )
-        binding.recyclerFolders.layoutManager = LinearLayoutManager(this)
-        binding.recyclerFolders.adapter = adapter
+        lifecycleScope.launch {
+            val mediaFilter = getContentFilter()
+            adapter = FolderAdapter(
+                onSelectionStateChanged = { selectedIds, deselectedIds ->
+                    lifecycleScope.launch {
+                        saveSelections()
+                        updateSummary(selectedIds.size, adapter.getPhotoCount())
+                    }
+                },
+                onFolderClick = { folderId ->
+                    viewModel.navigateToFolder(folderId)
+                },
+                mediaFilter = mediaFilter
+            )
+            binding.recyclerFolders.layoutManager = LinearLayoutManager(this@GalleryFolderBrowserActivity)
+            binding.recyclerFolders.adapter = adapter
 
-        // Restore previously saved folder selections
-        restoreSelectedFolders()
+            // Restore previously saved folder selections
+            restoreSelectedFolders()
+        }
     }
 
-    private fun restoreSelectedFolders() {
+    private suspend fun restoreSelectedFolders() {
         val account = accountId?.let {
             com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(
                 this,
@@ -179,7 +189,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         }
     }
 
-    private fun saveSelections() {
+    private suspend fun saveSelections() {
         val dreamSourceType = com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
         accountId?.let { id ->
             val account = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(this, dreamSourceType, id)
@@ -190,8 +200,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                             folderId = folderId, folderName = folderId, path = folderId, isSelected = true
                         )
                     },
-                    deselectedFolders = adapter.getDeselectedFolders(),
-                    photoCount = adapter.getPhotoCount()
+                    deselectedFolders = adapter.getDeselectedFolders()
                 )
                 com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveAccount(this, updated)
             }
@@ -200,59 +209,63 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
 
     private fun observeViewModel() {
         lifecycleScope.launch {
-            viewModel.folders.collectLatest { folders ->
-                if (folders.isEmpty()) {
-                    binding.recyclerFolders.visibility = View.GONE
-                    binding.emptyState.visibility = View.VISIBLE
-                } else {
-                    binding.recyclerFolders.visibility = View.VISIBLE
-                    binding.emptyState.visibility = View.GONE
-                    adapter.submitList(folders)
-                    // Restore selected folders after list is submitted
-                    restoreSelectedFolders()
-                    // Set parent folder context for auto-checking subfolders
-                    adapter.setCurrentParentFolderId(viewModel.currentFolderId.value)
-                    // Update title to show current folder name
-                    val currentFolder = folders.find { it.id == viewModel.currentFolderId.value }
-                    supportActionBar?.title = currentFolder?.name ?: "Browse Folders"
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.folders.collectLatest { folders ->
+                        if (folders.isEmpty()) {
+                            binding.recyclerFolders.visibility = View.GONE
+                            binding.emptyState.visibility = View.VISIBLE
+                        } else {
+                            binding.recyclerFolders.visibility = View.VISIBLE
+                            binding.emptyState.visibility = View.GONE
+                            adapter.submitList(folders)
+                            // Restore selected folders after list is submitted
+                            launch { restoreSelectedFolders() }
+                            // Set parent folder context for auto-checking subfolders
+                            adapter.setCurrentParentFolderId(viewModel.currentFolderId.value)
+                            // Update title to show current folder name
+                            val currentFolder = folders.find { it.id == viewModel.currentFolderId.value }
+                            supportActionBar?.title = currentFolder?.name ?: "Browse Folders"
+                        }
+                        binding.progressBar.visibility = View.GONE
+                    }
                 }
-                binding.progressBar.visibility = View.GONE
-            }
-        }
 
-        lifecycleScope.launch {
-            viewModel.currentFolderId.collectLatest { folderId ->
-                supportActionBar?.title = if (folderId != null) {
-                    "📁 Subfolder"
-                } else {
-                    "Browse Folders"
+                launch {
+                    viewModel.currentFolderId.collectLatest { folderId ->
+                        supportActionBar?.title = if (folderId != null) {
+                            "📁 Subfolder"
+                        } else {
+                            "Browse Folders"
+                        }
+                        adapter.setCurrentParentFolderId(folderId)
+                    }
                 }
-                adapter.setCurrentParentFolderId(folderId)
-            }
-        }
 
-        lifecycleScope.launch {
-            viewModel.isLoading.collectLatest { isLoading ->
-                binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
-            }
-        }
+                launch {
+                    viewModel.isLoading.collectLatest { isLoading ->
+                        binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+                    }
+                }
 
-        lifecycleScope.launch {
-            viewModel.error.collectLatest { error ->
-                error?.let {
-                    binding.progressBar.visibility = View.GONE
-                    com.google.android.material.snackbar.Snackbar.make(
-                        binding.root,
-                        it.userMessage(),
-                        com.google.android.material.snackbar.Snackbar.LENGTH_LONG
-                    ).show()
-                    viewModel.clearError()
+                launch {
+                    viewModel.error.collectLatest { error ->
+                        error?.let {
+                            binding.progressBar.visibility = View.GONE
+                            com.google.android.material.snackbar.Snackbar.make(
+                                binding.root,
+                                it.userMessage(),
+                                com.google.android.material.snackbar.Snackbar.LENGTH_LONG
+                            ).show()
+                            viewModel.clearError()
+                        }
+                    }
                 }
             }
         }
     }
 
-    private fun updateSummary(folderCount: Int, itemCount: Int) {
+    private suspend fun updateSummary(folderCount: Int, itemCount: Int) {
         if (itemCount > 0) {
             val label = when (getContentFilter()) {
                 "images" -> "photos"
@@ -279,8 +292,10 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
 
             override fun onQueryTextChange(newText: String?): Boolean {
                 if (newText.isNullOrBlank()) {
-                    val mediaFilter = getContentFilter()
-                    viewModel.loadFolders(mediaFilter = mediaFilter)
+                    lifecycleScope.launch {
+                        val mediaFilter = getContentFilter()
+                        viewModel.loadFolders(parentFolderId = viewModel.currentFolderId.value, mediaFilter = mediaFilter)
+                    }
                 }
                 return true
             }

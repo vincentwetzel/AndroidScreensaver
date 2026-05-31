@@ -51,6 +51,7 @@ class GoogleDriveAuthActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE, android.view.WindowManager.LayoutParams.FLAG_SECURE)
         binding = ActivityGoogleDriveAuthBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -59,10 +60,12 @@ class GoogleDriveAuthActivity : AppCompatActivity() {
 
     private fun setupUI() {
         // Check if we're re-authenticating an existing account
-        val existingAccountId = intent.getStringExtra("account_id")
+        val existingAccountId = intent.getStringExtra(EXTRA_ACCOUNT_ID)
         if (existingAccountId != null) {
-            val account = SettingsManager.getAccount(this, DreamSourceType.GOOGLE_DRIVE, existingAccountId)
-            binding.btnSignIn.text = "Re-authenticate${account?.accountEmail?.let { " as $it" } ?: ""}"
+            lifecycleScope.launch {
+                val account = SettingsManager.getAccount(this@GoogleDriveAuthActivity, DreamSourceType.GOOGLE_DRIVE, existingAccountId)
+                binding.btnSignIn.text = "Re-authenticate${account?.accountEmail?.let { " as $it" } ?: ""}"
+            }
         }
 
         binding.btnSignIn.setOnClickListener {
@@ -71,7 +74,7 @@ class GoogleDriveAuthActivity : AppCompatActivity() {
     }
 
     private fun startGoogleSignIn() {
-        val existingAccountId = intent.getStringExtra("account_id")
+        val existingAccountId = intent.getStringExtra(EXTRA_ACCOUNT_ID)
 
         lifecycleScope.launch {
             // If we are adding a NEW account (not re-authenticating), we must sign out first
@@ -94,7 +97,7 @@ class GoogleDriveAuthActivity : AppCompatActivity() {
             val account: GoogleSignInAccount = task.getResult(ApiException::class.java)
             onAuthenticated(account)
         } catch (e: ApiException) {
-            android.util.Log.e("GoogleDriveAuth", "Google Sign-In failed: statusCode=${e.statusCode}", e)
+            android.util.Log.e("GoogleDriveAuth", "Google Sign-In failed: statusCode=${e.statusCode}, message=${e.statusMessage ?: "none"}")
             binding.progressBar.visibility = View.GONE
             binding.btnSignIn.isEnabled = true
 

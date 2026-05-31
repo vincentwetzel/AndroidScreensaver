@@ -17,9 +17,8 @@ import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
  * Adapter for displaying folder list with checkboxes
  */
 class FolderAdapter(
-    private val onSelectionChanged: (Set<String>) -> Unit,
+    private val onSelectionStateChanged: (selectedIds: Set<String>, deselectedIds: Set<String>) -> Unit,
     private val onFolderClick: (String) -> Unit,
-    private val onDeselectionChanged: ((Set<String>) -> Unit)? = null,
     private val mediaFilter: String? = null
 ) : RecyclerView.Adapter<FolderAdapter.FolderViewHolder>() {
 
@@ -52,16 +51,19 @@ class FolderAdapter(
     }
 
     fun selectAll() {
-        selectedFolderIds.clear()
-        selectedFolderIds.addAll(folders.map { it.id })
+        val visibleIds = folders.map { it.id }
+        selectedFolderIds.addAll(visibleIds)
+        deselectedFolderIds.removeAll(visibleIds.toSet())
         notifyDataSetChanged()
-        onSelectionChanged(selectedFolderIds)
+        onSelectionStateChanged(selectedFolderIds, deselectedFolderIds)
     }
 
     fun deselectAll() {
-        selectedFolderIds.clear()
+        val visibleIds = folders.map { it.id }
+        selectedFolderIds.removeAll(visibleIds.toSet())
+        deselectedFolderIds.addAll(visibleIds)
         notifyDataSetChanged()
-        onSelectionChanged(selectedFolderIds)
+        onSelectionStateChanged(selectedFolderIds, deselectedFolderIds)
     }
 
     fun getSelectedFolders(): Set<String> {
@@ -79,8 +81,10 @@ class FolderAdapter(
     }
 
     fun getPhotoCount(): Int {
-        return folders.filter { selectedFolderIds.contains(it.id) }
-            .sumOf { it.photoCount }
+        val isInheritedSelection = currentParentFolderId != null && selectedFolderIds.contains(currentParentFolderId)
+        return folders.filter { folder ->
+            selectedFolderIds.contains(folder.id) || (isInheritedSelection && !deselectedFolderIds.contains(folder.id))
+        }.sumOf { it.photoCount }
     }
 
     /**
@@ -138,7 +142,7 @@ class FolderAdapter(
                     transformations(RoundedCornersTransformation(8f))
                 }
             } else {
-                ivFolderIcon.setImageResource(R.drawable.ic_folder)
+                ivFolderIcon.load(R.drawable.ic_folder)
             }
 
             // Use click listener instead of OnCheckedChangeListener to avoid triggering during bind()
@@ -153,8 +157,7 @@ class FolderAdapter(
                     selectedFolderIds.remove(folder.id)
                     deselectedFolderIds.add(folder.id)
                 }
-                onSelectionChanged(selectedFolderIds)
-                onDeselectionChanged?.invoke(deselectedFolderIds)
+                onSelectionStateChanged(selectedFolderIds, deselectedFolderIds)
             }
 
             // Clicking anywhere on the row navigates into the folder

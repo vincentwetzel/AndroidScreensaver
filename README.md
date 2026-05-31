@@ -37,7 +37,7 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
 ## Quick Start
 
 1. Build and run in Android Studio or with `./gradlew installDebug`.
-2. Enable a source such as Gallery, Google Drive, or Dropbox.
+2. Enable a source such as Gallery, Google Drive, or Dropbox. Remote sources can be added more than once for different accounts.
 3. Tap the source card and select folders. Folder selections save immediately.
 4. Source cards reuse the saved selected-folder count while repositories refresh media counts in the background.
 5. Tap **Open Screensaver Settings**, select **Android Screensaver**, then return to the app.
@@ -72,7 +72,7 @@ app/src/main/java/com/vincentwetzel/androidscreensaver/
 |   |-- slideshow/      # SlideshowView and NoSourcesView
 |   `-- sources/        # Source auth and folder browser screens
 |-- utils/              # SettingsManager, OAuth config, account helpers
-`-- viewmodel/          # Main, Gallery, Google Drive, and source ViewModels
+`-- viewmodel/          # Main, Gallery, shared cloud folder, and source ViewModels
 ```
 
 ## Documentation

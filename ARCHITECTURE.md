@@ -6,7 +6,7 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 
 ### Presentation Layer (`ui/`)
 
-- **Activities** - Single-screen UIs such as `MainActivity`, settings screens, and folder browsers.
+- **Activities** - Single-screen UIs such as `MainActivity`, settings screens, auth screens, and folder browsers.
 - **Adapters** - RecyclerView adapters for source and folder lists.
 - **Views** - Observe ViewModels through `StateFlow`/`LiveData`.
 - **SlideshowView** - Custom `FrameLayout` that renders photos/videos, transitions, overlays, and playback behavior.
@@ -16,7 +16,7 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 ### ViewModel Layer (`viewmodel/`)
 
 - **MainViewModel** - Manages source-card enablement and authenticated account labels for Gallery, Google Drive, and Dropbox.
-- **GoogleDriveViewModel** - Google Drive account and folder browsing state.
+- **CloudFolderViewModel** - Shared cloud folder browsing state for Google Drive, Dropbox, and future cloud sources, routed by explicit source type and account ID.
 - **GalleryViewModel** - Gallery folder browsing state.
 - ViewModels expose UI state as flows and should not hold long-lived Android `Context` references.
 
@@ -46,10 +46,10 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 
 ```text
 User enables a source
--> SettingsManager saves source state
+-> SettingsManager saves account state
 
 User selects folders
--> SettingsManager saves selected folder IDs
+-> SettingsManager saves selected folder metadata, deselected folder IDs, and cached media counts
 
 Preview or DreamService starts
 -> SlideshowManager loads fresh config
@@ -75,6 +75,7 @@ Preview or DreamService starts
 | `BaseAccountManager` | Abstract class centralizing common multi-account maps and auth queries |
 | `GoogleAccountManager` | Per-account Google auth, credentials, and Drive services |
 | `DropboxAccountManager` | Per-account Dropbox access tokens, emails, and clients |
+| `CloudFolderViewModel` | Shared folder browsing, search, back stack, and recursive subfolder lookup for account-scoped cloud sources |
 | `SlideshowManager` | Combines sources and applies slideshow config |
 | `SlideshowView` | Displays photos/videos, transitions, overlays, and playback |
 | `NoSourcesView` | Shows setup guidance when no source is configured |
@@ -115,7 +116,7 @@ All settings are persisted through DataStore Preferences.
 | `source_dropbox_folders` | StringSet | `{}` | Selected Dropbox folder IDs |
 | `source_gallery_enabled` | Boolean | `false` | Gallery source enabled |
 | `source_gallery_folders` | StringSet | `{}` | Selected Gallery folder IDs |
-| `source_accounts` | String | `""` | Serialized per-source account configs, selected folders, deselected folders, auth state, and cached selected media counts |
+| `source_accounts` | String | `""` | Serialized per-source account configs, URL-encoded account IDs/emails, selected folder IDs/names/paths, deselected folders, auth state, and cached selected media counts |
 
 ### Slideshow Settings
 
@@ -162,5 +163,8 @@ Engineering standards live in `CODING_STANDARDS.md`. Keep this file focused on a
 
 - Slideshow config: `SettingsManager.getSlideshowConfig(context)` / `saveSlideshowConfig(context, config)`
 - Source state: `SettingsManager.isSourceEnabled(context, sourceType)` / `setSourceEnabled(...)`
+- Account state: `SettingsManager.getAccountsForSource(context, sourceType)`, `getAccount(...)`, `saveAccount(...)`, and `removeAccount(...)`
 - Selected folders: `SettingsManager.getSelectedFolders(context, sourceType)` / `setSelectedFolders(...)`
 - Any source configured: `SettingsManager.hasAnySourceConfigured(context)`
+
+Most `SettingsManager` reads and writes are suspend functions. Call them from `viewModelScope`, `lifecycleScope`, repository IO work, or another coroutine context rather than blocking the main thread.

@@ -63,7 +63,7 @@ class GoogleAccountManager @Inject constructor(
         if (account == null) return null
 
         val email = account.email ?: return null
-
+        
         restoreAccountFromEmail(email, account)
         return "gdrive:$email"
     }
@@ -76,10 +76,12 @@ class GoogleAccountManager @Inject constructor(
         // First restore the last signed-in account to keep the GoogleSignIn SDK happy
         val lastAccount = GoogleSignIn.getLastSignedInAccount(context)
         if (lastAccount != null && GoogleOAuthConfig.CLIENT_ID.isNotEmpty()) {
-            val email = lastAccount.email ?: return
-            restoreAccountFromEmail(email, lastAccount)
+            val email = lastAccount.email
+            if (email != null) {
+                restoreAccountFromEmail(email, lastAccount)
+            }
         }
-
+        
         // Restore all other known accounts from preferences
         val prefs = context.getSharedPreferences("google_drive_accounts", Context.MODE_PRIVATE)
         val knownEmails = prefs.all.keys
@@ -98,7 +100,7 @@ class GoogleAccountManager @Inject constructor(
             }
             return
         }
-
+        
         try {
             val androidAccount = android.accounts.Account(email, "com.google")
             val credential = GoogleAccountCredential.usingOAuth2(context, GoogleOAuthConfig.SCOPES)
@@ -109,16 +111,16 @@ class GoogleAccountManager @Inject constructor(
                 GsonFactory.getDefaultInstance(),
                 credential
             ).setApplicationName("Android Screensaver").build()
-
+            
             accountStates[accountId] = AccountState(googleSignInAccount, driveService, credential)
-
+            
             // Track this email in preferences
             context.getSharedPreferences("google_drive_accounts", Context.MODE_PRIVATE)
                 .edit().putBoolean(email, true).apply()
-
-            android.util.Log.d("GoogleAccountManager", "Restored Google Drive account: $accountId")
+                
+            android.util.Log.d("GoogleAccountManager", "Restored Google Drive account")
         } catch (e: Exception) {
-            android.util.Log.e("GoogleAccountManager", "Failed to restore account for $email", e)
+            android.util.Log.e("GoogleAccountManager", "Failed to restore Google Drive account", e)
         }
     }
 
@@ -177,7 +179,7 @@ class GoogleAccountManager @Inject constructor(
         val email = accountId.removePrefix("gdrive:")
         context.getSharedPreferences("google_drive_accounts", Context.MODE_PRIVATE)
             .edit().remove(email).apply()
-        android.util.Log.d("GoogleAccountManager", "Removed account: $accountId")
+        android.util.Log.d("GoogleAccountManager", "Removed account")
     }
 
     /**

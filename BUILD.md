@@ -148,6 +148,7 @@ Before building or releasing a new version:
 - [ ] App launches and main screen renders.
 - [ ] Gallery source folders load and photos display.
 - [ ] Google Drive sign-in works and folders load.
+- [ ] Dropbox sign-in works and folders load.
 - [ ] Folder browser navigation works in and out of subfolders.
 - [ ] Screensaver is selectable in system settings.
 - [ ] Activation card appears when inactive and hides when active.

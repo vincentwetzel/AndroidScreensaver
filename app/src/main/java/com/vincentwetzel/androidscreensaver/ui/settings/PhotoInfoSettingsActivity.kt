@@ -6,6 +6,9 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.google.android.material.slider.Slider
+import kotlinx.coroutines.launch
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoBackground
 import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoDateFormat
@@ -35,8 +38,10 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
         supportActionBar?.setTitle("Photo Information")
 
         setupSpinners()
-        loadCurrentSettings()
-        setupListeners()
+        lifecycleScope.launch {
+            loadCurrentSettings()
+            setupListeners()
+        }
     }
 
     private fun setupSpinners() {
@@ -53,7 +58,7 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
         binding.spinnerFadeAnimation.adapter = animDurationAdapter
 
         // Position
-        val positions = arrayOf("Bottom Left", "Bottom Right", "Top Left", "Top Right", "Bottom Center", "Top Center")
+        val positions = arrayOf("Bottom Left", "Bottom Right", "Top Left", "Top Right", "Center")
         val positionAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, positions)
         positionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         binding.spinnerPosition.adapter = positionAdapter
@@ -83,7 +88,7 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
         binding.spinnerShadowIntensity.adapter = shadowAdapter
     }
 
-    private fun loadCurrentSettings() {
+    private suspend fun loadCurrentSettings() {
         val config = SettingsManager.getSlideshowConfig(this).photoInfoConfig
         currentConfig = config
 
@@ -275,13 +280,15 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
         }
 
         // Opacity sliders — auto-save
-        binding.sliderBgOpacity.addOnChangeListener { _, _, _ ->
-            saveCurrentSettings()
+        val opacityTouchListener = object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                saveCurrentSettings()
+            }
         }
-
-        binding.sliderTextOpacity.addOnChangeListener { _, _, _ ->
-            saveCurrentSettings()
-        }
+        
+        binding.sliderBgOpacity.addOnSliderTouchListener(opacityTouchListener)
+        binding.sliderTextOpacity.addOnSliderTouchListener(opacityTouchListener)
 
         // Text shadow — auto-save
         binding.switchTextShadow.setOnCheckedChangeListener { _, _ ->
@@ -312,82 +319,84 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
      * Read current UI values and persist to DataStore
      */
     private fun saveCurrentSettings() {
-        val newConfig = currentConfig.copy(
-            enabled = binding.switchEnabled.isChecked,
-            showFileName = binding.switchFilename.isChecked,
-            showFileNameWithExtension = binding.switchFilenameExt.isChecked,
-            showFolderName = binding.switchFolder.isChecked,
-            showFolderFullPath = binding.switchFolderPath.isChecked,
-            showDateTaken = binding.switchDate.isChecked,
-            showSourceName = binding.switchSource.isChecked,
-            showDescription = binding.switchDescription.isChecked,
-            showDimensions = binding.switchDimensions.isChecked,
-            showFileSize = binding.switchFilesize.isChecked,
+        lifecycleScope.launch {
+            val newConfig = currentConfig.copy(
+                enabled = binding.switchEnabled.isChecked,
+                showFileName = binding.switchFilename.isChecked,
+                showFileNameWithExtension = binding.switchFilenameExt.isChecked,
+                showFolderName = binding.switchFolder.isChecked,
+                showFolderFullPath = binding.switchFolderPath.isChecked,
+                showDateTaken = binding.switchDate.isChecked,
+                showSourceName = binding.switchSource.isChecked,
+                showDescription = binding.switchDescription.isChecked,
+                showDimensions = binding.switchDimensions.isChecked,
+                showFileSize = binding.switchFilesize.isChecked,
 
-            fadeOutAfterSeconds = when (binding.spinnerFadeDuration.selectedItemPosition) {
-                0 -> 2
-                1 -> 3
-                2 -> 5
-                3 -> 8
-                4 -> 10
-                5 -> 15
-                else -> Int.MAX_VALUE // Never
-            },
-            fadeOutEnabled = binding.spinnerFadeDuration.selectedItemPosition < 6,
-            fadeAnimationDurationMs = when (binding.spinnerFadeAnimation.selectedItemPosition) {
-                0 -> 500
-                1 -> 1000
-                2 -> 1500
-                3 -> 2000
-                else -> 1000
-            },
+                fadeOutAfterSeconds = when (binding.spinnerFadeDuration.selectedItemPosition) {
+                    0 -> 2
+                    1 -> 3
+                    2 -> 5
+                    3 -> 8
+                    4 -> 10
+                    5 -> 15
+                    else -> Int.MAX_VALUE // Never
+                },
+                fadeOutEnabled = binding.spinnerFadeDuration.selectedItemPosition < 6,
+                fadeAnimationDurationMs = when (binding.spinnerFadeAnimation.selectedItemPosition) {
+                    0 -> 500
+                    1 -> 1000
+                    2 -> 1500
+                    3 -> 2000
+                    else -> 1000
+                },
 
-            position = when (binding.spinnerPosition.selectedItemPosition) {
-                0 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_LEFT
-                1 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_RIGHT
-                2 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_LEFT
-                3 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_RIGHT
-                4 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.CENTER
-                else -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_LEFT
-            },
-            layout = when (binding.spinnerLayout.selectedItemPosition) {
-                0 -> PhotoInfoLayout.HORIZONTAL
-                1 -> PhotoInfoLayout.VERTICAL
-                2 -> PhotoInfoLayout.COMPACT
-                else -> PhotoInfoLayout.HORIZONTAL
-            },
-            separator = when (binding.spinnerSeparator.selectedItemPosition) {
-                0 -> PhotoInfoSeparator.BULLET
-                1 -> PhotoInfoSeparator.PIPE
-                2 -> PhotoInfoSeparator.DASH
-                3 -> PhotoInfoSeparator.SLASH
-                4 -> PhotoInfoSeparator.COMMA
-                else -> PhotoInfoSeparator.BULLET
-            },
-            background = when (binding.spinnerBackground.selectedItemPosition) {
-                0 -> PhotoInfoBackground.NONE
-                1 -> PhotoInfoBackground.SEMI_TRANSPARENT
-                2 -> PhotoInfoBackground.SOLID
-                3 -> PhotoInfoBackground.GRADIENT_FADE
-                else -> PhotoInfoBackground.SEMI_TRANSPARENT
-            },
+                position = when (binding.spinnerPosition.selectedItemPosition) {
+                    0 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_LEFT
+                    1 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_RIGHT
+                    2 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_LEFT
+                    3 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_RIGHT
+                    4 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.CENTER
+                    else -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_LEFT
+                },
+                layout = when (binding.spinnerLayout.selectedItemPosition) {
+                    0 -> PhotoInfoLayout.HORIZONTAL
+                    1 -> PhotoInfoLayout.VERTICAL
+                    2 -> PhotoInfoLayout.COMPACT
+                    else -> PhotoInfoLayout.HORIZONTAL
+                },
+                separator = when (binding.spinnerSeparator.selectedItemPosition) {
+                    0 -> PhotoInfoSeparator.BULLET
+                    1 -> PhotoInfoSeparator.PIPE
+                    2 -> PhotoInfoSeparator.DASH
+                    3 -> PhotoInfoSeparator.SLASH
+                    4 -> PhotoInfoSeparator.COMMA
+                    else -> PhotoInfoSeparator.BULLET
+                },
+                background = when (binding.spinnerBackground.selectedItemPosition) {
+                    0 -> PhotoInfoBackground.NONE
+                    1 -> PhotoInfoBackground.SEMI_TRANSPARENT
+                    2 -> PhotoInfoBackground.SOLID
+                    3 -> PhotoInfoBackground.GRADIENT_FADE
+                    else -> PhotoInfoBackground.SEMI_TRANSPARENT
+                },
 
-            // Opacity sliders
-            backgroundOpacity = binding.sliderBgOpacity.value.toInt(),
-            textOpacity = binding.sliderTextOpacity.value.toInt(),
+                // Opacity sliders
+                backgroundOpacity = binding.sliderBgOpacity.value.toInt(),
+                textOpacity = binding.sliderTextOpacity.value.toInt(),
 
-            // Text shadow
-            textShadow = binding.switchTextShadow.isChecked,
-            shadowIntensity = when (binding.spinnerShadowIntensity.selectedItemPosition) {
-                0 -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.LIGHT
-                1 -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.MEDIUM
-                2 -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.HEAVY
-                else -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.MEDIUM
-            }
-        )
+                // Text shadow
+                textShadow = binding.switchTextShadow.isChecked,
+                shadowIntensity = when (binding.spinnerShadowIntensity.selectedItemPosition) {
+                    0 -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.LIGHT
+                    1 -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.MEDIUM
+                    2 -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.HEAVY
+                    else -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.MEDIUM
+                }
+            )
 
-        val config = SettingsManager.getSlideshowConfig(this)
-        SettingsManager.saveSlideshowConfig(this, config.copy(photoInfoConfig = newConfig))
+            val config = SettingsManager.getSlideshowConfig(this@PhotoInfoSettingsActivity)
+            SettingsManager.saveSlideshowConfig(this@PhotoInfoSettingsActivity, config.copy(photoInfoConfig = newConfig))
+        }
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
