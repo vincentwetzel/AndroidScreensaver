@@ -25,17 +25,15 @@ import kotlinx.coroutines.tasks.await
  */
 @Singleton
 class GoogleAccountManager @Inject constructor(
-    @ApplicationContext private val context: Context
-) {
+    @ApplicationContext context: Context
+) : BaseAccountManager<GoogleAccountManager.AccountState>(context) {
+
     /** Represents the per-account auth state */
     data class AccountState(
-        val account: GoogleSignInAccount,
+        val account: GoogleSignInAccount?,
         val driveService: Drive,
         val credential: GoogleAccountCredential
     )
-
-    // Map from accountId to account state
-    private val accountStates = mutableMapOf<String, AccountState>()
 
     // Google Sign-In client (shared across accounts)
     private val googleSignInClient: GoogleSignInClient by lazy {
@@ -65,46 +63,62 @@ class GoogleAccountManager @Inject constructor(
         if (account == null) return null
 
         val email = account.email ?: return null
-        val accountId = "gdrive:$email"
 
-        // If already authenticated for this account, update the existing state
-        val driveService = initializeDriveService(account)
-        if (driveService != null) {
-            val credential = accountStates[accountId]?.credential
-                ?: GoogleAccountCredential.usingOAuth2(
-                    context, listOf(DriveScopes.DRIVE_READONLY)
-                ).apply { selectedAccount = account.account }
-
-            accountStates[accountId] = AccountState(account, driveService, credential)
-            android.util.Log.d("GoogleAccountManager", "Authenticated account: $accountId")
-            return accountId
-        }
-
-        return null
+        restoreAccountFromEmail(email, account)
+        return "gdrive:$email"
     }
 
     /**
      * Check for existing sign-in on device and restore any known accounts from settings.
      * This is called at app startup to re-establish Drive services for saved accounts.
      */
-    fun checkExistingSignIn() {
+    override fun checkExistingSignIn() {
+        // First restore the last signed-in account to keep the GoogleSignIn SDK happy
         val lastAccount = GoogleSignIn.getLastSignedInAccount(context)
         if (lastAccount != null && GoogleOAuthConfig.CLIENT_ID.isNotEmpty()) {
             val email = lastAccount.email ?: return
-            val accountId = "gdrive:$email"
+            restoreAccountFromEmail(email, lastAccount)
+        }
 
-            // Don't re-add if already tracked
-            if (accountStates.containsKey(accountId)) return
+        // Restore all other known accounts from preferences
+        val prefs = context.getSharedPreferences("google_drive_accounts", Context.MODE_PRIVATE)
+        val knownEmails = prefs.all.keys
+        for (email in knownEmails) {
+            restoreAccountFromEmail(email, null)
+        }
+    }
 
-            val driveService = initializeDriveService(lastAccount)
-            if (driveService != null) {
-                val credential = GoogleAccountCredential.usingOAuth2(
-                    context, listOf(DriveScopes.DRIVE_READONLY)
-                ).apply { selectedAccount = lastAccount.account }
-
-                accountStates[accountId] = AccountState(lastAccount, driveService, credential)
-                android.util.Log.d("GoogleAccountManager", "Restored existing account: $accountId")
+    private fun restoreAccountFromEmail(email: String, googleSignInAccount: GoogleSignInAccount?) {
+        val accountId = "gdrive:$email"
+        if (accountStates.containsKey(accountId)) {
+            // Update with the real GoogleSignInAccount object if we just got one
+            if (googleSignInAccount != null && accountStates[accountId]?.account == null) {
+                val currentState = accountStates[accountId]!!
+                accountStates[accountId] = currentState.copy(account = googleSignInAccount)
             }
+            return
+        }
+
+        try {
+            val androidAccount = android.accounts.Account(email, "com.google")
+            val credential = GoogleAccountCredential.usingOAuth2(context, GoogleOAuthConfig.SCOPES)
+            credential.selectedAccount = androidAccount
+
+            val driveService = Drive.Builder(
+                NetHttpTransport(),
+                GsonFactory.getDefaultInstance(),
+                credential
+            ).setApplicationName("Android Screensaver").build()
+
+            accountStates[accountId] = AccountState(googleSignInAccount, driveService, credential)
+
+            // Track this email in preferences
+            context.getSharedPreferences("google_drive_accounts", Context.MODE_PRIVATE)
+                .edit().putBoolean(email, true).apply()
+
+            android.util.Log.d("GoogleAccountManager", "Restored Google Drive account: $accountId")
+        } catch (e: Exception) {
+            android.util.Log.e("GoogleAccountManager", "Failed to restore account for $email", e)
         }
     }
 
@@ -125,7 +139,7 @@ class GoogleAccountManager @Inject constructor(
     /**
      * Get the access token for a specific account (for use with OkHttp).
      */
-    fun getAccessToken(accountId: String): String? {
+    override fun getAccessToken(accountId: String): String? {
         return try {
             accountStates[accountId]?.credential?.getToken()
         } catch (e: Exception) {
@@ -142,24 +156,27 @@ class GoogleAccountManager @Inject constructor(
     }
 
     /**
-     * Check if a specific account is authenticated and has a valid Drive service.
+     * Get the email for a specific account.
      */
-    fun isAccountAuthenticated(accountId: String): Boolean {
-        return accountStates.containsKey(accountId) && accountStates[accountId]?.driveService != null
+    fun getAccountEmail(accountId: String): String? {
+        return accountId.removePrefix("gdrive:")
     }
 
     /**
-     * Get all currently authenticated account IDs.
+     * Check if a specific account is authenticated and has a valid Drive service.
      */
-    fun getAuthenticatedAccountIds(): Set<String> {
-        return accountStates.keys.toSet()
+    override fun isAccountAuthenticated(accountId: String): Boolean {
+        return super.isAccountAuthenticated(accountId) && accountStates[accountId]?.driveService != null
     }
 
     /**
      * Sign out and remove a specific account.
      */
-    fun signOutAccount(accountId: String) {
-        accountStates.remove(accountId)
+    override fun signOutAccount(accountId: String) {
+        super.signOutAccount(accountId)
+        val email = accountId.removePrefix("gdrive:")
+        context.getSharedPreferences("google_drive_accounts", Context.MODE_PRIVATE)
+            .edit().remove(email).apply()
         android.util.Log.d("GoogleAccountManager", "Removed account: $accountId")
     }
 
@@ -180,8 +197,9 @@ class GoogleAccountManager @Inject constructor(
     /**
      * Sign out all accounts and clear the Google Sign-In session.
      */
-    fun signOutAll() {
-        accountStates.clear()
+    override fun signOutAll() {
+        super.signOutAll()
+        context.getSharedPreferences("google_drive_accounts", Context.MODE_PRIVATE).edit().clear().apply()
         googleSignInClient.signOut()
         android.util.Log.d("GoogleAccountManager", "Signed out all accounts")
     }
@@ -189,32 +207,10 @@ class GoogleAccountManager @Inject constructor(
     /**
      * Revoke access and remove all accounts.
      */
-    fun revokeAll() {
-        accountStates.clear()
+    override suspend fun revokeAll() {
+        super.signOutAll()
+        context.getSharedPreferences("google_drive_accounts", Context.MODE_PRIVATE).edit().clear().apply()
         googleSignInClient.revokeAccess()
         android.util.Log.d("GoogleAccountManager", "Revoked all accounts")
-    }
-
-    /**
-     * Initialize a Drive service for the given account.
-     */
-    private fun initializeDriveService(account: GoogleSignInAccount): Drive? {
-        return try {
-            val credential = GoogleAccountCredential.usingOAuth2(
-                context, listOf(DriveScopes.DRIVE_READONLY)
-            )
-            credential.selectedAccount = account.account
-
-            Drive.Builder(
-                NetHttpTransport(),
-                GsonFactory.getDefaultInstance(),
-                credential
-            )
-                .setApplicationName("Android Screensaver")
-                .build()
-        } catch (e: Exception) {
-            android.util.Log.e("GoogleAccountManager", "Failed to initialize Drive service", e)
-            null
-        }
     }
 }

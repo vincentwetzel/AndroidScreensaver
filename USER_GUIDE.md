@@ -99,6 +99,8 @@ Authenticated source cards must show `Signed in as [account email]`.
 
 Shows folders from Dropbox. The app can cache thumbnails and downloaded media locally so selected Dropbox photos and videos load faster after first access.
 
+Authenticated source cards must show `Signed in as [account email]`.
+
 ## Troubleshooting
 
 | Issue | Solution |

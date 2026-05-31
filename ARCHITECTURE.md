@@ -15,7 +15,7 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 
 ### ViewModel Layer (`viewmodel/`)
 
-- **MainViewModel** - Manages source selection state.
+- **MainViewModel** - Manages source-card enablement and authenticated account labels for Gallery, Google Drive, and Dropbox.
 - **GoogleDriveViewModel** - Google Drive account and folder browsing state.
 - **GalleryViewModel** - Gallery folder browsing state.
 - ViewModels expose UI state as flows and should not hold long-lived Android `Context` references.
@@ -23,10 +23,13 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 ### Data Layer (`data/`)
 
 - **PhotoRepository** - Unified contract for all photo sources.
+- **AbstractPhotoRepository** - Base class holding standardized `ConcurrentHashMap` caches, TTL constraints, and `syncPhotos` lifecycle behavior.
+- **BaseCloudPhotoRepository** - Abstract base class for cloud sources (Google Drive, Dropbox) that centralizes thread-safe caching, background count prefetching, and per-account fallback routing.
 - **GalleryPhotoRepository** - MediaStore access for local photos and videos, with cached folder/media counts and content-type-aware media listing.
 - **GoogleDrivePhotoRepository** - Google Drive media access with account-scoped routing, recursive folder traversal, background count prefetching, thumbnail metadata, and local cache paths.
 - **DropboxPhotoRepository** - Dropbox media access with recursive listing, paginated folder search, background count prefetching, thumbnails, and local cache support.
 - **GoogleDriveRepository** - Delegates auth and Drive service creation to `GoogleAccountManager`.
+- **DropboxRepository** - Delegates Dropbox auth, account metadata, and API clients to `DropboxAccountManager`.
 - **SettingsManager** - DataStore-backed preferences for slideshow config, source state, selected folders, and account configs.
 
 ### Service Layer (`dream/`)
@@ -62,11 +65,16 @@ Preview or DreamService starts
 | Class | Responsibility |
 |-------|---------------|
 | `PhotoRepository` | Interface defining photo source operations |
+| `AbstractPhotoRepository` | Unifies TTL maps and cache clearing |
+| `BaseCloudPhotoRepository` | Unifies common cloud caching, routing, and prefetch logic |
 | `GalleryPhotoRepository` | MediaStore-based local photo/video access |
 | `GoogleDrivePhotoRepository` | Google Drive media access with account-scoped URLs and cache paths |
 | `DropboxPhotoRepository` | Dropbox media access with thumbnail and local cache support |
 | `GoogleDriveRepository` | Google Sign-In and Drive service client facade |
+| `DropboxRepository` | Dropbox account and client facade |
+| `BaseAccountManager` | Abstract class centralizing common multi-account maps and auth queries |
 | `GoogleAccountManager` | Per-account Google auth, credentials, and Drive services |
+| `DropboxAccountManager` | Per-account Dropbox access tokens, emails, and clients |
 | `SlideshowManager` | Combines sources and applies slideshow config |
 | `SlideshowView` | Displays photos/videos, transitions, overlays, and playback |
 | `NoSourcesView` | Shows setup guidance when no source is configured |
@@ -103,8 +111,11 @@ All settings are persisted through DataStore Preferences.
 |-----|------|---------|-------------|
 | `source_google_drive_enabled` | Boolean | `false` | Google Drive source enabled |
 | `source_google_drive_folders` | StringSet | `{}` | Selected Google Drive folder IDs |
+| `source_dropbox_enabled` | Boolean | `false` | Dropbox source enabled |
+| `source_dropbox_folders` | StringSet | `{}` | Selected Dropbox folder IDs |
 | `source_gallery_enabled` | Boolean | `false` | Gallery source enabled |
 | `source_gallery_folders` | StringSet | `{}` | Selected Gallery folder IDs |
+| `source_accounts` | String | `""` | Serialized per-source account configs, selected folders, deselected folders, auth state, and cached selected media counts |
 
 ### Slideshow Settings
 
@@ -142,6 +153,10 @@ All settings are persisted through DataStore Preferences.
 - `SlideshowView.showPhoto()` applies match-orientation behavior.
 - `SlideshowView.startAutoAdvance()` reloads config each cycle so setting changes can take effect mid-slideshow.
 - DreamService handles touch exit, receiver cleanup, timeout cleanup, and battery-saver pause behavior.
+
+## Coding Standards
+
+Engineering standards live in `CODING_STANDARDS.md`. Keep this file focused on architecture, data flow, key classes, settings behavior, and system design decisions.
 
 ## Accessing Settings
 

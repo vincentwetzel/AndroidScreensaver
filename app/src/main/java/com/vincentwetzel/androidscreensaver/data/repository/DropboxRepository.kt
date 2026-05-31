@@ -45,6 +45,13 @@ class DropboxRepository @Inject constructor(
     }
 
     /**
+     * Get the email for a specific account.
+     */
+    fun getAccountEmail(accountId: String): String? {
+        return accountManager.getAccountEmail(accountId)
+    }
+
+    /**
      * Get the Dropbox API service client for a specific account.
      */
     fun getDbxClientV2(accountId: String): DbxClientV2? {

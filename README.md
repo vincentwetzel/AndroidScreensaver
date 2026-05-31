@@ -53,6 +53,7 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
 - **Image Loading:** Coil
 - **Video:** Media3/ExoPlayer
 - **Build:** Android Gradle Plugin 9.2.1 with Gradle 9.4.1
+- **Compile SDK:** 36
 - **Min SDK:** 26 (Android 8.0)
 - **Target SDK:** 34 (Android 14)
 
@@ -80,6 +81,7 @@ app/src/main/java/com/vincentwetzel/androidscreensaver/
 |------|---------|
 | [BUILD.md](BUILD.md) | Build commands, OAuth setup notes, and troubleshooting |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Architecture, design patterns, key classes, and settings reference |
+| [CODING_STANDARDS.md](CODING_STANDARDS.md) | Kotlin/Android coding standards, review checklist, and verification expectations |
 | [CHANGELOG.md](CHANGELOG.md) | Release history and completed changes |
 | [TODO.md](TODO.md) | Active backlog and quality checklist |
 | [USER_GUIDE.md](USER_GUIDE.md) | User-facing setup and usage guide |

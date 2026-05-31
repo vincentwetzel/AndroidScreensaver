@@ -18,7 +18,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Gallery implementation of PhotoRepository
@@ -27,39 +26,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Singleton
 class GalleryPhotoRepository @Inject constructor(
     @ApplicationContext private val context: Context
-) : PhotoRepository {
-
-    // Background scope for prefetch operations that outlive individual callers
-    private val prefetchScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
-    companion object {
-        // Cache TTL: folders are considered stale after this many milliseconds
-        // 60 seconds - balances snappy UX with detecting changes
-        private const val FOLDER_CACHE_TTL_MS = 60_000L
-        private const val PHOTO_COUNT_CACHE_TTL_MS = 300_000L // 5 minutes for counts
-    }
-
-    // Cache entry with timestamp for TTL-based expiration
-    private data class CacheEntry<T>(val data: T, val timestampMs: Long = System.currentTimeMillis()) {
-        val isStale: Boolean
-            get() = System.currentTimeMillis() - timestampMs > FOLDER_CACHE_TTL_MS
-    }
-
-    // Cache for loaded folders (survives Activity recreation)
-    private val folderCache = ConcurrentHashMap<String, CacheEntry<List<PhotoFolder>>>()
-
-    // Cache for folder photo counts (survives Activity recreation)
-    private data class CountCacheEntry(val count: Int, val timestampMs: Long = System.currentTimeMillis()) {
-        val isStale: Boolean
-            get() = System.currentTimeMillis() - timestampMs > PHOTO_COUNT_CACHE_TTL_MS
-    }
-    private val photoCountCache = ConcurrentHashMap<String, CountCacheEntry>()
-
-    private data class PhotoListCacheEntry(val data: List<Photo>, val timestampMs: Long = System.currentTimeMillis()) {
-        val isStale: Boolean
-            get() = System.currentTimeMillis() - timestampMs > PHOTO_COUNT_CACHE_TTL_MS
-    }
-    private val photoListCache = ConcurrentHashMap<String, PhotoListCacheEntry>()
+) : AbstractPhotoRepository() {
 
     // Supported image file extensions
     private val imageMimeTypes = setOf(
@@ -89,25 +56,26 @@ class GalleryPhotoRepository @Inject constructor(
                 // Re-use existing listFolders logic which populates the cache
                 val folders = listFolders(null, forceRefresh = true)
                 android.util.Log.d("GalleryPhotoRepo", "Prefetched ${folders.size} Gallery folders")
-                
+
                 val account = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccountsForSource(
                     context, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
                 ).firstOrNull()
-                
+
                 val selectedIds = account?.selectedFolders?.map { it.folderId }?.toSet() ?: emptySet()
-                
+
                 if (selectedIds.isNotEmpty()) {
                     var totalCount = 0
+                    val normalizedFilter = normalizeMediaFilter(mediaFilter)
                     selectedIds.forEach { folderId ->
                         val photos = listPhotos(folderId, account?.deselectedFolders ?: emptySet(), mediaFilter)
                         val count = photos.size
-                        val cacheKey = "${folderId}_${mediaFilter ?: "all"}"
+                        val cacheKey = "${folderId}_${normalizedFilter}"
                         photoCountCache[cacheKey] = CountCacheEntry(count)
                         totalCount += count
                     }
                     if (account != null && totalCount != account.photoCount) {
-                        com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveAccount(
-                            context, account.copy(photoCount = totalCount)
+                        com.vincentwetzel.androidscreensaver.utils.SettingsManager.updateAccountPhotoCount(
+                            context, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY, account.accountId, totalCount
                         )
                     }
                 } else {
@@ -148,7 +116,7 @@ class GalleryPhotoRepository @Inject constructor(
         return null
     }
 
-    override suspend fun listFolders(parentFolderId: String?, forceRefresh: Boolean): List<PhotoFolder> {
+    override suspend fun listFolders(parentFolderId: String?, forceRefresh: Boolean, accountId: String?): List<PhotoFolder> {
         // MediaStore buckets are flat. There are no sub-buckets.
         if (parentFolderId != null) return emptyList()
 
@@ -229,8 +197,9 @@ class GalleryPhotoRepository @Inject constructor(
         }
     }
 
-    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: String?): List<Photo> = withContext(Dispatchers.IO) {
-        val cacheKey = "${folderId}_${mediaTypeFilter}_${excludedFolderIds.hashCode()}"
+    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: String?, accountId: String?): List<Photo> = withContext(Dispatchers.IO) {
+        val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
+        val cacheKey = "${folderId}_${normalizedFilter}_${excludedFolderIds.hashCode()}"
         val cached = photoListCache[cacheKey]
         if (cached != null && !cached.isStale) {
             return@withContext cached.data
@@ -273,32 +242,38 @@ class GalleryPhotoRepository @Inject constructor(
             } else {
                 emptyList()
             }
-            
+
             val imageType = MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString()
             val videoType = MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString()
-            
-            val mediaTypeSelection = when(mediaTypeFilter) {
+
+            val mediaTypeSelection = when(normalizedFilter) {
                 "images" -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ?"
                 "videos" -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ?"
                 else -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
             }
-            val mediaTypeArgs = when(mediaTypeFilter) {
+            val mediaTypeArgs = when(normalizedFilter) {
                 "images" -> arrayOf(imageType)
                 "videos" -> arrayOf(videoType)
                 else -> arrayOf(imageType, videoType)
             }
 
             val (selection, selectionArgs) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && folderRelativePath != null) {
+                val safeFolderPath = if (folderRelativePath.endsWith("/")) folderRelativePath else "$folderRelativePath/"
+                val escapedFolderPath = safeFolderPath.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
                 if (excludedRelativePaths.isNotEmpty()) {
                     val excludeClause = excludedRelativePaths.joinToString(" AND ") { path ->
-                        "${MediaStore.Files.FileColumns.RELATIVE_PATH} NOT LIKE ?"
+                        "${MediaStore.Files.FileColumns.RELATIVE_PATH} NOT LIKE ? ESCAPE '\\'"
                     }
-                    val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ? AND $mediaTypeSelection AND ($excludeClause)"
-                    val excludeArgs = excludedRelativePaths.map { "$it%" }
-                    selection to arrayOf("$folderRelativePath%") + mediaTypeArgs + excludeArgs.toTypedArray()
+                    val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ? ESCAPE '\\' AND $mediaTypeSelection AND ($excludeClause)"
+                    val excludeArgs = excludedRelativePaths.map {
+                        val safeExcludePath = if (it.endsWith("/")) it else "$it/"
+                        val escapedExclude = safeExcludePath.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                        "$escapedExclude%"
+                    }
+                    selection to arrayOf("$escapedFolderPath%") + mediaTypeArgs + excludeArgs.toTypedArray()
                 } else {
-                    val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ? AND $mediaTypeSelection"
-                    selection to arrayOf("$folderRelativePath%") + mediaTypeArgs
+                    val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ? ESCAPE '\\' AND $mediaTypeSelection"
+                    selection to arrayOf("$escapedFolderPath%") + mediaTypeArgs
                 }
             } else {
                 val selection = "${MediaStore.Files.FileColumns.BUCKET_ID} = ? AND $mediaTypeSelection"
@@ -368,7 +343,7 @@ class GalleryPhotoRepository @Inject constructor(
         return@withContext photos
     }
 
-    override suspend fun getPhotoMetadata(photoId: String): Photo? = withContext(Dispatchers.IO) {
+    override suspend fun getPhotoMetadata(photoId: String, accountId: String?): Photo? = withContext(Dispatchers.IO) {
         try {
             val contentResolver = context.contentResolver
             val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -447,33 +422,27 @@ class GalleryPhotoRepository @Inject constructor(
         }
     }
 
-    override suspend fun getPhotoUrl(photoId: String): String? = withContext(Dispatchers.IO) {
+    override suspend fun getPhotoUrl(photoId: String, accountId: String?): String? = withContext(Dispatchers.IO) {
         // Resolves correctly to either MediaStore.Images or MediaStore.Video based on DB type
-        getPhotoMetadata(photoId)?.uri
+        getPhotoMetadata(photoId, accountId)?.uri
     }
 
-    override suspend fun getThumbnailUrl(photoId: String): String? = withContext(Dispatchers.IO) {
-        getPhotoMetadata(photoId)?.thumbnailUri
+    override suspend fun getThumbnailUrl(photoId: String, accountId: String?): String? = withContext(Dispatchers.IO) {
+        getPhotoMetadata(photoId, accountId)?.thumbnailUri
     }
 
-    override suspend fun searchFolders(query: String): List<PhotoFolder> = withContext(Dispatchers.IO) {
-        val allFolders = listFolders(null, false)
+    override suspend fun searchFolders(query: String, accountId: String?): List<PhotoFolder> = withContext(Dispatchers.IO) {
+        val allFolders = listFolders(null, false, accountId)
         allFolders.filter { it.name.contains(query, ignoreCase = true) }
     }
 
-    override suspend fun getFolderPhotoCount(folderId: String): Int {
-        return getFilteredFolderMediaCount(folderId, null)
+    override suspend fun getFolderPhotoCount(folderId: String, accountId: String?): Int {
+        return getFilteredFolderMediaCount(folderId, null, accountId)
     }
 
-    override suspend fun syncPhotos(): Boolean = withContext(Dispatchers.IO) {
-        folderCache.clear()
-        photoCountCache.clear()
-        photoListCache.clear()
-        true
-    }
-
-    override suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: String?): Int {
-        val cacheKey = "${folderId}_${mediaTypeFilter ?: "all"}"
+    override suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: String?, accountId: String?): Int {
+        val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
+        val cacheKey = "${folderId}_${normalizedFilter}"
         val cached = photoCountCache[cacheKey]
         if (cached != null && !cached.isStale) {
             return cached.count
@@ -495,14 +464,16 @@ class GalleryPhotoRepository @Inject constructor(
                 val videoType = MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString()
 
                 val (selection, selectionArgs) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && folderRelativePath != null) {
+                    val safeFolderPath = if (folderRelativePath.endsWith("/")) folderRelativePath else "$folderRelativePath/"
+                    val escapedFolderPath = safeFolderPath.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
                     val relPathCol = MediaStore.Files.FileColumns.RELATIVE_PATH
-                    when (mediaTypeFilter) {
-                        "images" -> "$relPathCol LIKE ? AND $mediaTypeCol = ?" to arrayOf("$folderRelativePath%", imageType)
-                        "videos" -> "$relPathCol LIKE ? AND $mediaTypeCol = ?" to arrayOf("$folderRelativePath%", videoType)
-                        else -> "$relPathCol LIKE ? AND $mediaTypeCol IN (?, ?)" to arrayOf("$folderRelativePath%", imageType, videoType)
+                    when (normalizedFilter) {
+                        "images" -> "$relPathCol LIKE ? ESCAPE '\\' AND $mediaTypeCol = ?" to arrayOf("$escapedFolderPath%", imageType)
+                        "videos" -> "$relPathCol LIKE ? ESCAPE '\\' AND $mediaTypeCol = ?" to arrayOf("$escapedFolderPath%", videoType)
+                        else -> "$relPathCol LIKE ? ESCAPE '\\' AND $mediaTypeCol IN (?, ?)" to arrayOf("$escapedFolderPath%", imageType, videoType)
                     }
                 } else {
-                    when (mediaTypeFilter) {
+                    when (normalizedFilter) {
                         "images" -> "$bucketCol = ? AND $mediaTypeCol = ?" to arrayOf(folderId, imageType)
                         "videos" -> "$bucketCol = ? AND $mediaTypeCol = ?" to arrayOf(folderId, videoType)
                         else -> "$bucketCol = ? AND $mediaTypeCol IN (?, ?)" to arrayOf(folderId, imageType, videoType)
@@ -520,5 +491,46 @@ class GalleryPhotoRepository @Inject constructor(
                 0
             }
         }
+    }
+
+    override suspend fun getSubfolderIds(folderId: String, accountId: String?): List<String> = withContext(Dispatchers.IO) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return@withContext emptyList()
+        }
+        val subfolders = mutableListOf<String>()
+        try {
+            val contentResolver = context.contentResolver
+            val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            val projection = arrayOf(MediaStore.Files.FileColumns.BUCKET_ID, MediaStore.Files.FileColumns.RELATIVE_PATH)
+            val selection = "${MediaStore.Files.FileColumns.BUCKET_ID} = ?"
+
+            val pathCursor = contentResolver.query(collection, projection, selection, arrayOf(folderId), null)
+            val folderRelativePath = pathCursor?.use {
+                if (it.moveToFirst()) it.getString(it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.RELATIVE_PATH)) else null
+            } ?: return@withContext emptyList()
+
+            val safeFolderPath = if (folderRelativePath.endsWith("/")) folderRelativePath else "$folderRelativePath/"
+            val escapedFolderPath = safeFolderPath.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+            val selectionQuery = "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ? ESCAPE '\\'"
+            val selectionArgs = arrayOf("$escapedFolderPath%")
+            val allCursor = contentResolver.query(collection, projection, selectionQuery, selectionArgs, null)
+            allCursor?.use {
+                val bucketIdIdx = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.BUCKET_ID)
+                val pathIdx = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.RELATIVE_PATH)
+                val seen = mutableSetOf<String>()
+                while (it.moveToNext()) {
+                    val bucketId = it.getString(bucketIdIdx)
+                    val path = it.getString(pathIdx)
+                    if (bucketId !in seen && path != null && path.startsWith(safeFolderPath) && path != folderRelativePath && bucketId != folderId) {
+                        seen.add(bucketId)
+                        subfolders.add(bucketId)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("GalleryPhotoRepo", "Failed to get subfolders for $folderId: ${e.message}")
+        }
+        subfolders
     }
 }

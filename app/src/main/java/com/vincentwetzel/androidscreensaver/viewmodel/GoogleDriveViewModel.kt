@@ -11,6 +11,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -36,8 +37,14 @@ class GoogleDriveViewModel @Inject constructor(
     private val _currentFolderId = MutableStateFlow<String?>(null)
     val currentFolderId: StateFlow<String?> = _currentFolderId.asStateFlow()
 
+    // Track the active media filter so it persists during back navigation
+    private var currentMediaFilter: String? = null
+
     // Back stack for folder navigation
     private val _navigationBackStack = mutableListOf<String?>()
+
+    // Track current jobs to prevent race conditions
+    private var currentJob: Job? = null
 
     fun getNavigationBackStack(): List<String?> = _navigationBackStack.toList()
 
@@ -57,13 +64,15 @@ class GoogleDriveViewModel @Inject constructor(
     /**
      * Load folders from Google Drive for the configured account.
      */
-    fun loadFolders(parentFolderId: String? = null, forceRefresh: Boolean = false, addToBackStack: Boolean = true, mediaFilter: String? = null) {
+    fun loadFolders(parentFolderId: String? = null, forceRefresh: Boolean = false, addToBackStack: Boolean = true, mediaFilter: String? = currentMediaFilter) {
+        currentMediaFilter = mediaFilter
         val id = accountId ?: run {
             _error.value = FolderError.UnknownError("No account configured for Google Drive folder browsing")
             return
         }
 
-        viewModelScope.launch {
+        currentJob?.cancel()
+        currentJob = viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
 
@@ -81,10 +90,16 @@ class GoogleDriveViewModel @Inject constructor(
                 }
 
                 _folders.value = foldersWithCounts
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _error.value = fromException(e)
+                if (currentJob == coroutineContext[Job]) {
+                    _error.value = fromException(e)
+                }
             } finally {
-                _isLoading.value = false
+                if (currentJob == coroutineContext[Job]) {
+                    _isLoading.value = false
+                }
             }
         }
     }
@@ -119,21 +134,31 @@ class GoogleDriveViewModel @Inject constructor(
      * Search folders by name for the configured account.
      */
     fun searchFolders(query: String) {
-        val id = accountId ?: return
+        val id = accountId ?: run {
+            _error.value = FolderError.UnknownError("No account configured for Google Drive folder browsing")
+            return
+        }
 
-        viewModelScope.launch {
+        currentJob?.cancel()
+        currentJob = viewModelScope.launch {
             if (query.isBlank()) {
-                loadFolders(_currentFolderId.value)
+                loadFolders(_currentFolderId.value, addToBackStack = false)
                 return@launch
             }
 
             _isLoading.value = true
             try {
                 _folders.value = photoRepository.searchFoldersForAccount(query, id)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _error.value = fromException(e)
+                if (currentJob == coroutineContext[Job]) {
+                    _error.value = fromException(e)
+                }
             } finally {
-                _isLoading.value = false
+                if (currentJob == coroutineContext[Job]) {
+                    _isLoading.value = false
+                }
             }
         }
     }
@@ -158,33 +183,6 @@ class GoogleDriveViewModel @Inject constructor(
      */
     suspend fun getSubfolderIds(folderId: String): List<String> = withContext(Dispatchers.IO) {
         val id = accountId ?: return@withContext emptyList()
-        val driveService = driveRepository.getDriveService(id) ?: return@withContext emptyList()
-        val allSubfolders = mutableListOf<String>()
-        collectSubfolderIds(folderId, driveService, allSubfolders)
-        allSubfolders
-    }
-
-    private fun collectSubfolderIds(parentId: String, driveService: com.google.api.services.drive.Drive, result: MutableList<String>) {
-        try {
-            val query = "mimeType='application/vnd.google-apps.folder' and trashed=false and '$parentId' in parents"
-            var nextPageToken: String? = null
-            do {
-                val files = driveService.files().list()
-                    .setQ(query)
-                    .setPageSize(1000)
-                    .setFields("nextPageToken, files(id)")
-                    .setPageToken(nextPageToken)
-                    .execute()
-                files.files?.forEach { file ->
-                    file.id?.let {
-                        result.add(it)
-                        collectSubfolderIds(it, driveService, result)
-                    }
-                }
-                nextPageToken = files.nextPageToken
-            } while (nextPageToken != null)
-        } catch (e: Exception) {
-            android.util.Log.w("GoogleDriveVM", "Failed to get subfolders: ${e.message}")
-        }
+        photoRepository.getSubfolderIdsForAccount(folderId, id)
     }
 }

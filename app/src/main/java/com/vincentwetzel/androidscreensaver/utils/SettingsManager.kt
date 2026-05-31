@@ -242,7 +242,7 @@ object SettingsManager {
                 preferences[PreferencesKeys.NETWORK_TIMEOUT] = config.networkTimeoutSeconds
 
                 // Timer
-                preferences[PreferencesKeys.TIMER_ENABLED] = config.timerConfig.timeoutMinutes != TimeoutMinutes.DISABLED
+                preferences[PreferencesKeys.TIMER_ENABLED] = config.timerConfig.enabled
                 preferences[PreferencesKeys.TIMER_TIMEOUT_MINUTES] = config.timerConfig.timeoutMinutes.name
                 preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_MINUTES] = config.timerConfig.customTimeoutValue
                 preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_UNIT] = config.timerConfig.customTimeoutUnit.name
@@ -259,7 +259,7 @@ object SettingsManager {
             val preferences = context.dataStore.data.first()
             val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
             if (accountsJson.isEmpty()) return@runBlocking false
-            
+
             val accounts = parseAccountsJson(accountsJson)
             val matchingAccounts = accounts.filter {
                 it.sourceType == sourceType.toModelSourceType()
@@ -299,6 +299,7 @@ object SettingsManager {
                     com.vincentwetzel.androidscreensaver.data.model.PhotoFolder(
                         id = sf.folderId,
                         sourceType = account.sourceType,
+                        accountId = account.accountId,
                         name = sf.folderName,
                         parentFolderId = null,
                         photoCount = 0
@@ -366,15 +367,14 @@ object SettingsManager {
      */
     fun saveAccount(context: Context, account: AccountConfig) {
         runBlocking {
-            val preferences = context.dataStore.data.first()
-            val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
-            val allAccounts = parseAccountsJson(accountsJson).toMutableList()
-            
-            // Remove existing account with same ID if present
-            allAccounts.removeAll { it.accountId == account.accountId }
-            allAccounts.add(account)
-            
             context.dataStore.edit { prefs ->
+                val accountsJson = prefs[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+                val allAccounts = parseAccountsJson(accountsJson).toMutableList()
+
+                // Remove existing account with same ID if present
+                allAccounts.removeAll { it.accountId == account.accountId }
+                allAccounts.add(account)
+
                 prefs[PreferencesKeys.SOURCE_ACCOUNTS] = serializeAccountsJson(allAccounts)
             }
         }
@@ -389,15 +389,14 @@ object SettingsManager {
         accountId: String
     ) {
         runBlocking {
-            val preferences = context.dataStore.data.first()
-            val accountsJson = preferences[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
-            val allAccounts = parseAccountsJson(accountsJson).toMutableList()
-            
-            allAccounts.removeAll { 
-                it.accountId == accountId && it.sourceType == sourceType.toModelSourceType() 
-            }
-            
             context.dataStore.edit { prefs ->
+                val accountsJson = prefs[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+                val allAccounts = parseAccountsJson(accountsJson).toMutableList()
+
+                allAccounts.removeAll {
+                    it.accountId == accountId && it.sourceType == sourceType.toModelSourceType()
+                }
+
                 prefs[PreferencesKeys.SOURCE_ACCOUNTS] = serializeAccountsJson(allAccounts)
             }
         }
@@ -418,42 +417,73 @@ object SettingsManager {
     }
 
     /**
+     * Update only the photo count for a specific account.
+     * Performs an atomic transaction to avoid read-modify-write data loss on selected folders
+     * if the user alters them in the UI while a long background prefetch is running.
+     */
+    fun updateAccountPhotoCount(
+        context: Context,
+        sourceType: com.vincentwetzel.androidscreensaver.dream.SourceType,
+        accountId: String,
+        photoCount: Int
+    ) {
+        runBlocking {
+            context.dataStore.edit { prefs ->
+                val accountsJson = prefs[PreferencesKeys.SOURCE_ACCOUNTS] ?: ""
+                val allAccounts = parseAccountsJson(accountsJson).toMutableList()
+
+                val index = allAccounts.indexOfFirst { it.accountId == accountId && it.sourceType == sourceType.toModelSourceType() }
+                if (index != -1) {
+                    allAccounts[index] = allAccounts[index].copy(photoCount = photoCount)
+                    prefs[PreferencesKeys.SOURCE_ACCOUNTS] = serializeAccountsJson(allAccounts)
+                }
+            }
+        }
+    }
+
+    /**
      * Parse accounts from JSON string
      * Simple format: accountId|sourceType|email|enabled|folderId1,folderId2|deselectedId1,id2|isAuth|authTime|syncTime|photoCount
      * Multiple accounts separated by ;;
      */
     private fun parseAccountsJson(json: String): List<AccountConfig> {
         if (json.isEmpty()) return emptyList()
-        
+
         return try {
             json.split(";;").filter { it.isNotEmpty() }.mapNotNull { accountStr ->
                 val parts = accountStr.split("|")
                 if (parts.size < 4) return@mapNotNull null
-                
-                val accountId = parts[0]
+
+                val accountId = java.net.URLDecoder.decode(parts[0], "UTF-8")
                 val sourceType = try {
                     com.vincentwetzel.androidscreensaver.data.model.SourceType.valueOf(parts[1])
                 } catch (e: IllegalArgumentException) {
                     return@mapNotNull null
                 }
-                val email = parts[2]
+                val email = java.net.URLDecoder.decode(parts[2], "UTF-8")
                 val enabled = parts[3].toBoolean()
-                
+
                 val selectedFolderIds = if (parts.size > 4 && parts[4].isNotEmpty()) {
                     parts[4].split(",").map { id ->
-                        SelectedFolder(folderId = id, folderName = id, path = id, isSelected = true)
+                        val decodedId = java.net.URLDecoder.decode(id, "UTF-8")
+                        SelectedFolder(folderId = decodedId, folderName = decodedId, path = decodedId, isSelected = true)
                     }
                 } else emptyList()
-                
+
                 val deselectedIds = if (parts.size > 5 && parts[5].isNotEmpty()) {
-                    parts[5].split(",").toSet()
+                    parts[5].split(",").map { java.net.URLDecoder.decode(it, "UTF-8") }.toSet()
                 } else emptySet()
-                
-                val isAuth = if (parts.size > 6) parts[6].toBoolean() else false
+
+                // Local sources do not have auth flows; guarantee they are always authenticated
+                val isAuth = if (sourceType == com.vincentwetzel.androidscreensaver.data.model.SourceType.GALLERY ||
+                                 sourceType == com.vincentwetzel.androidscreensaver.data.model.SourceType.LOCAL_NETWORK) {
+                    true
+                } else if (parts.size > 6) parts[6].toBoolean() else false
+
                 val authTime = if (parts.size > 7 && parts[7].isNotEmpty()) parts[7].toLongOrNull() else null
                 val syncTime = if (parts.size > 8 && parts[8].isNotEmpty()) parts[8].toLongOrNull() else null
                 val photoCount = if (parts.size > 9) parts[9].toIntOrNull() ?: 0 else 0
-                
+
                 AccountConfig(
                     accountId = accountId,
                     sourceType = sourceType,
@@ -478,10 +508,12 @@ object SettingsManager {
      */
     private fun serializeAccountsJson(accounts: List<AccountConfig>): String {
         return accounts.joinToString(";;") { account ->
-            val folderIds = account.selectedFolders.joinToString(",") { it.folderId }
-            val deselectedIds = account.deselectedFolders.joinToString(",")
-            
-            "${account.accountId}|${account.sourceType.name}|${account.accountEmail}|${account.enabled}|$folderIds|$deselectedIds|${account.isAuthenticated}|${account.lastAuthTime ?: ""}|${account.lastSyncTime ?: ""}|${account.photoCount}"
+            val folderIds = account.selectedFolders.joinToString(",") { java.net.URLEncoder.encode(it.folderId, "UTF-8") }
+            val deselectedIds = account.deselectedFolders.joinToString(",") { java.net.URLEncoder.encode(it, "UTF-8") }
+            val email = java.net.URLEncoder.encode(account.accountEmail, "UTF-8")
+            val encodedAccountId = java.net.URLEncoder.encode(account.accountId, "UTF-8")
+
+            "$encodedAccountId|${account.sourceType.name}|$email|${account.enabled}|$folderIds|$deselectedIds|${account.isAuthenticated}|${account.lastAuthTime ?: ""}|${account.lastSyncTime ?: ""}|${account.photoCount}"
         }
     }
 }

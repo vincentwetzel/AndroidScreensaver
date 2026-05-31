@@ -49,7 +49,7 @@ class WeatherRepository @Inject constructor() {
                 val url = "https://api.open-meteo.com/v1/forecast?" +
                         "latitude=$latitude&longitude=$longitude" +
                         "&current=temperature_2m,relative_humidity_2m,apparent_temperature," +
-                        "precipitation_probability,weather_code,wind_speed_10m,is_day" +
+                        "weather_code,wind_speed_10m,is_day" +
                         "&temperature_unit=celsius" +
                         "&wind_speed_unit=ms"
 
@@ -90,6 +90,7 @@ class WeatherRepository @Inject constructor() {
             1, 2, 3 -> "Partly Cloudy"
             45, 48 -> "Foggy"
             51, 53, 55 -> "Drizzle"
+            56, 57 -> "Freezing Drizzle"
             61, 63, 65 -> "Rain"
             66, 67 -> "Freezing Rain"
             71, 73, 75 -> "Snow"

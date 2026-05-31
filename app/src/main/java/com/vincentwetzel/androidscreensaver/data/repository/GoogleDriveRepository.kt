@@ -66,6 +66,13 @@ class GoogleDriveRepository @Inject constructor(
     }
 
     /**
+     * Get the email for a specific account.
+     */
+    fun getAccountEmail(accountId: String): String? {
+        return accountManager.getAccountEmail(accountId)
+    }
+
+    /**
      * Check if a specific account is authenticated.
      * If accountId is null, checks if any account is authenticated (legacy compat).
      */
@@ -99,7 +106,7 @@ class GoogleDriveRepository @Inject constructor(
     /**
      * Revoke access and remove all accounts.
      */
-    fun revokeAll() {
+    suspend fun revokeAll() {
         accountManager.revokeAll()
     }
 }

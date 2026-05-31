@@ -18,8 +18,8 @@ import com.dropbox.core.v2.users.FullAccount
 
 @Singleton
 class DropboxAccountManager @Inject constructor(
-    @ApplicationContext private val context: Context
-) {
+    @ApplicationContext context: Context
+) : BaseAccountManager<DropboxAccountManager.AccountState>(context) {
     private val DROPBOX_APP_KEY = DropboxOAuthConfig.APP_KEY
 
     private val ACCESS_TOKEN_PREF_NAME = "dropbox_access_tokens"
@@ -38,8 +38,6 @@ class DropboxAccountManager @Inject constructor(
         val client: DbxClientV2,
         val email: String? = null // Store email for display/identification
     )
-
-    private val accountStates = mutableMapOf<String, AccountState>()
 
     init {
         checkExistingSignIn()
@@ -89,6 +87,7 @@ class DropboxAccountManager @Inject constructor(
                 // Save accessToken securely
                 sharedPreferences.edit()
                     .putString(accountId, accessToken)
+                    .putString("${accountId}_email", email)
                     .apply()
 
                 accountId
@@ -103,24 +102,20 @@ class DropboxAccountManager @Inject constructor(
      * Check for existing sign-in.
      * Loads saved access tokens from secure storage and initializes accountStates.
      */
-    fun checkExistingSignIn() {
+    override fun checkExistingSignIn() {
         val savedAccountIds = sharedPreferences.all.keys
         for (accountId in savedAccountIds) {
+            // Skip email auxiliary keys during the main iteration
+            if (accountId.endsWith("_email")) continue
+
             val savedAccessToken = sharedPreferences.getString(accountId, null)
             if (!savedAccessToken.isNullOrEmpty()) {
                 val config = DbxRequestConfig.newBuilder("android-screensaver").build()
                 val client = DbxClientV2(config, savedAccessToken)
-                try {
-                    // Verify token by fetching account info
-                    val currentAccount: FullAccount = client.users().currentAccount
-                    val email = currentAccount.email
-                    accountStates[accountId] = AccountState(accountId, savedAccessToken, client, email)
-                    Log.d("DropboxAccountManager", "Restored existing Dropbox account: $accountId (Email: $email)")
-                } catch (e: Exception) {
-                    Log.e("DropboxAccountManager", "Failed to verify token for $accountId. Removing from storage.", e)
-                    // Remove invalid token
-                    sharedPreferences.edit().remove(accountId).apply()
-                }
+                val email = sharedPreferences.getString("${accountId}_email", null)
+
+                accountStates[accountId] = AccountState(accountId, savedAccessToken, client, email)
+                Log.d("DropboxAccountManager", "Restored existing Dropbox account: $accountId (Email: $email)")
             }
         }
     }
@@ -135,7 +130,7 @@ class DropboxAccountManager @Inject constructor(
     /**
      * Get the access token for a specific account.
      */
-    fun getAccessToken(accountId: String): String? {
+    override fun getAccessToken(accountId: String): String? {
         return accountStates[accountId]?.accessToken
     }
 
@@ -149,24 +144,20 @@ class DropboxAccountManager @Inject constructor(
     /**
      * Check if a specific account is authenticated.
      */
-    fun isAccountAuthenticated(accountId: String): Boolean {
-        return accountStates.containsKey(accountId) && accountStates[accountId]?.accessToken != null
-    }
-
-    /**
-     * Get all currently authenticated account IDs.
-     */
-    fun getAuthenticatedAccountIds(): Set<String> {
-        return accountStates.keys.toSet()
+    override fun isAccountAuthenticated(accountId: String): Boolean {
+        return super.isAccountAuthenticated(accountId) && accountStates[accountId]?.accessToken != null
     }
 
     /**
      * Sign out and remove a specific account.
      * This deletes the stored token locally.
      */
-    fun signOutAccount(accountId: String) {
-        accountStates.remove(accountId)
-        sharedPreferences.edit().remove(accountId).apply()
+    override fun signOutAccount(accountId: String) {
+        super.signOutAccount(accountId)
+        sharedPreferences.edit()
+            .remove(accountId)
+            .remove("${accountId}_email")
+            .apply()
         Log.d("DropboxAccountManager", "Removed Dropbox account: $accountId")
     }
 
@@ -174,8 +165,8 @@ class DropboxAccountManager @Inject constructor(
      * Sign out all accounts.
      * Clears all locally stored access tokens.
      */
-    fun signOutAll() {
-        accountStates.clear()
+    override fun signOutAll() {
+        super.signOutAll()
         sharedPreferences.edit().clear().apply()
         Log.d("DropboxAccountManager", "Signed out all Dropbox accounts")
     }
@@ -184,7 +175,7 @@ class DropboxAccountManager @Inject constructor(
      * Revoke access and remove all accounts.
      * This calls the Dropbox API to invalidate the access token.
      */
-    suspend fun revokeAll() {
+    override suspend fun revokeAll() {
         withContext(Dispatchers.IO) {
             val accountsToRevoke = accountStates.values.toList() // Avoid ConcurrentModificationException
             for (accountState in accountsToRevoke) {
@@ -200,4 +191,3 @@ class DropboxAccountManager @Inject constructor(
         }
     }
 }
-

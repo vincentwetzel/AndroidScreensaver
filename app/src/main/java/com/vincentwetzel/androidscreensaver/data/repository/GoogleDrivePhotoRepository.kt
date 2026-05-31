@@ -23,41 +23,15 @@ import javax.inject.Singleton
  */
 @Singleton
 class GoogleDrivePhotoRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @ApplicationContext context: Context,
     private val driveRepository: GoogleDriveRepository
-) : PhotoRepository {
+) : BaseCloudPhotoRepository(context, "source_google_drive") {
 
-    // Background scope for prefetch operations that outlive individual callers
-    private val prefetchScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
-    companion object {
-        // Cache TTL: folders are considered stale after this many milliseconds
-        // 60 seconds - balances snappy UX with detecting changes
-        private const val FOLDER_CACHE_TTL_MS = 60_000L
-        private const val PHOTO_COUNT_CACHE_TTL_MS = 300_000L // 5 minutes for counts
-    }
-
-    // Per-account cache: outer key is accountId, inner key is folder parent ID
-    private data class CacheEntry<T>(val data: T, val timestampMs: Long = System.currentTimeMillis()) {
-        val isStale: Boolean
-            get() = System.currentTimeMillis() - timestampMs > FOLDER_CACHE_TTL_MS
-    }
-    private val folderCache = ConcurrentHashMap<String, ConcurrentHashMap<String, CacheEntry<List<PhotoFolder>>>>()
-    private data class CountCacheEntry(val count: Int, val timestampMs: Long = System.currentTimeMillis()) {
-        val isStale: Boolean
-            get() = System.currentTimeMillis() - timestampMs > PHOTO_COUNT_CACHE_TTL_MS
-    }
-    private val photoCountCache = ConcurrentHashMap<String, ConcurrentHashMap<String, CountCacheEntry>>()
-    
-    private data class PhotoListCacheEntry(val data: List<Photo>, val timestampMs: Long = System.currentTimeMillis()) {
-        val isStale: Boolean
-            get() = System.currentTimeMillis() - timestampMs > PHOTO_COUNT_CACHE_TTL_MS
-    }
-    private val photoListCache = ConcurrentHashMap<String, ConcurrentHashMap<String, PhotoListCacheEntry>>()
-    
     private val driveImageQuery = "mimeType contains 'image/'"
     private val driveVideoQuery = "mimeType contains 'video/'"
     private val driveMediaMimeTypeQuery = "($driveImageQuery or $driveVideoQuery)"
+
+    override fun getAuthenticatedAccountIds(): List<String> = driveRepository.getAuthenticatedAccountIds().toList()
 
     /**
      * Check if a specific account is authenticated.
@@ -115,61 +89,11 @@ class GoogleDrivePhotoRepository @Inject constructor(
     }
 
     /**
-     * Pre-fetch root folders from Google Drive in the background for a specific account.
-     */
-    fun prefetchRootFolders(accountId: String, mediaFilter: String? = null) {
-        prefetchScope.launch {
-            try {
-                // Re-use the existing folder listing logic which also updates the cache
-                val folders = listFoldersForAccount(null, true, accountId)
-                android.util.Log.d("GoogleDrivePhotoRepo", "Prefetched ${folders.size} root folders for $accountId")
-
-                val account = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(
-                    context, com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE, accountId
-                )
-                val selectedIds = account?.selectedFolders?.map { it.folderId }?.toSet() ?: emptySet()
-                
-                // Only perform expensive network counting for selected folders in the background
-                if (selectedIds.isNotEmpty()) {
-                    var totalCount = 0
-                    val cache = getPhotoCountCacheForAccount(accountId)
-                    selectedIds.forEach { folderId ->
-                        val photos = listPhotosForAccount(folderId, account?.deselectedFolders ?: emptySet(), accountId, mediaFilter)
-                        val count = photos.size
-                        val cacheKey = "${folderId}_${mediaFilter ?: "all"}"
-                        cache[cacheKey] = CountCacheEntry(count)
-                        totalCount += count
-                    }
-                    
-                    if (account != null && totalCount != account.photoCount) {
-                        com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveAccount(
-                            context, account.copy(photoCount = totalCount)
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                android.util.Log.w("GoogleDrivePhotoRepo", "Prefetch failed for $accountId: ${e.message}")
-            }
-        }
-    }
-
-    /**
-     * List folders for a specific account. Implements PhotoRepository interface (accountId from Photo).
-     */
-    override suspend fun listFolders(parentFolderId: String?, forceRefresh: Boolean): List<PhotoFolder> {
-        // Default to first available account for interface compat
-        val accountId = driveRepository.getAuthenticatedAccountIds().firstOrNull()
-            ?: return emptyList()
-        return listFoldersForAccount(parentFolderId, forceRefresh, accountId)
-    }
-
-    /**
      * List folders for a specific account.
      */
-    suspend fun listFoldersForAccount(parentFolderId: String?, forceRefresh: Boolean, accountId: String): List<PhotoFolder> {
-        val cacheKey = parentFolderId ?: "ROOT"
-        val accountCache = getFolderCacheForAccount(accountId)
-        val cached = accountCache[cacheKey]
+    override suspend fun listFoldersForAccount(parentFolderId: String?, forceRefresh: Boolean, accountId: String): List<PhotoFolder> {
+        val cacheKey = "${accountId}_${parentFolderId ?: "ROOT"}"
+        val cached = folderCache[cacheKey]
         if (!forceRefresh && cached != null && !cached.isStale) {
             return cached.data
         }
@@ -220,34 +144,25 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 throw Exception("Failed to list folders: ${e.message}")
             }
 
-            folders.also { accountCache[cacheKey] = CacheEntry(it) }
+            folders.also { folderCache[cacheKey] = CacheEntry(it) }
         }
-    }
-
-    /**
-     * List photos for a specific account (from PhotoRepository interface).
-     */
-    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: String?): List<Photo> {
-        val accountId = driveRepository.getAuthenticatedAccountIds().firstOrNull()
-            ?: return emptyList()
-        return listPhotosForAccount(folderId, excludedFolderIds, accountId, mediaTypeFilter)
     }
 
     /**
      * List photos for a specific account.
      */
-    suspend fun listPhotosForAccount(folderId: String, excludedFolderIds: Set<String>, accountId: String, mediaTypeFilter: String?): List<Photo> = withContext(Dispatchers.IO) {
-        val cacheKey = "${folderId}_${mediaTypeFilter}_${excludedFolderIds.hashCode()}"
-        val accountCache = photoListCache.getOrPut(accountId) { ConcurrentHashMap() }
-        val cached = accountCache[cacheKey]
+    override suspend fun listPhotosForAccount(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: String?, accountId: String): List<Photo> = withContext(Dispatchers.IO) {
+        val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
+        val cacheKey = "${accountId}_${folderId}_${normalizedFilter}_${excludedFolderIds.hashCode()}"
+        val cached = photoListCache[cacheKey]
         if (cached != null && !cached.isStale) {
             return@withContext cached.data
         }
 
         val photos = mutableListOf<Photo>()
-        collectPhotosFromFolder(folderId, excludedFolderIds, photos, accountId, mediaTypeFilter)
+        collectPhotosFromFolder(folderId, excludedFolderIds, photos, accountId, normalizedFilter)
         
-        accountCache[cacheKey] = PhotoListCacheEntry(photos)
+        photoListCache[cacheKey] = PhotoListCacheEntry(photos)
         photos
     }
 
@@ -322,16 +237,10 @@ class GoogleDrivePhotoRepository @Inject constructor(
         }
     }
 
-    override suspend fun getPhotoMetadata(photoId: String): Photo? = withContext(Dispatchers.IO) {
-        val accountId = driveRepository.getAuthenticatedAccountIds().firstOrNull()
-            ?: return@withContext null
-        getPhotoMetadataForAccount(photoId, accountId)
-    }
-
     /**
      * Get photo metadata for a specific account.
      */
-    suspend fun getPhotoMetadataForAccount(photoId: String, accountId: String): Photo? = withContext(Dispatchers.IO) {
+    override suspend fun getPhotoMetadataForAccount(photoId: String, accountId: String): Photo? = withContext(Dispatchers.IO) {
         val driveService = driveRepository.getDriveService(accountId)
             ?: return@withContext null
 
@@ -371,28 +280,19 @@ class GoogleDrivePhotoRepository @Inject constructor(
         }
     }
 
-    override suspend fun getPhotoUrl(photoId: String): String? {
-        val accountId = driveRepository.getAuthenticatedAccountIds().firstOrNull()
-            ?: return null
+    override suspend fun getPhotoUrlForAccount(photoId: String, accountId: String): String? {
         return "https://www.googleapis.com/drive/v3/files/$photoId?alt=media&accountId=$accountId"
     }
 
-    override suspend fun getThumbnailUrl(photoId: String): String? {
+    override suspend fun getThumbnailUrlForAccount(photoId: String, accountId: String): String? {
         // Google Drive v3 API does not have a /thumbnail endpoint.
         // We must return the thumbnailLink from the file's metadata.
-        return getPhotoMetadata(photoId)?.thumbnailUri
-    }
-
-    override suspend fun searchFolders(query: String): List<PhotoFolder> {
-        val accountId = driveRepository.getAuthenticatedAccountIds().firstOrNull()
-            ?: return emptyList()
-        return searchFoldersForAccount(query, accountId)
     }
 
     /**
      * Search folders for a specific account.
      */
-    suspend fun searchFoldersForAccount(query: String, accountId: String): List<PhotoFolder> = withContext(Dispatchers.IO) {
+    override suspend fun searchFoldersForAccount(query: String, accountId: String): List<PhotoFolder> = withContext(Dispatchers.IO) {
         val driveService = driveRepository.getDriveService(accountId)
             ?: return@withContext emptyList<PhotoFolder>()
 
@@ -432,39 +332,13 @@ class GoogleDrivePhotoRepository @Inject constructor(
         return@withContext folders
     }
 
-    override suspend fun getFolderPhotoCount(folderId: String): Int {
-        val accountId = driveRepository.getAuthenticatedAccountIds().firstOrNull()
-            ?: return 0
-        return getFolderPhotoCountForAccount(folderId, accountId)
-    }
-
-    /**
-     * Get folder photo count for a specific account.
-     */
-    suspend fun getFolderPhotoCountForAccount(folderId: String, accountId: String): Int {
-        return getFilteredFolderMediaCountForAccount(folderId, null, accountId)
-    }
-
-    override suspend fun syncPhotos(): Boolean = withContext(Dispatchers.IO) {
-        folderCache.clear()
-        photoCountCache.clear()
-        photoListCache.clear()
-        true 
-    }
-
-    override suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: String?): Int {
-        val accountId = driveRepository.getAuthenticatedAccountIds().firstOrNull()
-            ?: return 0
-        return getFilteredFolderMediaCountForAccount(folderId, mediaTypeFilter, accountId)
-    }
-
     /**
      * Get filtered folder media count for a specific account.
      */
-    suspend fun getFilteredFolderMediaCountForAccount(folderId: String, mediaTypeFilter: String?, accountId: String): Int {
-        val cacheKey = "${folderId}_${mediaTypeFilter ?: "all"}"
-        val accountCountCache = getPhotoCountCacheForAccount(accountId)
-        val cached = accountCountCache[cacheKey]
+    override suspend fun getFilteredFolderMediaCountForAccount(folderId: String, mediaTypeFilter: String?, accountId: String): Int {
+        val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
+        val cacheKey = "${accountId}_${folderId}_${normalizedFilter}"
+        val cached = photoCountCache[cacheKey]
         if (cached != null && !cached.isStale) {
             return cached.count
         }
@@ -474,13 +348,46 @@ class GoogleDrivePhotoRepository @Inject constructor(
         return 0
     }
 
-    // Helper to get or create per-account folder cache
-    private fun getFolderCacheForAccount(accountId: String): ConcurrentHashMap<String, CacheEntry<List<PhotoFolder>>> {
-        return folderCache.getOrPut(accountId) { ConcurrentHashMap() }
+    override suspend fun getSubfolderIdsForAccount(folderId: String, accountId: String): List<String> = withContext(Dispatchers.IO) {
+        val driveService = driveRepository.getDriveService(accountId) ?: return@withContext emptyList()
+        val result = mutableListOf<String>()
+        collectSubfolderIds(folderId, driveService, result)
+        result
     }
 
-    // Helper to get or create per-account photo count cache
-    private fun getPhotoCountCacheForAccount(accountId: String): ConcurrentHashMap<String, CountCacheEntry> {
-        return photoCountCache.getOrPut(accountId) { ConcurrentHashMap() }
+    private fun collectSubfolderIds(parentId: String, driveService: Drive, result: MutableList<String>) {
+        try {
+            val query = "mimeType='application/vnd.google-apps.folder' and trashed=false and '$parentId' in parents"
+            var nextPageToken: String? = null
+            do {
+                val files = driveService.files().list()
+                    .setQ(query)
+                    .setPageSize(1000)
+                    .setFields("nextPageToken, files(id)")
+                    .setPageToken(nextPageToken)
+                    .execute()
+                files.files?.forEach { file ->
+                    file.id?.let {
+                        result.add(it)
+                        collectSubfolderIds(it, driveService, result)
+                    }
+                }
+                nextPageToken = files.nextPageToken
+            } while (nextPageToken != null)
+        } catch (e: Exception) {
+            android.util.Log.w("GoogleDrivePhotoRepo", "Failed to get subfolders: ${e.message}")
+        }
+    }
+
+    override suspend fun syncPhotos(): Boolean {
+        val success = super.syncPhotos()
+        withContext(Dispatchers.IO) {
+            try {
+                File(context.cacheDir, "drive_photos").deleteRecursively()
+            } catch (e: Exception) {
+                android.util.Log.e("GoogleDrivePhotoRepo", "Failed to clear Google Drive disk cache", e)
+            }
+        }
+        return success
     }
 }

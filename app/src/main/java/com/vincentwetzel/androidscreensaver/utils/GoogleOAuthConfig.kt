@@ -1,5 +1,7 @@
 package com.vincentwetzel.androidscreensaver.utils
 
+import com.vincentwetzel.androidscreensaver.BuildConfig
+
 /**
  * Google OAuth2 Configuration
  * 
@@ -15,7 +17,7 @@ object GoogleOAuthConfig {
      * From: Google Cloud Console > APIs & Services > Credentials
      * Type: Android
      */
-    const val CLIENT_ID = "459442467476-r9unkjslnp6giff3v0iv642hiss1ntap.apps.googleusercontent.com"
+    val CLIENT_ID: String = BuildConfig.GOOGLE_CLIENT_ID
 
     /**
      * OAuth 2.0 Web Client ID (for ID token requests)

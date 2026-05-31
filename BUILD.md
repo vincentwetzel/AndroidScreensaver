@@ -4,7 +4,7 @@
 
 - Android Studio Hedgehog or newer
 - JDK 17
-- Android SDK 34 (`compileSdk`), minSdk 26
+- Android SDK 36 (`compileSdk`), minSdk 26, targetSdk 34
 - Android Gradle Plugin 9.2.1 with Gradle 9.4.1 wrapper
 
 ## Build Commands
@@ -140,6 +140,7 @@ Before building or releasing a new version:
 - [ ] `TODO.md` updated with task status.
 - [ ] `README.md` reflects new features/removals.
 - [ ] `ARCHITECTURE.md` updated if structure changed.
+- [ ] `CODING_STANDARDS.md` updated if engineering rules changed.
 - [ ] `AGENTS.md` documentation rule followed.
 
 ### Testing

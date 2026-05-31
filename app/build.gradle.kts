@@ -19,8 +19,8 @@ android {
         // - Bug fix or minor change → increment versionName patch (1.0.0 → 1.0.1)
         // - Major release → increment versionName major (1.0.0 → 2.0.0)
         // - Every update → increment versionCode by 1
-        versionName = "1.8.0"
-        versionCode = 9
+        versionName = "1.11.0"
+        versionCode = 10
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

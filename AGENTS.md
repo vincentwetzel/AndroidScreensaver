@@ -52,6 +52,7 @@ Do not rely on memory or assumptions about what the app does. The markdown files
 |------|---------------|
 | `README.md` | Adding/removing features, changing tech stack |
 | `ARCHITECTURE.md` | Adding new layers, changing patterns, new key classes |
+| `CODING_STANDARDS.md` | Changing engineering standards, review rules, or verification expectations |
 | `CHANGELOG.md` | Every feature addition, bug fix, or breaking change |
 | `TODO.md` | Adding new tasks, completing existing tasks, changing quality status |
 | `BUILD.md` | Changing build config, setup steps, or troubleshooting steps |
@@ -64,7 +65,7 @@ Do not rely on memory or assumptions about what the app does. The markdown files
 
 - `CHANGELOG.md` is the release/history log.
 - `TODO.md` is the active backlog and quality checklist.
-- `README.md`, `ARCHITECTURE.md`, `BUILD.md`, and `USER_GUIDE.md` describe durable product, technical, build, and user-facing behavior.
+- `README.md`, `ARCHITECTURE.md`, `CODING_STANDARDS.md`, `BUILD.md`, and `USER_GUIDE.md` describe durable product, technical, standards, build, and user-facing behavior.
 - Do not recreate `PROGRESS.md`; it was removed because it duplicated `TODO.md` and `CHANGELOG.md`.
 
 ### Before Finishing a Task
@@ -119,12 +120,13 @@ Only then may you proceed, and you MUST follow this checklist:
 ### Checklist Before `git commit && git push`
 
 ```text
-□ CHANGELOG.md updated with all changes
-□ TODO.md updated if tasks were added/completed
-□ README.md updated if features changed
-□ ARCHITECTURE.md updated if structure changed
-□ Any other relevant MD files updated
-□ Build passes (./gradlew assembleDebug)
-□ git diff reviewed
-□ Clear commit message written
+[ ] CHANGELOG.md updated with all changes
+[ ] TODO.md updated if tasks were added/completed
+[ ] README.md updated if features changed
+[ ] ARCHITECTURE.md updated if structure changed
+[ ] CODING_STANDARDS.md updated if engineering standards changed
+[ ] Any other relevant MD files updated
+[ ] Build passes (./gradlew assembleDebug)
+[ ] git diff reviewed
+[ ] Clear commit message written
 ```

@@ -1,5 +1,7 @@
 package com.vincentwetzel.androidscreensaver.utils
 
+import com.vincentwetzel.androidscreensaver.BuildConfig
+
 /**
  * Dropbox OAuth2 Configuration
  *
@@ -14,9 +16,7 @@ object DropboxOAuthConfig {
      * Dropbox App Key
      * From: Dropbox Developers Console > Your App > Settings
      *
-     * IMPORTANT: This key should be kept secret and not exposed publicly (e.g., on GitHub).
-     * In a production app, consider using build configs (e.g., buildConfigField) or a secure
-     * secrets management system.
+     * Injected via BuildConfig from local.properties to follow Secret Management standards.
      */
-    const val APP_KEY = "dwz4belhfim678r"
+    val APP_KEY: String = BuildConfig.DROPBOX_APP_KEY
 }
