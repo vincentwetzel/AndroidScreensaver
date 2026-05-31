@@ -93,6 +93,7 @@ class SlideshowView @JvmOverloads constructor(
     private var slideJob: Job? = null
     private var isAdvancing = false // Prevent double-advance (video end + auto-advance racing)
     private var videoDurationJob: Job? = null // Cancelable job for video duration timers
+    private var burnInProtectionJob: Job? = null // Cancelable job for pixel shifting
 
     // Audio volume management
     private var savedSystemVolume: Int = -1 // Stores original system volume when overridden
@@ -276,6 +277,7 @@ class SlideshowView @JvmOverloads constructor(
         loadingLayout.setBackgroundColor(slideshowManager.config.backgroundColor)
         // Setup decoration overlays
         updateDecorations()
+        startBurnInProtection()
         loadPhotosAndStart()
     }
 
@@ -1477,6 +1479,37 @@ class SlideshowView @JvmOverloads constructor(
     }
 
     /**
+     * Protects against OLED burn-in by slightly shifting overlay positions every minute.
+     */
+    private fun startBurnInProtection() {
+        burnInProtectionJob?.cancel()
+        burnInProtectionJob = slideshowScope.launch {
+            while (true) {
+                delay(60_000L) // Shift every 1 minute
+                
+                if (isPlaying) {
+                    val maxShift = 24f // Maximum shift in pixels (~24px)
+                    val shiftViews = listOf(dateTextView, clockTextView, weatherTextView, photoInfoTextView)
+                    
+                    for (view in shiftViews) {
+                        if (view != null && view.visibility == VISIBLE) {
+                            val shiftX = (-maxShift.toInt()..maxShift.toInt()).random().toFloat()
+                            val shiftY = (-maxShift.toInt()..maxShift.toInt()).random().toFloat()
+                            
+                            view.animate()
+                                .translationX(shiftX)
+                                .translationY(shiftY)
+                                .setDuration(3000L) // Slow 3-second glide
+                                .setInterpolator(android.view.animation.LinearInterpolator())
+                                .start()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Pause the slideshow
      */
     fun pause() {
@@ -1508,6 +1541,8 @@ class SlideshowView @JvmOverloads constructor(
         pause()
         stopVideoPlayer()
         stopClockUpdates()
+        burnInProtectionJob?.cancel()
+        burnInProtectionJob = null
         slideshowScope.launch {
             withContext(Dispatchers.Main) {
                 imageViewA.setImageDrawable(null)

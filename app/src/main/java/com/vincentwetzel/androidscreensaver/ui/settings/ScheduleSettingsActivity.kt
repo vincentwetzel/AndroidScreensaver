@@ -120,26 +120,32 @@ class ScheduleSettingsActivity : AppCompatActivity() {
 
         // Quick presets — auto-save
         binding.btnWeekdays.setOnClickListener {
+            isUpdatingUI = true
             selectedDays.clear()
             selectedDays.addAll(listOf(
                 DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
                 DayOfWeek.THURSDAY, DayOfWeek.FRIDAY
             ))
             updateDayCheckboxes()
+            isUpdatingUI = false
             saveCurrentSettings()
         }
 
         binding.btnWeekends.setOnClickListener {
+            isUpdatingUI = true
             selectedDays.clear()
             selectedDays.addAll(listOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY))
             updateDayCheckboxes()
+            isUpdatingUI = false
             saveCurrentSettings()
         }
 
         binding.btnEveryday.setOnClickListener {
+            isUpdatingUI = true
             selectedDays.clear()
             selectedDays.addAll(DayOfWeek.values().toList())
             updateDayCheckboxes()
+            isUpdatingUI = false
             saveCurrentSettings()
         }
 

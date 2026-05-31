@@ -84,6 +84,7 @@ This file defines engineering standards for Android Screensaver. Architecture de
 - Use account email where available, not display name.
 - Ensure accessibility (WCAG mobile equivalents): Provide minimum 48dp touch targets and `contentDescription` for interactive icons.
 - Loading indicators, overlays, and empty states must be explicitly hidden or updated on both success and error paths.
+- **Burn-in Protection (OLED/AMOLED):** All persistent on-screen overlays (such as clocks, weather, and photo metadata) must implement pixel-shifting or periodic repositioning to prevent screen burn-in. Avoid purely static, high-contrast elements that remain in the exact same coordinates for extended periods.
 - Settings, toggles, sliders, and checkbox changes must persist immediately.
 
 ## Dependencies And Build Hygiene

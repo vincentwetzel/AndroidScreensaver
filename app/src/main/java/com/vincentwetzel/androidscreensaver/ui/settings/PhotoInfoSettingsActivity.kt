@@ -28,6 +28,7 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityPhotoInfoSettingsBinding
     private lateinit var currentConfig: PhotoInfoConfig
+    private var isInitializing = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +42,7 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
         lifecycleScope.launch {
             loadCurrentSettings()
             setupListeners()
+            binding.root.post { isInitializing = false }
         }
     }
 
@@ -319,6 +321,8 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
      * Read current UI values and persist to DataStore
      */
     private fun saveCurrentSettings() {
+        if (isInitializing) return
+        
         lifecycleScope.launch {
             val newConfig = currentConfig.copy(
                 enabled = binding.switchEnabled.isChecked,

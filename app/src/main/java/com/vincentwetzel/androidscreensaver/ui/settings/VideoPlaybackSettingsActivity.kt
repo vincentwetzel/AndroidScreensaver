@@ -26,6 +26,7 @@ import dagger.hilt.android.AndroidEntryPoint
 class VideoPlaybackSettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityVideoPlaybackSettingsBinding
+    private var isInitializing = true
 
     companion object {
         private const val TAG = "VideoPlaybackSettings"
@@ -43,6 +44,7 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
         lifecycleScope.launch {
             loadCurrentSettings()
             setupListeners()
+            binding.root.post { isInitializing = false }
         }
     }
 
@@ -181,6 +183,8 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
      * Read current UI values and persist to DataStore
      */
     private fun saveCurrentSettings() {
+        if (isInitializing) return
+        
         lifecycleScope.launch {
             val videoAudioMode = when (binding.radioAudio.checkedRadioButtonId) {
                 R.id.radio_mute -> VideoAudioMode.MUTE

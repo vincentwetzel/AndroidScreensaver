@@ -470,6 +470,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
                     // Update summary to show custom value
                     val unitText = if (timeoutUnit == TimeoutUnit.MINUTES) "minutes" else "hours"
                     preference.summary = "Custom: $timeoutValue $unitText"
+                    // Update the preference value explicitly since we returned false
+                    (preference as ListPreference).value = "CUSTOM"
                 }
                 // Return false to prevent saving CUSTOM value immediately
                 false
@@ -635,7 +637,14 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         // Cache limit
         val cacheLimit = if (config.cacheConfig.usePresetLimit) {
-            config.cacheConfig.presetLimit.name.replace("MB_", "").replace("GB_", "000 ").let { "$it MB" }
+            when (config.cacheConfig.presetLimit) {
+                CacheSizeLimit.UNLIMITED -> "Unlimited"
+                else -> {
+                    val name = config.cacheConfig.presetLimit.name
+                    if (name.startsWith("GB_")) "${name.removePrefix("GB_")}000 MB"
+                    else "${name.removePrefix("MB_")} MB"
+                }
+            }
         } else {
             "${config.cacheConfig.cacheSizeLimitMB} MB"
         }

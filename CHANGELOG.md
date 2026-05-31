@@ -32,6 +32,7 @@
 
 ### Added
 - **Shared cloud folder browser ViewModel** - Replaced the Google-Drive-only folder browser ViewModel with `CloudFolderViewModel`, allowing Google Drive and Dropbox to share account-scoped folder browsing, search, back-stack navigation, and recursive subfolder lookup.
+- **Burn-in protection for overlays** - Persistent slideshow overlays now shift slightly while playback is active so date, clock, weather, and photo metadata text do not remain pinned to identical OLED/AMOLED pixels for extended sessions.
 - **Dropbox authentication screen** - Added `DropboxAuthActivity` and its auth layout so Dropbox accounts can be added or re-authenticated through the Dropbox OAuth flow with a success toast that includes the account email.
 - **AbstractPhotoRepository** - Extracted shared caching primitives (thread-safe maps, TTL data classes, and sync functionality) entirely out of all repositories, moving them into a single unified base. Both local `GalleryPhotoRepository` and `BaseCloudPhotoRepository` now inherit from it.
 - **BaseCloudPhotoRepository** — Introduced an abstract base class to unify caching logic, background prefetching, and account routing across Google Drive and Dropbox repositories, eliminating duplicated boilerplate.
@@ -45,6 +46,9 @@
 - **Remove account option** — Source cards on the main screen now have a "more" menu with a "Remove account" option. This allows users to remove individual accounts (e.g., a second Google Drive account) after a confirmation dialog.
 
 ### Fixed
+- **Settings initialization save races** - Video playback, photo info, and decoration settings screens now suppress auto-save callbacks until their persisted values have finished populating the UI, preventing default control values from overwriting saved preferences during screen setup.
+- **Schedule preset duplicate saves** - Weekday, weekend, and everyday schedule preset buttons now batch checkbox updates before saving, avoiding transient intermediate writes while the UI is being synchronized.
+- **Settings summary display issues** - Custom screensaver timeout selection now keeps the `CUSTOM` list preference selected after the custom dialog closes, and cache limit summaries now display `Unlimited` correctly instead of formatting every preset as megabytes.
 - **Blocking settings access cleanup** - Converted account and slideshow settings calls used by UI flows to suspend access patterns, removing `runBlocking` bridges from `SettingsManager` and routing callers through `lifecycleScope`.
 - **Dropbox source card integration** - Main source cards now include Dropbox accounts in the add-source dialog, route Dropbox auth results, prefetch Dropbox root folders, open the shared cloud folder browser, and sign out the correct account when removed.
 - **Selected folder metadata persistence** - `SettingsManager` now serializes selected folder IDs, names, and paths together, preserving user-facing folder metadata while still URL-encoding delimiter-sensitive values.

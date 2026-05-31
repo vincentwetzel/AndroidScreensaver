@@ -40,6 +40,7 @@ class DecorationSettingsActivity : AppCompatActivity() {
     private lateinit var dateConfig: DecorationConfig
     private lateinit var clockConfig: ClockDecorationConfig
     private lateinit var weatherConfig: WeatherDecorationConfig
+    private var isInitializing = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,6 +57,7 @@ class DecorationSettingsActivity : AppCompatActivity() {
                 setupDateTab()
                 setupClockTab()
                 setupWeatherTab()
+                binding.root.post { isInitializing = false }
             }
         }
     }
@@ -439,6 +441,8 @@ class DecorationSettingsActivity : AppCompatActivity() {
      * Read current UI values and persist to DataStore
      */
     private fun saveCurrentSettings() {
+        if (isInitializing) return
+        
         lifecycleScope.launch {
             // Save date config (preserve user's enabled state)
             val newDateConfig = dateConfig.copy(

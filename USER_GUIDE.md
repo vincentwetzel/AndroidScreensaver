@@ -65,6 +65,7 @@ Settings are accessed through **Menu > Settings**.
 - Clock overlay.
 - Weather overlay.
 - Photo information overlay.
+- Persistent overlays gently shift position during playback to reduce OLED/AMOLED burn-in risk.
 
 ### Schedule & Timer
 

@@ -149,6 +149,7 @@ All settings are persisted through DataStore Preferences.
 
 - `PhotoScreensaverService.onAttachedToWindow()` refreshes slideshow config.
 - `SlideshowView.initialize()` applies background color and starts rendering.
+- `SlideshowView` starts a cancelable burn-in protection job that periodically pixel-shifts visible persistent overlays while playback is active.
 - DreamService applies keep-screen-on and screen-orientation behavior.
 - `SlideshowManager.loadPhotos()` checks network restrictions before cloud fetches.
 - `SlideshowView.showPhoto()` applies match-orientation behavior.

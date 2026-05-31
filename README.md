@@ -17,6 +17,7 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
   - Content Type filter for images only, videos only, or both.
   - Background color, screen rotation, keep-screen-on, match-orientation, and touch-exit settings.
   - Network-only cloud loading works on Wi-Fi or Ethernet.
+  - Burn-in protection gently shifts persistent overlays during long-running screensaver sessions.
 
 - **Video playback**
   - Videos play with Media3/ExoPlayer and auto-advance when finished.
