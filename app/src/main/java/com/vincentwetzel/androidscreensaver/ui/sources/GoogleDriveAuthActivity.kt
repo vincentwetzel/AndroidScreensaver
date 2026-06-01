@@ -115,7 +115,6 @@ class GoogleDriveAuthActivity : AppCompatActivity() {
     private fun onAuthenticated(account: GoogleSignInAccount) {
         lifecycleScope.launch {
             val accountEmail = account.email ?: "Unknown"
-            val accountId = "gdrive:$accountEmail"
 
             // Register with the account manager
             val returnedAccountId = driveRepository.handleSignInResult(account)
@@ -126,8 +125,15 @@ class GoogleDriveAuthActivity : AppCompatActivity() {
                 return@launch
             }
 
-            // Save/update the account in SettingsManager
-            val existingAccount = SettingsManager.getAccount(this@GoogleDriveAuthActivity, DreamSourceType.GOOGLE_DRIVE, accountId)
+            val existingAccountId = intent.getStringExtra(EXTRA_ACCOUNT_ID)
+            val accountId = returnedAccountId
+
+            // Save/update the account in SettingsManager, migrating existing selections if the ID changed
+            var existingAccount = SettingsManager.getAccount(this@GoogleDriveAuthActivity, DreamSourceType.GOOGLE_DRIVE, accountId)
+            if (existingAccount == null && existingAccountId != null) {
+                existingAccount = SettingsManager.getAccount(this@GoogleDriveAuthActivity, DreamSourceType.GOOGLE_DRIVE, existingAccountId)
+            }
+
             val updatedAccount = AccountConfig(
                 accountId = accountId,
                 sourceType = SourceType.GOOGLE_DRIVE,
@@ -142,6 +148,11 @@ class GoogleDriveAuthActivity : AppCompatActivity() {
                 photoCount = existingAccount?.photoCount ?: 0
             )
             SettingsManager.saveAccount(this@GoogleDriveAuthActivity, updatedAccount)
+
+            // Cleanup old account reference if the ID changed during re-auth
+            if (existingAccountId != null && existingAccountId != accountId && existingAccount != null) {
+                SettingsManager.removeAccount(this@GoogleDriveAuthActivity, DreamSourceType.GOOGLE_DRIVE, existingAccountId)
+            }
 
             val message = "Successfully signed in as $accountEmail"
             Toast.makeText(this@GoogleDriveAuthActivity, message, Toast.LENGTH_LONG).show()

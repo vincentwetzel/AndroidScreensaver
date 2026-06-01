@@ -19,7 +19,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.vincentwetzel.androidscreensaver.R
-import com.vincentwetzel.androidscreensaver.data.model.FolderError.Companion.userMessage
 import com.vincentwetzel.androidscreensaver.databinding.ActivityFolderBrowserBinding
 import com.vincentwetzel.androidscreensaver.viewmodel.GalleryViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -68,9 +67,6 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         accountId = intent.getStringExtra(EXTRA_ACCOUNT_ID)
 
         setupToolbar()
-        setupRecyclerView()
-        setupButtons()
-        observeViewModel()
 
         // Handle system back button — navigate to previous folder, or finish if none
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -84,15 +80,20 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
             }
         })
 
-        // Check and request permissions before loading folders
-        if (hasGalleryPermissions()) {
-            viewModel.clearNavigationBackStack()
-            lifecycleScope.launch {
-                val mediaFilter = getContentFilter()
+        lifecycleScope.launch {
+            val mediaFilter = getContentFilter()
+            
+            setupRecyclerView(mediaFilter)
+            setupButtons()
+            observeViewModel()
+
+            // Check and request permissions before loading folders
+            if (hasGalleryPermissions()) {
+                viewModel.clearNavigationBackStack()
                 viewModel.loadFolders(parentFolderId = null, forceRefresh = false, addToBackStack = false, mediaFilter = mediaFilter)
+            } else {
+                requestGalleryPermissions()
             }
-        } else {
-            requestGalleryPermissions()
         }
     }
 
@@ -140,27 +141,24 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupRecyclerView() {
-        lifecycleScope.launch {
-            val mediaFilter = getContentFilter()
-            adapter = FolderAdapter(
-                onSelectionStateChanged = { selectedIds, deselectedIds ->
-                    lifecycleScope.launch {
-                        saveSelections()
-                        updateSummary(selectedIds.size, adapter.getPhotoCount())
-                    }
-                },
-                onFolderClick = { folderId ->
-                    viewModel.navigateToFolder(folderId)
-                },
-                mediaFilter = mediaFilter
-            )
-            binding.recyclerFolders.layoutManager = LinearLayoutManager(this@GalleryFolderBrowserActivity)
-            binding.recyclerFolders.adapter = adapter
+    private suspend fun setupRecyclerView(mediaFilter: String?) {
+        adapter = FolderAdapter(
+            onSelectionStateChanged = { selectedIds, deselectedIds ->
+                lifecycleScope.launch {
+                    saveSelections()
+                    updateSummary(selectedIds.size, adapter.getPhotoCount())
+                }
+            },
+            onFolderClick = { folderId ->
+                viewModel.navigateToFolder(folderId)
+            },
+            mediaFilter = mediaFilter
+        )
+        binding.recyclerFolders.layoutManager = LinearLayoutManager(this@GalleryFolderBrowserActivity)
+        binding.recyclerFolders.adapter = adapter
 
-            // Restore previously saved folder selections
-            restoreSelectedFolders()
-        }
+        // Restore previously saved folder selections
+        restoreSelectedFolders()
     }
 
     private suspend fun restoreSelectedFolders() {

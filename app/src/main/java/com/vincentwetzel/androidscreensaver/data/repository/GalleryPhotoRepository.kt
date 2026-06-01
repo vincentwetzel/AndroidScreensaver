@@ -25,7 +25,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class GalleryPhotoRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : AbstractPhotoRepository() {
 
     // Supported image file extensions

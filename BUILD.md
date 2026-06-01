@@ -53,6 +53,19 @@ Use this to get the debug keystore SHA-1 fingerprint for Google Cloud Console se
    - **SHA-1 fingerprint:** Run `./gradlew signingReport`.
 4. Add your test Google account email under **OAuth Consent Screen > Test users**.
 
+## Dropbox OAuth Setup
+
+1. Create or open the Dropbox app in the Dropbox App Console.
+2. Add the app key to `local.properties`:
+
+```properties
+DROPBOX_APP_KEY=your_app_key_here
+```
+
+The Gradle build sanitizes quotes and whitespace before injecting this value into `BuildConfig.DROPBOX_APP_KEY`. Dropbox sign-in uses PKCE with explicit read-only scopes: `files.content.read`, `files.metadata.read`, and `account_info.read`.
+
+If `DROPBOX_APP_KEY` is missing, Dropbox authentication shows an error instead of launching OAuth.
+
 ## Troubleshooting
 
 ### Debug Logcat Mirroring

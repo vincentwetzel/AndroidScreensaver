@@ -82,6 +82,12 @@
             android:name=".ui.sources.GoogleDriveAuthActivity"
             android:exported="false"
             android:label="@string/source_auth" />
+
+        <!-- Dropbox Authentication Activity -->
+        <activity
+            android:name=".ui.sources.DropboxAuthActivity"
+            android:exported="false"
+            android:label="Dropbox Authentication" />
         
         <!-- Photo Browser Activity -->
         <activity
@@ -176,8 +182,6 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <!-- Dropbox callback -->
-                <data android:scheme="db-${DROPBOX_APP_KEY}" />
             </intent-filter>
         </activity>
         

@@ -1,7 +1,5 @@
 package com.vincentwetzel.androidscreensaver.utils
 
-import com.vincentwetzel.androidscreensaver.BuildConfig
-
 /**
  * Google OAuth2 Configuration
  * 
@@ -17,7 +15,7 @@ object GoogleOAuthConfig {
      * From: Google Cloud Console > APIs & Services > Credentials
      * Type: Android
      */
-    val CLIENT_ID: String = BuildConfig.GOOGLE_CLIENT_ID
+    val CLIENT_ID: String = "" // TODO: Replace with BuildConfig.GOOGLE_CLIENT_ID once buildConfigField is added to build.gradle.kts
 
     /**
      * OAuth 2.0 Web Client ID (for ID token requests)

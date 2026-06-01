@@ -1,7 +1,5 @@
 package com.vincentwetzel.androidscreensaver.utils
 
-import com.vincentwetzel.androidscreensaver.BuildConfig
-
 /**
  * Dropbox OAuth2 Configuration
  *
@@ -18,5 +16,5 @@ object DropboxOAuthConfig {
      *
      * Injected via BuildConfig from local.properties to follow Secret Management standards.
      */
-    val APP_KEY: String = BuildConfig.DROPBOX_APP_KEY
+    val APP_KEY: String = "" // TODO: Replace with BuildConfig.DROPBOX_APP_KEY once buildConfigField is added to build.gradle.kts
 }

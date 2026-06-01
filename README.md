@@ -7,7 +7,7 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
 - **Multiple photo sources**
   - **Gallery** - Browse and select folders from device photos via MediaStore.
   - **Google Drive** - Browse and select folders from one or more Google accounts with OAuth2 authentication.
-  - **Dropbox** - Browse and select Dropbox folders with thumbnail and local cache support.
+  - **Dropbox** - Browse and select Dropbox folders from one or more accounts with PKCE OAuth, thumbnails, and local cache support.
   - Planned: Google Photos, OneDrive, and local network sources.
 
 - **Customizable slideshow**
@@ -41,8 +41,9 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
 2. Enable a source such as Gallery, Google Drive, or Dropbox. Remote sources can be added more than once for different accounts.
 3. Tap the source card and select folders. Folder selections save immediately.
 4. Source cards reuse the saved selected-folder count while repositories refresh media counts in the background.
-5. Tap **Open Screensaver Settings**, select **Android Screensaver**, then return to the app.
-6. Adjust slideshow, video, schedule, overlay, and cache settings from the app settings menu.
+5. Use **Re-authenticate** from a remote source card or folder browser menu if a cloud token expires.
+6. Tap **Open Screensaver Settings**, select **Android Screensaver**, then return to the app.
+7. Adjust slideshow, video, schedule, overlay, and cache settings from the app settings menu.
 
 ## Tech Stack
 

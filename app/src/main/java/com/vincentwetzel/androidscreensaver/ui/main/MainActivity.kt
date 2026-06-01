@@ -34,7 +34,6 @@ import com.vincentwetzel.androidscreensaver.ui.sources.GoogleDriveAuthActivity
 import com.vincentwetzel.androidscreensaver.utils.GoogleAccountManager
 import com.vincentwetzel.androidscreensaver.utils.SettingsManager
 import com.vincentwetzel.androidscreensaver.viewmodel.MainViewModel
-import com.vincentwetzel.androidscreensaver.viewmodel.SourceCardType
 import com.vincentwetzel.androidscreensaver.data.repository.GalleryPhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDrivePhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.DropboxPhotoRepository
@@ -67,7 +66,7 @@ class MainActivity : AppCompatActivity() {
     private data class SourceCardData(
         val cardView: View,
         val info: CardInfo,
-        val sourceType: SourceCardType,
+        val sourceType: SourceType,
         val accountId: String? = null
     )
     private val sourceCards = mutableListOf<SourceCardData>()
@@ -79,33 +78,15 @@ class MainActivity : AppCompatActivity() {
         if (result.resultCode == RESULT_OK) {
             lifecycleScope.launch {
                 val accountName = result.data?.getStringExtra(GoogleDriveAuthActivity.EXTRA_ACCOUNT_NAME)
-                val existingAccountId = result.data?.getStringExtra("account_id")
-                
-                // Create or update the account in SettingsManager
-                val accountId = existingAccountId ?: "gdrive:${accountName ?: System.currentTimeMillis()}"
-                val existingAccount = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(this@MainActivity, com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE, accountId)
-                
-                val updatedAccount = existingAccount?.copy(
-                    isAuthenticated = true,
-                    lastAuthTime = System.currentTimeMillis()
-                ) ?: com.vincentwetzel.androidscreensaver.data.model.AccountConfig(
-                    accountId = accountId,
-                    sourceType = com.vincentwetzel.androidscreensaver.data.model.SourceType.GOOGLE_DRIVE,
-                    accountEmail = accountName ?: "Unknown",
-                    enabled = true,
-                    isAuthenticated = true,
-                    lastAuthTime = System.currentTimeMillis()
-                )
-                com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveAccount(this@MainActivity, updatedAccount)
-                
-                viewModel.onGoogleDriveAuthenticated(true, accountName)
-                buildSourceCards() // Rebuild cards with new account
-                refreshSourceCards()
-                // Pre-fetch folders now that auth succeeded
-                val mediaFilter = getContentFilterFilter()
-                googleDrivePhotoRepository.prefetchRootFolders(accountId, mediaFilter)
-                showSnackbar("Google Drive connected!")
-                openFolderBrowser(SourceCardType.GOOGLE_DRIVE, accountId)
+                val accountId = result.data?.getStringExtra("account_id")
+
+                if (accountId != null) {
+                    buildSourceCards() // Rebuild cards with new account
+                    refreshSourceCards()
+                    
+                    showSnackbar("Google Drive connected!")
+                    openFolderBrowser(SourceType.GOOGLE_DRIVE, accountId)
+                }
             }
         }
     }
@@ -117,32 +98,15 @@ class MainActivity : AppCompatActivity() {
         if (result.resultCode == RESULT_OK) {
             lifecycleScope.launch {
                 val accountEmail = result.data?.getStringExtra("account_name") ?: "Unknown"
-                val existingAccountId = result.data?.getStringExtra("account_id")
-                
-                val accountId = existingAccountId ?: "dropbox:${System.currentTimeMillis()}"
-                val existingAccount = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(this@MainActivity, com.vincentwetzel.androidscreensaver.dream.SourceType.DROPBOX, accountId)
-                
-                val updatedAccount = existingAccount?.copy(
-                    isAuthenticated = true,
-                    lastAuthTime = System.currentTimeMillis()
-                ) ?: com.vincentwetzel.androidscreensaver.data.model.AccountConfig(
-                    accountId = accountId,
-                    sourceType = com.vincentwetzel.androidscreensaver.data.model.SourceType.DROPBOX,
-                    accountEmail = accountEmail,
-                    enabled = true,
-                    isAuthenticated = true,
-                    lastAuthTime = System.currentTimeMillis()
-                )
-                com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveAccount(this@MainActivity, updatedAccount)
-                
-                viewModel.onDropboxAuthenticated(true, accountEmail)
-                buildSourceCards()
-                refreshSourceCards()
-                
-                val mediaFilter = getContentFilterFilter()
-                dropboxPhotoRepository.prefetchRootFolders(accountId, mediaFilter)
-                showSnackbar("Dropbox connected!")
-                openFolderBrowser(SourceCardType.DROPBOX, accountId)
+                val accountId = result.data?.getStringExtra("account_id")
+
+                if (accountId != null) {
+                    buildSourceCards()
+                    refreshSourceCards()
+                    
+                    showSnackbar("Dropbox connected!")
+                    openFolderBrowser(SourceType.DROPBOX, accountId)
+                }
             }
         }
     }
@@ -196,15 +160,20 @@ class MainActivity : AppCompatActivity() {
         }
         binding?.btnAddSources?.setOnClickListener { showAddSourcesDialog() }
         bindingTv?.btnAddSources?.setOnClickListener { showAddSourcesDialog() }
-
-        lifecycleScope.launch {
-            buildSourceCards()
-            refreshSourceCards()
-            updateActivationCardVisibility()
-        }
     }
 
     private suspend fun buildSourceCards() {
+        // Get all accounts from settings first (suspending) to prevent concurrent modification exceptions
+        val gdriveAccounts = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccountsForSource(
+            this, com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE
+        )
+        val galleryAccounts = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccountsForSource(
+            this, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
+        )
+        val dropboxAccounts = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccountsForSource(
+            this, com.vincentwetzel.androidscreensaver.dream.SourceType.DROPBOX
+        )
+
         val container = if (isTvLayout) bindingTv?.connectedSourcesContainer else binding?.connectedSourcesContainer
         container?.let { c ->
             c.removeAllViews()
@@ -214,28 +183,17 @@ class MainActivity : AppCompatActivity() {
             val iconSize = if (isTvLayout) 72 else 40
             val switchScale = if (isTvLayout) 1.5f else 1f
 
-            // Get all accounts from settings
-            val gdriveAccounts = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccountsForSource(
-                this, com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE
-            )
-            val galleryAccounts = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccountsForSource(
-                this, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
-            )
-            val dropboxAccounts = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccountsForSource(
-                this, com.vincentwetzel.androidscreensaver.dream.SourceType.DROPBOX
-            )
-
             // Gallery account cards
             galleryAccounts.forEach { account ->
                 val (card, info) = createSourceCard(
                     "Gallery",
                     if (account.isAuthenticated) "Signed in" else getString(R.string.not_authenticated),
                     R.drawable.ic_source_gallery,
-                    padding, iconSize, switchScale, SourceCardType.GALLERY,
+                    padding, iconSize, switchScale, SourceType.GALLERY,
                     accountId = account.accountId
                 )
                 c.addView(card)
-                sourceCards.add(SourceCardData(card, info, SourceCardType.GALLERY, account.accountId))
+                sourceCards.add(SourceCardData(card, info, SourceType.GALLERY, account.accountId))
             }
 
             // Google Drive account cards
@@ -244,11 +202,11 @@ class MainActivity : AppCompatActivity() {
                     "Google Drive",
                     account.accountEmail,
                     R.drawable.ic_source_google_drive,
-                    padding, iconSize, switchScale, SourceCardType.GOOGLE_DRIVE,
+                    padding, iconSize, switchScale, SourceType.GOOGLE_DRIVE,
                     accountId = account.accountId
                 )
                 c.addView(card)
-                sourceCards.add(SourceCardData(card, info, SourceCardType.GOOGLE_DRIVE, account.accountId))
+                sourceCards.add(SourceCardData(card, info, SourceType.GOOGLE_DRIVE, account.accountId))
             }
             
             // Dropbox account cards
@@ -259,11 +217,11 @@ class MainActivity : AppCompatActivity() {
                     "Dropbox",
                     account.accountEmail,
                     iconRes,
-                    padding, iconSize, switchScale, SourceCardType.DROPBOX,
+                    padding, iconSize, switchScale, SourceType.DROPBOX,
                     accountId = account.accountId
                 )
                 c.addView(card)
-                sourceCards.add(SourceCardData(card, info, SourceCardType.DROPBOX, account.accountId))
+                sourceCards.add(SourceCardData(card, info, SourceType.DROPBOX, account.accountId))
             }
         }
     }
@@ -275,7 +233,7 @@ class MainActivity : AppCompatActivity() {
         padding: Int,
         iconSize: Int,
         switchScale: Float,
-        sourceType: SourceCardType,
+        sourceType: SourceType,
         accountId: String? = null
     ): Pair<MaterialCardView, CardInfo> {
         val card = MaterialCardView(this).apply {
@@ -382,11 +340,9 @@ class MainActivity : AppCompatActivity() {
             if (switchScale > 1f) { scaleX = switchScale; scaleY = switchScale }
             setOnCheckedChangeListener { _, isChecked ->
                 if (isRestoringToggleState) return@setOnCheckedChangeListener
-                val dreamSourceType = sourceTypeToDreamSourceType(sourceType)
-                if (dreamSourceType != null) {
-                    lifecycleScope.launch {
-                        handleSourceToggle(dreamSourceType, isChecked, accountId)
-                    }
+                val dreamSourceType = sourceType.toDreamSourceType()
+                lifecycleScope.launch {
+                    handleSourceToggle(dreamSourceType, isChecked, accountId)
                 }
             }
         }
@@ -401,7 +357,7 @@ class MainActivity : AppCompatActivity() {
         card.setOnClickListener {
             lifecycleScope.launch {
                 when (sourceType) {
-                    SourceCardType.GALLERY -> {
+                    SourceType.GALLERY -> {
                         val account = accountId?.let { id ->
                             com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(
                                 this@MainActivity,
@@ -411,7 +367,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         if (account?.isAuthenticated == true) openGalleryFolderBrowser(accountId)
                     }
-                    SourceCardType.GOOGLE_DRIVE -> {
+                    SourceType.GOOGLE_DRIVE -> {
                         val account = accountId?.let { id ->
                             com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(
                                 this@MainActivity,
@@ -419,10 +375,10 @@ class MainActivity : AppCompatActivity() {
                                 id
                             )
                         }
-                        if (account?.isAuthenticated == true) openFolderBrowser(SourceCardType.GOOGLE_DRIVE, accountId)
+                        if (account?.isAuthenticated == true) openFolderBrowser(SourceType.GOOGLE_DRIVE, accountId)
                         else startGoogleDriveAuth(accountId)
                     }
-                    SourceCardType.DROPBOX -> {
+                    SourceType.DROPBOX -> {
                         val account = accountId?.let { id ->
                             com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(
                                 this@MainActivity,
@@ -430,7 +386,7 @@ class MainActivity : AppCompatActivity() {
                                 id
                             )
                         }
-                        if (account?.isAuthenticated == true) openFolderBrowser(SourceCardType.DROPBOX, accountId)
+                        if (account?.isAuthenticated == true) openFolderBrowser(SourceType.DROPBOX, accountId)
                         else startDropboxAuth(accountId)
                     }
                     else -> {}
@@ -441,10 +397,8 @@ class MainActivity : AppCompatActivity() {
         menuButton.setOnClickListener { view ->
             lifecycleScope.launch {
                 val account = accountId?.let { id ->
-                    val dreamSourceType = sourceTypeToDreamSourceType(sourceType)
-                    if (dreamSourceType != null) {
-                        SettingsManager.getAccount(this@MainActivity, dreamSourceType, id)
-                    } else null
+                    val dreamSourceType = sourceType.toDreamSourceType()
+                    SettingsManager.getAccount(this@MainActivity, dreamSourceType, id)
                 }
                 showAccountMenu(view, sourceType, accountId, account?.accountEmail ?: "this account")
             }
@@ -454,39 +408,55 @@ class MainActivity : AppCompatActivity() {
         return card to cardInfo
     }
 
-    private fun showAccountMenu(anchorView: View, sourceType: SourceCardType, accountId: String?, email: String) {
+    private fun showAccountMenu(anchorView: View, sourceType: SourceType, accountId: String?, email: String) {
         if (accountId == null) return
 
         val popup = PopupMenu(this, anchorView)
-        popup.menu.add("Remove account")
-        popup.setOnMenuItemClickListener {
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Remove Account?")
-                .setMessage("Are you sure you want to remove the account '$email'? This action cannot be undone.")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Remove") { _, _ ->
-                    lifecycleScope.launch {
-                        removeAccount(sourceType, accountId, email)
+        
+        if (sourceType == SourceType.GOOGLE_DRIVE || sourceType == SourceType.DROPBOX) {
+            popup.menu.add(0, 1, 0, "Re-authenticate")
+        }
+        
+        popup.menu.add(0, 2, 0, "Remove account")
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> {
+                    when (sourceType) {
+                        SourceType.GOOGLE_DRIVE -> startGoogleDriveAuth(accountId)
+                        SourceType.DROPBOX -> startDropboxAuth(accountId)
+                        else -> {}
                     }
                 }
-                .show()
+                2 -> {
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle("Remove Account?")
+                        .setMessage("Are you sure you want to remove the account '$email'? This action cannot be undone.")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Remove") { _, _ ->
+                            lifecycleScope.launch {
+                                removeAccount(sourceType, accountId, email)
+                            }
+                        }
+                        .show()
+                }
+            }
             true
         }
         popup.show()
     }
 
-    private suspend fun removeAccount(sourceType: SourceCardType, accountId: String, email: String) {
-        val dreamSourceType = sourceTypeToDreamSourceType(sourceType) ?: return
+    private suspend fun removeAccount(sourceType: SourceType, accountId: String, email: String) {
+        val dreamSourceType = sourceType.toDreamSourceType()
 
         // Remove from SettingsManager
         SettingsManager.removeAccount(this, dreamSourceType, accountId)
 
         // If it's a Google Drive account, also sign it out from the manager
-        if (sourceType == SourceCardType.GOOGLE_DRIVE) {
+        if (sourceType == SourceType.GOOGLE_DRIVE) {
             googleAccountManager.signOutAccount(accountId)
         }
         // If it's a Dropbox account, sign it out from its manager
-        if (sourceType == SourceCardType.DROPBOX) {
+        if (sourceType == SourceType.DROPBOX) {
             dropboxAccountManager.signOutAccount(accountId)
         }
 
@@ -514,11 +484,10 @@ class MainActivity : AppCompatActivity() {
     private suspend fun refreshSourceCards() {
         isRestoringToggleState = true
 
-        sourceCards.forEach { cardData ->
+        sourceCards.toList().forEach { cardData ->
             val account = cardData.accountId?.let { id ->
-                sourceTypeToDreamSourceType(cardData.sourceType)?.let { dreamType ->
-                    SettingsManager.getAccount(this, dreamType, id)
-                }
+                val dreamType = cardData.sourceType.toDreamSourceType()
+                SettingsManager.getAccount(this, dreamType, id)
             }
 
             // Update switch state from account's enabled flag
@@ -540,9 +509,9 @@ class MainActivity : AppCompatActivity() {
                     cardData.accountId?.let { id ->
                         val filter = getContentFilterFilter()
                         when (cardData.sourceType) {
-                            SourceCardType.GOOGLE_DRIVE -> googleDrivePhotoRepository.prefetchRootFolders(id, filter)
-                            SourceCardType.GALLERY -> galleryPhotoRepository.prefetchRootFolders(filter)
-                            SourceCardType.DROPBOX -> dropboxPhotoRepository.prefetchRootFolders(id, filter)
+                            SourceType.GOOGLE_DRIVE -> googleDrivePhotoRepository.prefetchRootFolders(id, filter)
+                            SourceType.GALLERY -> galleryPhotoRepository.prefetchRootFolders(filter)
+                            SourceType.DROPBOX -> dropboxPhotoRepository.prefetchRootFolders(id, filter)
                             else -> {}
                         }
                     }
@@ -588,28 +557,27 @@ class MainActivity : AppCompatActivity() {
 
     private fun showAddSourcesDialog() {
         lifecycleScope.launch {
-            val sources = mutableListOf<Pair<String, SourceCardType>>()
+            val sources = mutableListOf<Pair<String, SourceType>>()
 
             // Gallery is a singleton source, only show it if it hasn't been added yet
             val galleryAccounts = SettingsManager.getAccountsForSource(
                 this@MainActivity, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
             )
             if (galleryAccounts.isEmpty()) {
-                sources.add("Gallery" to SourceCardType.GALLERY)
+                sources.add("Gallery" to SourceType.GALLERY)
             }
 
             // Google Drive supports multiple accounts, always show it
-            sources.add("Google Drive" to SourceCardType.GOOGLE_DRIVE)
+            sources.add("Google Drive" to SourceType.GOOGLE_DRIVE)
             
             // Dropbox supports multiple accounts, always show it
-            sources.add("Dropbox" to SourceCardType.DROPBOX)
+            sources.add("Dropbox" to SourceType.DROPBOX)
 
             val sourceNames = sources.map { it.first }.toTypedArray()
             var selectedIndex = 0
 
             MaterialAlertDialogBuilder(this@MainActivity)
-                .setTitle("Add Account")
-                .setMessage("Select which source you want to add:")
+                .setTitle("Select source to add")
                 .setSingleChoiceItems(sourceNames, selectedIndex) { _, which -> selectedIndex = which }
                 .setPositiveButton("Add") { _, _ ->
                     if (selectedIndex >= 0 && selectedIndex < sources.size) {
@@ -621,9 +589,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun handleAddSource(sourceType: SourceCardType) {
+    private suspend fun handleAddSource(sourceType: SourceType) {
         when (sourceType) {
-            SourceCardType.GALLERY -> {
+            SourceType.GALLERY -> {
                 // Gallery is a singleton source, only add if it doesn't exist.
                 val galleryAccounts = SettingsManager.getAccountsForSource(this, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY)
                 if (galleryAccounts.isEmpty()) {
@@ -643,10 +611,10 @@ class MainActivity : AppCompatActivity() {
                     showSnackbar("Gallery source already exists.")
                 }
             }
-            SourceCardType.GOOGLE_DRIVE -> {
+            SourceType.GOOGLE_DRIVE -> {
                 startGoogleDriveAuth()
             }
-            SourceCardType.DROPBOX -> {
+            SourceType.DROPBOX -> {
                 startDropboxAuth()
             }
             else -> {}
@@ -671,7 +639,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateSourceStatus(sourceType: SourceCardType, isAuthenticated: Boolean, accountName: String? = null, accountId: String? = null) {
+    private fun updateSourceStatus(sourceType: SourceType, isAuthenticated: Boolean, accountName: String? = null, accountId: String? = null) {
         val displayText = if (isAuthenticated) {
             accountName?.let { "Signed in as $it" } ?: "Signed in as Unknown"
         } else {
@@ -702,10 +670,10 @@ class MainActivity : AppCompatActivity() {
         dropboxAuthLauncher.launch(intent)
     }
 
-    private fun openFolderBrowser(sourceType: SourceCardType, accountId: String? = null) {
+    private fun openFolderBrowser(sourceType: SourceType, accountId: String? = null) {
         val intent = android.content.Intent(this, FolderBrowserActivity::class.java).apply {
-            val dreamType = sourceTypeToDreamSourceType(sourceType)
-            dreamType?.let { putExtra(FolderBrowserActivity.EXTRA_SOURCE_TYPE, it.name) }
+            val dreamType = sourceType.toDreamSourceType()
+            putExtra(FolderBrowserActivity.EXTRA_SOURCE_TYPE, dreamType.name)
             accountId?.let { putExtra(FolderBrowserActivity.EXTRA_ACCOUNT_ID, it) }
         }
         folderLauncher.launch(intent)
@@ -779,6 +747,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         updateActivationCardVisibility()
         lifecycleScope.launch {
+            buildSourceCards() // Forces the views to rebuild and grab any newly migrated Account IDs
             refreshSourceCards()
         }
     }
@@ -819,12 +788,4 @@ class MainActivity : AppCompatActivity() {
         val menuButton: ImageButton
     )
 
-    private fun sourceTypeToDreamSourceType(sourceType: SourceCardType): com.vincentwetzel.androidscreensaver.dream.SourceType? {
-        return when (sourceType) {
-            SourceCardType.GALLERY -> com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
-            SourceCardType.GOOGLE_DRIVE -> com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE
-            SourceCardType.DROPBOX -> com.vincentwetzel.androidscreensaver.dream.SourceType.DROPBOX
-            else -> null
-        }
-    }
 }

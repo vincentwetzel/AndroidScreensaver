@@ -8,6 +8,8 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.vincentwetzel.androidscreensaver.dream.SlideshowManager
 import com.vincentwetzel.androidscreensaver.data.model.TimeoutMinutes
 import com.vincentwetzel.androidscreensaver.data.model.TimeoutUnit
@@ -37,47 +39,50 @@ class ScreensaverPreviewActivity : AppCompatActivity() {
         // Enter immersive fullscreen mode (hide status bar, nav bar)
         enableImmersiveMode()
         
-        // Check if any sources are configured
-        val hasSources = SettingsManager.hasAnySourceConfigured(this)
-        
-        if (!hasSources) {
-            // Show "no sources configured" message (same as DreamService)
-            val noSourcesLayout = com.vincentwetzel.androidscreensaver.ui.slideshow.NoSourcesView(this)
-            setContentView(noSourcesLayout)
-            android.util.Log.d("PreviewActivity", "No sources configured - showing setup message")
-        } else {
-            // Create and show the slideshow
-            slideshowView = SlideshowView(this).apply {
-                layoutParams = android.view.ViewGroup.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                
-                onSlideshowStarted = { photos ->
-                    val label = when (slideshowManager.config.mediaTypeFilter) {
-                        com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY -> "videos"
-                        com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "photos"
-                        else -> "items"
-                    }
-                    Toast.makeText(this@ScreensaverPreviewActivity, "Slideshow started: ${photos.size} $label", Toast.LENGTH_SHORT).show()
-                    android.util.Log.d("PreviewActivity", "Slideshow started with ${photos.size} $label")
-                }
-
-                onError = { error ->
-                    Toast.makeText(this@ScreensaverPreviewActivity, "Error: $error", Toast.LENGTH_LONG).show()
-                    android.util.Log.e("PreviewActivity", "Slideshow error: $error")
-                }
-
-                // Initialize and start
-                slideshowManager.loadConfig()
-                initialize(slideshowManager)
-            }
+        lifecycleScope.launch {
+            // Check if any sources are configured
+            val hasSources = SettingsManager.hasAnySourceConfigured(this@ScreensaverPreviewActivity)
             
-            setContentView(slideshowView)
-        }
+            if (!hasSources) {
+                // Show "no sources configured" message (same as DreamService)
+                val noSourcesLayout = com.vincentwetzel.androidscreensaver.ui.slideshow.NoSourcesView(this@ScreensaverPreviewActivity)
+                setContentView(noSourcesLayout)
+                android.util.Log.d("PreviewActivity", "No sources configured - showing setup message")
+            } else {
+                // Create and show the slideshow
+                slideshowManager.loadConfig()
+                
+                slideshowView = SlideshowView(this@ScreensaverPreviewActivity).apply {
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    
+                    onSlideshowStarted = { photos ->
+                        val label = when (slideshowManager.config.mediaTypeFilter) {
+                            com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY -> "videos"
+                            com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "photos"
+                            else -> "items"
+                        }
+                        Toast.makeText(this@ScreensaverPreviewActivity, "Slideshow started: ${photos.size} $label", Toast.LENGTH_SHORT).show()
+                        android.util.Log.d("PreviewActivity", "Slideshow started with ${photos.size} $label")
+                    }
 
-        // Setup timeout if enabled
-        setupTimeout()
+                    onError = { error ->
+                        Toast.makeText(this@ScreensaverPreviewActivity, "Error: $error", Toast.LENGTH_LONG).show()
+                        android.util.Log.e("PreviewActivity", "Slideshow error: $error")
+                    }
+
+                    // Initialize and start
+                    initialize(slideshowManager)
+                }
+                
+                setContentView(slideshowView)
+                
+                // Setup timeout if enabled
+                setupTimeout()
+            }
+        }
     }
 
     /**

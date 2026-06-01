@@ -14,7 +14,6 @@ This file is the active backlog and quality checklist. Completed release history
 
 - [ ] Revalidate `./gradlew assembleDebug` after the AGP 9.2.1 bump and confirm the app still runs.
 - [ ] Add enforceable style/static-analysis tooling such as ktlint, detekt, or Spotless.
-- [ ] Replace dynamic dependency versions with pinned versions.
 - [ ] Unit tests for repositories.
 - [ ] Instrumentation tests for folder browser flows.
 - [ ] Lint checks passing.

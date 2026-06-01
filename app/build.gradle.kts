@@ -1,7 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
+}
+
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        load(localPropertiesFile.inputStream())
+    }
 }
 
 android {
@@ -26,7 +35,11 @@ android {
 
         // For TV devices
         manifestPlaceholders["leanbackRequired"] = false
-        manifestPlaceholders["DROPBOX_APP_KEY"] = "default_key"
+        
+        // Read and aggressively sanitize the app key to prevent quote/whitespace errors
+        val dropboxAppKey = localProperties.getProperty("DROPBOX_APP_KEY", "default_key").replace("\"", "").replace("'", "").trim()
+        manifestPlaceholders["DROPBOX_APP_KEY"] = dropboxAppKey
+        buildConfigField("String", "DROPBOX_APP_KEY", "\"$dropboxAppKey\"")
     }
 
     buildTypes {
@@ -132,7 +145,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:5.3.2")
     
     // Future Cloud Storage SDKs (disabled for v1.0)
-    implementation("com.dropbox.core:dropbox-core-sdk:5.+")
+    implementation("com.dropbox.core:dropbox-core-sdk:5.4.6")
     // implementation("com.microsoft.graph:microsoft-graph:5.80.0")
     // implementation("com.jcifs:jcifs-ng:2.1.9")
     // implementation("com.github.thegrizzlylabs:sardine-android:0.8")
@@ -144,11 +157,10 @@ dependencies {
     
     // Testing
     testImplementation("junit:junit:4.13.2")
-androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 }
 
 hilt {
     enableAggregatingTask = true
 }
-

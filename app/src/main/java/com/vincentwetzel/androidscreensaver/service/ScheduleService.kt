@@ -10,50 +10,55 @@ import com.vincentwetzel.androidscreensaver.data.model.DayOfWeek
 import com.vincentwetzel.androidscreensaver.receiver.AlarmReceiver
 import com.vincentwetzel.androidscreensaver.utils.SettingsManager
 import java.util.Calendar
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class ScheduleService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val config = SettingsManager.getSlideshowConfig(this)
-        
-        config.autostartSchedules.forEachIndexed { index, schedule ->
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val alarmIntent = Intent(this, AlarmReceiver::class.java).let { intent ->
-                intent.action = "START_SCREENSAVER"
-                PendingIntent.getBroadcast(this, index, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        CoroutineScope(Dispatchers.IO).launch {
+            val config = SettingsManager.getSlideshowConfig(this@ScheduleService)
+            
+            config.autostartSchedules.forEachIndexed { index, schedule ->
+                val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                val alarmIntent = Intent(this@ScheduleService, AlarmReceiver::class.java).let { intent ->
+                    intent.action = "START_SCREENSAVER"
+                    PendingIntent.getBroadcast(this@ScheduleService, index, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                }
+                
+                if (schedule.enabled) {
+                    val nextAlarmTime = getNextAlarmTime(schedule.timeHour, schedule.timeMinute, schedule.daysOfWeek)
+                    if (nextAlarmTime != null) {
+                        alarmManager.setExact(
+                            AlarmManager.RTC_WAKEUP,
+                            nextAlarmTime.timeInMillis,
+                            alarmIntent
+                        )
+                    }
+                } else {
+                    alarmManager.cancel(alarmIntent)
+                }
             }
             
-            if (schedule.enabled) {
-                val nextAlarmTime = getNextAlarmTime(schedule.timeHour, schedule.timeMinute, schedule.daysOfWeek)
-                if (nextAlarmTime != null) {
-                    alarmManager.setExact(
-                        AlarmManager.RTC_WAKEUP,
-                        nextAlarmTime.timeInMillis,
-                        alarmIntent
-                    )
+            config.autostopSchedules.forEachIndexed { index, schedule ->
+                val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                val alarmIntent = Intent(this@ScheduleService, AlarmReceiver::class.java).let { intent ->
+                    intent.action = "STOP_SCREENSAVER"
+                    PendingIntent.getBroadcast(this@ScheduleService, 100 + index, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                 }
-            } else {
-                alarmManager.cancel(alarmIntent)
-            }
-        }
-        
-        config.autostopSchedules.forEachIndexed { index, schedule ->
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val alarmIntent = Intent(this, AlarmReceiver::class.java).let { intent ->
-                intent.action = "STOP_SCREENSAVER"
-                PendingIntent.getBroadcast(this, 100 + index, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            }
-            if (schedule.enabled) {
-                val nextAlarmTime = getNextAlarmTime(schedule.timeHour, schedule.timeMinute, schedule.daysOfWeek)
-                if (nextAlarmTime != null) {
-                    alarmManager.setExact(
-                        AlarmManager.RTC_WAKEUP,
-                        nextAlarmTime.timeInMillis,
-                        alarmIntent
-                    )
+                if (schedule.enabled) {
+                    val nextAlarmTime = getNextAlarmTime(schedule.timeHour, schedule.timeMinute, schedule.daysOfWeek)
+                    if (nextAlarmTime != null) {
+                        alarmManager.setExact(
+                            AlarmManager.RTC_WAKEUP,
+                            nextAlarmTime.timeInMillis,
+                            alarmIntent
+                        )
+                    }
+                } else {
+                    alarmManager.cancel(alarmIntent)
                 }
-            } else {
-                alarmManager.cancel(alarmIntent)
             }
         }
 

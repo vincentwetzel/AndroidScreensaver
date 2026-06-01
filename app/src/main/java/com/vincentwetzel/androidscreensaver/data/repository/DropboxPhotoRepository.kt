@@ -38,7 +38,7 @@ class DropboxPhotoRepository @Inject constructor(
         )
     }
 
-    override fun getAuthenticatedAccountIds(): List<String> = dropboxRepository.getAuthenticatedAccountIds()
+    override fun getAuthenticatedAccountIds(): List<String> = dropboxRepository.getAuthenticatedAccountIds().toList()
 
     // region PhotoRepository Interface Implementation
     override fun isAuthenticated(): Boolean {

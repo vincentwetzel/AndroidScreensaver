@@ -9,6 +9,7 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 - **Activities** - Single-screen UIs such as `MainActivity`, settings screens, auth screens, and folder browsers.
 - **Adapters** - RecyclerView adapters for source and folder lists.
 - **Views** - Observe ViewModels through `StateFlow`/`LiveData`.
+- **FolderBrowserActivity** - Shared cloud folder browser for Google Drive and Dropbox. It can launch source-specific re-authentication from the toolbar or auth-error empty state, then reload the current folder for the same account.
 - **SlideshowView** - Custom `FrameLayout` that renders photos/videos, transitions, overlays, and playback behavior.
 - **NoSourcesView** - Setup guidance when no sources are configured.
 - **ScreensaverPreviewActivity** - Activity-based preview that mirrors DreamService behavior for testing.
@@ -74,7 +75,7 @@ Preview or DreamService starts
 | `DropboxRepository` | Dropbox account and client facade |
 | `BaseAccountManager` | Abstract class centralizing common multi-account maps and auth queries |
 | `GoogleAccountManager` | Per-account Google auth, credentials, and Drive services |
-| `DropboxAccountManager` | Per-account Dropbox access tokens, emails, and clients |
+| `DropboxAccountManager` | Per-account Dropbox PKCE credentials, emails, and clients |
 | `CloudFolderViewModel` | Shared folder browsing, search, back stack, and recursive subfolder lookup for account-scoped cloud sources |
 | `SlideshowManager` | Combines sources and applies slideshow config |
 | `SlideshowView` | Displays photos/videos, transitions, overlays, and playback |
@@ -91,6 +92,7 @@ Preview or DreamService starts
 - `SlideshowManager` chunk-loads selected folders in small concurrent batches to limit memory/API spikes.
 - ViewModel work runs in `viewModelScope`.
 - Main source cards read persisted per-account selected media counts so card refreshes do not block on recursive cloud API counts; repository prefetch refreshes those counts in the background.
+- UI settings/account reads are suspend calls and must run from coroutines. Activities use `lifecycleScope`, while `ScheduleService` performs schedule reads on an IO coroutine before setting alarms.
 
 ## Screensaver Implementation
 
@@ -154,6 +156,7 @@ All settings are persisted through DataStore Preferences.
 - `SlideshowManager.loadPhotos()` checks network restrictions before cloud fetches.
 - `SlideshowView.showPhoto()` applies match-orientation behavior.
 - `SlideshowView.startAutoAdvance()` reloads config each cycle so setting changes can take effect mid-slideshow.
+- `ScreensaverPreviewActivity` loads source state and slideshow config asynchronously before rendering, matching the suspend settings contract used by DreamService.
 - DreamService handles touch exit, receiver cleanup, timeout cleanup, and battery-saver pause behavior.
 
 ## Coding Standards

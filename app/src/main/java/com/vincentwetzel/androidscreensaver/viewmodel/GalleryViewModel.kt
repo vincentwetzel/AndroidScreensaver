@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vincentwetzel.androidscreensaver.data.model.FolderError
 import com.vincentwetzel.androidscreensaver.data.model.FolderError.Companion.fromException
-import com.vincentwetzel.androidscreensaver.data.model.FolderError.Companion.userMessage
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
 import com.vincentwetzel.androidscreensaver.data.repository.GalleryPhotoRepository
 import dagger.hilt.android.lifecycle.HiltViewModel

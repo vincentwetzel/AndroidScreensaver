@@ -3,9 +3,11 @@ package com.vincentwetzel.androidscreensaver.utils
 import android.content.Context
 import android.content.Intent
 import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKeys
+import androidx.security.crypto.MasterKey
 import com.dropbox.core.DbxRequestConfig
 import com.dropbox.core.android.Auth
+import com.dropbox.core.http.OkHttp3Requestor
+import okhttp3.OkHttpClient
 import com.dropbox.core.v2.DbxClientV2
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -14,27 +16,28 @@ import android.util.Log
 import com.dropbox.core.oauth.DbxCredential
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import com.dropbox.core.v2.users.FullAccount
 
 @Singleton
 class DropboxAccountManager @Inject constructor(
     @ApplicationContext context: Context
 ) : BaseAccountManager<DropboxAccountManager.AccountState>(context) {
-    private val DROPBOX_APP_KEY = DropboxOAuthConfig.APP_KEY
-
     private val ACCESS_TOKEN_PREF_NAME = "dropbox_access_tokens"
-    private val masterKeyAlias: String = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+    private val masterKey = MasterKey.Builder(context)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
     private val sharedPreferences = EncryptedSharedPreferences.create(
-        ACCESS_TOKEN_PREF_NAME,
-        masterKeyAlias,
         context,
+        ACCESS_TOKEN_PREF_NAME,
+        masterKey,
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
     data class AccountState(
         val accountId: String,
-        val accessToken: String,
+        val credential: DbxCredential,
         val client: DbxClientV2,
         val email: String? = null // Store email for display/identification
     )
@@ -62,15 +65,17 @@ class DropboxAccountManager @Inject constructor(
      */
     suspend fun handleSignInResult(): String? {
         return withContext(Dispatchers.IO) {
-            val accessToken = Auth.getOAuth2Token()
-            if (accessToken.isNullOrEmpty()) {
-                Log.e("DropboxAccountManager", "Failed to get OAuth2 token")
+            val credential = Auth.getDbxCredential()
+            if (credential == null) {
+                Log.e("DropboxAccountManager", "Failed to get DbxCredential from PKCE flow")
                 return@withContext null
             }
 
             // Create DbxClientV2 to get user info
-            val config = DbxRequestConfig.newBuilder("android-screensaver").build()
-            val client = DbxClientV2(config, accessToken)
+            val config = DbxRequestConfig.newBuilder("android-screensaver")
+                .withHttpRequestor(OkHttp3Requestor(OkHttpClient()))
+                .build()
+            val client = DbxClientV2(config, credential)
 
             try {
                 val currentAccount: FullAccount = client.users().currentAccount
@@ -81,12 +86,19 @@ class DropboxAccountManager @Inject constructor(
                     Log.d("DropboxAccountManager", "Account $accountId already authenticated. Updating token.")
                 }
 
-                accountStates[accountId] = AccountState(accountId, accessToken, client, email)
+                accountStates[accountId] = AccountState(accountId, credential, client, email)
                 Log.d("DropboxAccountManager", "Authenticated Dropbox account: $accountId")
 
-                // Save accessToken securely
+                val credJson = JSONObject().apply {
+                    put("accessToken", credential.accessToken)
+                    credential.expiresAt?.let { put("expiresAt", it) }
+                    credential.refreshToken?.let { put("refreshToken", it) }
+                    credential.appKey?.let { put("appKey", it) }
+                }.toString()
+
+                // Save credential securely
                 sharedPreferences.edit()
-                    .putString(accountId, accessToken)
+                    .putString(accountId, credJson)
                     .putString("${accountId}_email", email)
                     .apply()
 
@@ -108,14 +120,37 @@ class DropboxAccountManager @Inject constructor(
             // Skip email auxiliary keys during the main iteration
             if (accountId.endsWith("_email")) continue
             
-            val savedAccessToken = sharedPreferences.getString(accountId, null)
-            if (!savedAccessToken.isNullOrEmpty()) {
-                val config = DbxRequestConfig.newBuilder("android-screensaver").build()
-                val client = DbxClientV2(config, savedAccessToken)
-                val email = sharedPreferences.getString("${accountId}_email", null)
-                
-                accountStates[accountId] = AccountState(accountId, savedAccessToken, client, email)
-                Log.d("DropboxAccountManager", "Restored existing Dropbox account: $accountId")
+            val savedData = sharedPreferences.getString(accountId, null)
+            if (!savedData.isNullOrEmpty()) {
+                try {
+                    val json = JSONObject(savedData)
+                    val expiresAt = if (json.isNull("expiresAt")) null else json.getLong("expiresAt")
+                    val refreshToken = if (json.isNull("refreshToken")) null else json.getString("refreshToken")
+                    val appKey = if (json.isNull("appKey")) null else json.getString("appKey")
+                    
+                    val credential = DbxCredential(
+                        json.getString("accessToken"),
+                        expiresAt,
+                        refreshToken,
+                        appKey
+                    )
+                    
+                    val config = DbxRequestConfig.newBuilder("android-screensaver")
+                        .withHttpRequestor(OkHttp3Requestor(OkHttpClient()))
+                        .build()
+                    val client = DbxClientV2(config, credential)
+                    val email = sharedPreferences.getString("${accountId}_email", null)
+                    
+                    accountStates[accountId] = AccountState(accountId, credential, client, email)
+                    Log.d("DropboxAccountManager", "Restored existing Dropbox account: $accountId")
+                } catch (e: Exception) {
+                    Log.e("DropboxAccountManager", "Failed to restore existing Dropbox account $accountId", e)
+                    // Clean up obsolete/legacy token formats (Zero Backward Compatibility)
+                    sharedPreferences.edit()
+                        .remove(accountId)
+                        .remove("${accountId}_email")
+                        .apply()
+                }
             }
         }
     }
@@ -131,7 +166,7 @@ class DropboxAccountManager @Inject constructor(
      * Get the access token for a specific account.
      */
     override fun getAccessToken(accountId: String): String? {
-        return accountStates[accountId]?.accessToken
+        return accountStates[accountId]?.credential?.accessToken
     }
 
     /**
@@ -145,7 +180,7 @@ class DropboxAccountManager @Inject constructor(
      * Check if a specific account is authenticated.
      */
     override fun isAccountAuthenticated(accountId: String): Boolean {
-        return super.isAccountAuthenticated(accountId) && accountStates[accountId]?.accessToken != null
+        return super.isAccountAuthenticated(accountId) && accountStates[accountId]?.credential != null
     }
 
     /**

@@ -26,13 +26,16 @@
 
   These are now handled by AGP 9.2.0 defaults. Retained only essential properties: `android.nonTransitiveRClass` and `android.enableJetifier`.
 
-- **Migrated to AGP 9.1 built-in Kotlin** — Removed explicit `org.jetbrains.kotlin.android` plugin from root and app `build.gradle.kts` files. AGP 9.1+ includes Kotlin as a built-in feature, eliminating plugin conflicts. Added `android.disallowKotlinSourceSets=false` to allow KSP to generate Kotlin sources. Replaced deprecated `kotlinOptions` with modern `kotlin` DSL block.
+- **Migrated to AGP 9.1 built-in Kotlin** - Removed explicit `org.jetbrains.kotlin.android` plugin from root and app `build.gradle.kts` files. AGP 9.1+ includes Kotlin as a built-in feature, eliminating plugin conflicts. Added `android.disallowKotlinSourceSets=false` to allow KSP to generate Kotlin sources. Replaced deprecated `kotlinOptions` with modern `kotlin` DSL block.
 
-- **Enabled BuildConfig generation** — Added `buildConfig = true` to buildFeatures for custom debug/release configuration fields.
+- **Enabled BuildConfig generation** - Added `buildConfig = true` to buildFeatures for custom debug/release configuration fields.
+- **Injected Dropbox app key from local.properties** - `DROPBOX_APP_KEY` is now read from `local.properties`, sanitized, and exposed through `BuildConfig.DROPBOX_APP_KEY` for the Dropbox PKCE OAuth flow.
 
 ### Added
+- **Re-authenticate GUI options** - Added a clear way to re-authenticate cloud accounts directly from the app GUI. A "Re-authenticate" option is now available in the three-dot menu of source cards on the main screen, as well as in the top-right options menu while browsing folders. This resolves token expiration errors without requiring the user to remove and re-add their account.
+- **In-screen re-authenticate button** - Added a prominent "Re-authenticate" button directly to the center of the folder browser empty-state whenever an authentication error prevents folders from loading. The button automatically disappears upon successful sign-in.
+- **Dropbox PKCE OAuth flow** - Dropbox sign-in now uses the modern PKCE flow with explicit read-only scopes and a `BuildConfig` app key, avoiding the legacy OAuth endpoint.
 - **Shared cloud folder browser ViewModel** - Replaced the Google-Drive-only folder browser ViewModel with `CloudFolderViewModel`, allowing Google Drive and Dropbox to share account-scoped folder browsing, search, back-stack navigation, and recursive subfolder lookup.
-- **Burn-in protection for overlays** - Persistent slideshow overlays now shift slightly while playback is active so date, clock, weather, and photo metadata text do not remain pinned to identical OLED/AMOLED pixels for extended sessions.
 - **Dropbox authentication screen** - Added `DropboxAuthActivity` and its auth layout so Dropbox accounts can be added or re-authenticated through the Dropbox OAuth flow with a success toast that includes the account email.
 - **AbstractPhotoRepository** - Extracted shared caching primitives (thread-safe maps, TTL data classes, and sync functionality) entirely out of all repositories, moving them into a single unified base. Both local `GalleryPhotoRepository` and `BaseCloudPhotoRepository` now inherit from it.
 - **BaseCloudPhotoRepository** — Introduced an abstract base class to unify caching logic, background prefetching, and account routing across Google Drive and Dropbox repositories, eliminating duplicated boilerplate.
@@ -46,9 +49,9 @@
 - **Remove account option** — Source cards on the main screen now have a "more" menu with a "Remove account" option. This allows users to remove individual accounts (e.g., a second Google Drive account) after a confirmation dialog.
 
 ### Fixed
-- **Settings initialization save races** - Video playback, photo info, and decoration settings screens now suppress auto-save callbacks until their persisted values have finished populating the UI, preventing default control values from overwriting saved preferences during screen setup.
-- **Schedule preset duplicate saves** - Weekday, weekend, and everyday schedule preset buttons now batch checkbox updates before saving, avoiding transient intermediate writes while the UI is being synchronized.
-- **Settings summary display issues** - Custom screensaver timeout selection now keeps the `CUSTOM` list preference selected after the custom dialog closes, and cache limit summaries now display `Unlimited` correctly instead of formatting every preset as megabytes.
+- **Security API deprecations** - Migrated `EncryptedSharedPreferences` initialization in `DropboxAccountManager` from the deprecated `MasterKeys` API to the modern `MasterKey.Builder` equivalent.
+- **Cloud re-auth selection preservation** - Google Drive and Dropbox re-authentication now preserves existing enabled state, selected folders, deselected folders, cached counts, and last sync metadata when the provider returns a changed account ID.
+- **Dropbox SSL handshake failure** - Fixed a `SSLV3_ALERT_HANDSHAKE_FAILURE` during the Dropbox PKCE token exchange by overriding the default HTTP requestor with `OkHttp3Requestor`, ensuring compatibility with modern TLS cipher suites. Also pinned the dynamic `5.+` Dropbox SDK dependency to `5.4.6` in compliance with coding standards.
 - **Blocking settings access cleanup** - Converted account and slideshow settings calls used by UI flows to suspend access patterns, removing `runBlocking` bridges from `SettingsManager` and routing callers through `lifecycleScope`.
 - **Dropbox source card integration** - Main source cards now include Dropbox accounts in the add-source dialog, route Dropbox auth results, prefetch Dropbox root folders, open the shared cloud folder browser, and sign out the correct account when removed.
 - **Selected folder metadata persistence** - `SettingsManager` now serializes selected folder IDs, names, and paths together, preserving user-facing folder metadata while still URL-encoding delimiter-sensitive values.

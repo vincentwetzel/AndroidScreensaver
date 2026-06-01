@@ -22,6 +22,7 @@ After enabling a source, tap it to browse folders:
 - Selected folders include nested subfolders automatically.
 - Deselect a nested folder to exclude it.
 - Pull down to refresh and detect new or removed folders.
+- Use **Re-authenticate** from the folder browser menu, or the in-screen button that appears after an authentication error, to refresh cloud account access without removing the account.
 - Use **Select All** and **Deselect All** for quick selection.
 - Source cards show the last saved selected-folder media count while refreshed counts are prepared in the background.
 
@@ -98,11 +99,15 @@ Shows folders from one or more Google Drive accounts. The app requests read-only
 
 Authenticated source cards must show `Signed in as [account email]`.
 
+If sign-in expires or a token is revoked, open the source card's three-dot menu and choose **Re-authenticate**. Existing folder selections are kept for the account whenever the provider returns a matching account identity.
+
 ### Dropbox
 
 Shows folders from one or more Dropbox accounts. The app uses the Dropbox OAuth browser flow, then opens the shared cloud folder browser for the signed-in account. It can cache thumbnails and downloaded media locally so selected Dropbox photos and videos load faster after first access.
 
 Authenticated source cards must show `Signed in as [account email]`.
+
+Dropbox sign-in requires `DROPBOX_APP_KEY` to be configured at build time. If authentication expires, use **Re-authenticate** from the source card or folder browser instead of removing and re-adding the account.
 
 ## Troubleshooting
 
@@ -113,4 +118,6 @@ Authenticated source cards must show `Signed in as [account email]`.
 | No photos showing | Verify folders are selected and contain photos or videos matching the Content Type filter. |
 | Google Drive sign-in fails | Check that your device has a Google account added. |
 | 403 error when adding Google account | If the app is unpublished, add the Google account email to Google Cloud Console test users. |
+| Dropbox sign-in does not start | Confirm `DROPBOX_APP_KEY` is set in `local.properties` before building the app. |
+| Cloud folders fail after prior sign-in | Use **Re-authenticate** from the source card menu or folder browser. |
 | Gallery shows empty | Ensure the device has photos and permission is granted. |

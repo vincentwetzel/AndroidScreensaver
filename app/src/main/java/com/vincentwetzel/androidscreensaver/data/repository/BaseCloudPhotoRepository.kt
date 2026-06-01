@@ -88,7 +88,7 @@ abstract class BaseCloudPhotoRepository(
         getAuthenticatedAccountIds().forEach { prefetchRootFolders(it, mediaFilter) }
     }
 
-    protected fun prefetchRootFolders(accountId: String, mediaFilter: String? = null) {
+    fun prefetchRootFolders(accountId: String, mediaFilter: String? = null) {
         prefetchScope.launch {
             try {
                 listFoldersForAccount(null, true, accountId)
