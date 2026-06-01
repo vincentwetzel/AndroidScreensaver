@@ -1,7 +1,6 @@
 package com.vincentwetzel.androidscreensaver.ui.settings
 
 import android.os.Bundle
-import android.util.Log
 import android.view.MenuItem
 import android.view.View
 import android.widget.AdapterView
@@ -27,10 +26,6 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityVideoPlaybackSettingsBinding
     private var isInitializing = true
-
-    companion object {
-        private const val TAG = "VideoPlaybackSettings"
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,17 +65,6 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
 
     private suspend fun loadCurrentSettings() {
         val config = SettingsManager.getSlideshowConfig(this)
-        Log.d(TAG, "=== LOADING settings from DataStore ===")
-        Log.d(TAG, "  videoAudioMode=${config.videoAudioMode}")
-        Log.d(TAG, "  videoCustomVolume=${config.videoCustomVolume}")
-        Log.d(TAG, "  videoMaxDurationSeconds=${config.videoMaxDurationSeconds}")
-        Log.d(TAG, "  videoAutoPlay=${config.videoAutoPlay}")
-        Log.d(TAG, "  videoLoopShort=${config.videoLoopShort}")
-        Log.d(TAG, "  videoShowControls=${config.videoShowControls}")
-        Log.d(TAG, "  videoDisplayMode=${config.videoDisplayMode}")
-        Log.d(TAG, "  videoFixedPlaySeconds=${config.videoFixedPlaySeconds}")
-        Log.d(TAG, "  videoStillTimestamp=${config.videoStillTimestamp}")
-        Log.d(TAG, "  videoPlaybackSpeed=${config.videoPlaybackSpeed}")
 
         // Audio mode
         when (config.videoAudioMode) {
@@ -132,10 +116,6 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
         // Audio mode radio buttons — auto-save
         binding.radioAudio.setOnCheckedChangeListener { _, checkedId ->
             binding.sliderVolume.isEnabled = checkedId == R.id.radio_custom_volume
-            when (checkedId) {
-                R.id.radio_mute -> binding.sliderVolume.value = 0f
-                R.id.radio_custom_volume -> binding.sliderVolume.value = 75f
-            }
             // Save after slider value is set - the slider's listener will also fire
             // but that's fine since both will save the same value
             saveCurrentSettings()
@@ -219,11 +199,6 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
                 else -> VideoPlaybackSpeed.NORMAL
             }
 
-            Log.d(TAG, "=== SAVING settings ===")
-            Log.d(TAG, "  videoAudioMode=$videoAudioMode")
-            Log.d(TAG, "  videoCustomVolume=$videoCustomVolume")
-            Log.d(TAG, "  videoPlaybackSpeed=$videoPlaybackSpeed")
-
             val config = SettingsManager.getSlideshowConfig(this@VideoPlaybackSettingsActivity).copy(
                 videoAudioMode = videoAudioMode,
                 videoCustomVolume = videoCustomVolume,
@@ -238,10 +213,6 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
             )
 
             SettingsManager.saveSlideshowConfig(this@VideoPlaybackSettingsActivity, config)
-            
-            // Verify save by reading back
-            val verifyConfig = SettingsManager.getSlideshowConfig(this@VideoPlaybackSettingsActivity)
-            Log.d(TAG, "  VERIFIED: videoAudioMode=${verifyConfig.videoAudioMode}, videoCustomVolume=${verifyConfig.videoCustomVolume}, videoPlaybackSpeed=${verifyConfig.videoPlaybackSpeed}")
         }
     }
 

@@ -7,6 +7,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.pm.PackageInfoCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
+import com.vincentwetzel.androidscreensaver.BuildConfig
 import com.vincentwetzel.androidscreensaver.databinding.ActivityDebugSettingsBinding
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,13 @@ class DebugSettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (!BuildConfig.DEBUG) {
+            android.widget.Toast.makeText(this, "Debug settings disabled in release builds", android.widget.Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
+
         binding = ActivityDebugSettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -72,11 +80,13 @@ class DebugSettingsActivity : AppCompatActivity() {
         }
 
         // Export logs
+        binding.btnExportLogs.filterTouchesWhenObscured = true
         binding.btnExportLogs.setOnClickListener {
             Snackbar.make(binding.root, "Logs exported to Downloads", Snackbar.LENGTH_SHORT).show()
         }
 
         // Reset settings
+        binding.btnResetSettings.filterTouchesWhenObscured = true
         binding.btnResetSettings.setOnClickListener {
             AlertDialog.Builder(this)
                 .setTitle("Reset All Settings?")
@@ -91,11 +101,16 @@ class DebugSettingsActivity : AppCompatActivity() {
                                 file.delete()
                             }
                         }
-                        kotlinx.coroutines.withContext(Dispatchers.Main) {
-                            Snackbar.make(binding.root, "Settings reset. Exiting app...", Snackbar.LENGTH_LONG).show()
-                            binding.root.postDelayed({
-                                kotlin.system.exitProcess(0)
-                            }, 1500)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                try {
+                                    Snackbar.make(binding.root, "Settings reset. Exiting app...", Snackbar.LENGTH_LONG).show()
+                                } catch (e: Exception) {
+                                    // Ignore if views are detached during destruction
+                                }
+                            }
+                            kotlinx.coroutines.delay(1500)
+                            kotlin.system.exitProcess(0)
                         }
                     }
                 }
@@ -104,6 +119,7 @@ class DebugSettingsActivity : AppCompatActivity() {
         }
 
         // Test crash
+        binding.btnTestCrash.filterTouchesWhenObscured = true
         binding.btnTestCrash.setOnClickListener {
             AlertDialog.Builder(this)
                 .setTitle("Test Crash Reporting")

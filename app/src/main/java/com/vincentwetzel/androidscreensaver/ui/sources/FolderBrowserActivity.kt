@@ -41,8 +41,6 @@ class FolderBrowserActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_SOURCE_TYPE = "source_type"
         const val EXTRA_ACCOUNT_ID = "account_id"
-        const val EXTRA_SELECTED_FOLDERS = "selected_folders"
-        const val RESULT_SELECTED_FOLDERS = "selected_folders_result"
     }
 
     private val authLauncher = registerForActivityResult(
@@ -103,18 +101,14 @@ class FolderBrowserActivity : AppCompatActivity() {
             }
         }
 
-        if (accountId == null) {
-            android.util.Log.e("FolderBrowserActivity", "accountId is missing from intent!")
-            com.google.android.material.snackbar.Snackbar.make(binding.root, "Error: Account ID is missing", com.google.android.material.snackbar.Snackbar.LENGTH_LONG).show()
-        }
-
-        setupToolbar()
-
         if (dreamSourceType == null || accountId == null) {
             android.util.Log.e("FolderBrowserActivity", "Required context missing. Closing browser.")
+            android.widget.Toast.makeText(this, "Error: Account ID or Source Type missing", android.widget.Toast.LENGTH_LONG).show()
             finish()
             return
         }
+
+        setupToolbar()
 
         injectReauthButton()
 
@@ -145,11 +139,17 @@ class FolderBrowserActivity : AppCompatActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        reauthButton = null
+    }
+
     private fun injectReauthButton() {
         val root = binding.root as? android.view.ViewGroup ?: return
         reauthButton = com.google.android.material.button.MaterialButton(this).apply {
             text = "Re-authenticate"
             visibility = View.GONE
+            filterTouchesWhenObscured = true
             setOnClickListener {
                 startReauthFlow()
             }
@@ -220,14 +220,25 @@ class FolderBrowserActivity : AppCompatActivity() {
     private suspend fun setupRecyclerView(mediaFilter: String?) {
         adapter = FolderAdapter(
             onSelectionStateChanged = { selectedIds, deselectedIds ->
+                // Capture synchronous state to prevent corruption if the user navigates
+                // before the coroutine resumes from reading DataStore.
+                val visibleFolders = adapter.getVisibleFolders().associateBy { f -> f.id }
+                val photoCount = adapter.getPhotoCount()
+                
                 lifecycleScope.launch {
                     if (accountId != null && dreamSourceType != null) {
                         val account = SettingsManager.getAccount(this@FolderBrowserActivity, dreamSourceType!!, accountId!!)
                         account?.let {
+                            val existingFolders = it.selectedFolders.associateBy { sf -> sf.folderId }
                             val updated = it.copy(
                                 selectedFolders = selectedIds.map { folderId ->
+                                    val visible = visibleFolders[folderId]
+                                    val existing = existingFolders[folderId]
                                     com.vincentwetzel.androidscreensaver.data.model.SelectedFolder(
-                                        folderId = folderId, folderName = folderId, path = folderId, isSelected = true
+                                        folderId = folderId,
+                                        folderName = visible?.name ?: existing?.folderName ?: folderId,
+                                        path = visible?.path ?: existing?.path ?: folderId,
+                                        isSelected = true
                                     )
                                 },
                                 deselectedFolders = deselectedIds
@@ -235,7 +246,7 @@ class FolderBrowserActivity : AppCompatActivity() {
                             SettingsManager.saveAccount(this@FolderBrowserActivity, updated)
                         }
                     }
-                    updateSummary(selectedIds.size, adapter.getPhotoCount())
+                    updateSummary(selectedIds.size, photoCount)
                 }
             },
             onFolderClick = { folderId ->
@@ -267,7 +278,7 @@ class FolderBrowserActivity : AppCompatActivity() {
         binding.swipeRefresh.setOnRefreshListener {
             lifecycleScope.launch {
                 val mediaFilter = getContentFilter()
-                viewModel.loadFolders(forceRefresh = true, mediaFilter = mediaFilter)
+                viewModel.loadFolders(parentFolderId = viewModel.currentFolderId.value, forceRefresh = true, addToBackStack = false, mediaFilter = mediaFilter)
             }
         }
 
@@ -293,11 +304,8 @@ class FolderBrowserActivity : AppCompatActivity() {
                             binding.emptyState.visibility = View.GONE
                             reauthButton?.visibility = View.GONE
                             adapter.submitList(folders)
-                            restoreSelectedFolders()
                             updateSummary(adapter.getSelectedFolders().size, adapter.getPhotoCount())
                             adapter.setCurrentParentFolderId(viewModel.currentFolderId.value)
-                            val currentFolder = folders.find { it.id == viewModel.currentFolderId.value }
-                            supportActionBar?.title = currentFolder?.name ?: "Browse Folders"
                         }
                     }
                 }
@@ -322,10 +330,7 @@ class FolderBrowserActivity : AppCompatActivity() {
                             binding.swipeRefresh.isRefreshing = false
 
                             // Spawns the auth button if the error is related to authentication
-                            val isAuthError = it.javaClass.simpleName.contains("Auth") ||
-                                    it.userMessage().lowercase().contains("auth") ||
-                                    it.userMessage().lowercase().contains("sign in") ||
-                                    it.userMessage().lowercase().contains("token")
+                            val isAuthError = it is com.vincentwetzel.androidscreensaver.data.model.FolderError.AuthError
 
                             if (isAuthError && binding.recyclerFolders.visibility == View.GONE) {
                                 reauthButton?.visibility = View.VISIBLE
@@ -373,7 +378,7 @@ class FolderBrowserActivity : AppCompatActivity() {
                 if (newText.isNullOrBlank()) {
                     lifecycleScope.launch {
                         val mediaFilter = getContentFilter()
-                        viewModel.loadFolders(parentFolderId = viewModel.currentFolderId.value, mediaFilter = mediaFilter)
+                        viewModel.loadFolders(parentFolderId = viewModel.currentFolderId.value, addToBackStack = false, mediaFilter = mediaFilter)
                     }
                 }
                 return true

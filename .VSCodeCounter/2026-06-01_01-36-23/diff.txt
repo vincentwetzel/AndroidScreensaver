@@ -1,0 +1,101 @@
+Date : 2026-06-01 01:36:23
+Directory : e:\coding_workspaces\Kotlin\AndroidScreensaver
+Total : 47 files,  793 codes, 26 comments, 115 blanks, all 934 lines
+
+Languages
++--------------+------------+------------+------------+------------+------------+
+| language     | files      | code       | comment    | blank      | total      |
++--------------+------------+------------+------------+------------+------------+
+| Kotlin       |         35 |        588 |         27 |         76 |        691 |
+| Markdown     |          8 |        172 |          0 |         34 |        206 |
+| XML          |          2 |         43 |          0 |          7 |         50 |
+| Kotlinscript |          1 |          9 |          1 |          2 |         12 |
+| Python       |          1 |        -19 |         -2 |         -4 |        -25 |
++--------------+------------+------------+------------+------------+------------+
+
+Directories
++-------------------------------------------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                                                                                  | files      | code       | comment    | blank      | total      |
++-------------------------------------------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                                                                                     |         47 |        793 |         26 |        115 |        934 |
+| . (Files)                                                                                                                                             |          9 |        153 |         -2 |         30 |        181 |
+| app                                                                                                                                                   |         38 |        640 |         28 |         85 |        753 |
+| app (Files)                                                                                                                                           |          1 |          9 |          1 |          2 |         12 |
+| app\src                                                                                                                                               |         37 |        631 |         27 |         83 |        741 |
+| app\src\main                                                                                                                                          |         37 |        631 |         27 |         83 |        741 |
+| app\src\main (Files)                                                                                                                                  |          1 |          3 |          0 |          1 |          4 |
+| app\src\main\java                                                                                                                                     |         35 |        588 |         27 |         76 |        691 |
+| app\src\main\java\com                                                                                                                                 |         35 |        588 |         27 |         76 |        691 |
+| app\src\main\java\com\vincentwetzel                                                                                                                   |         35 |        588 |         27 |         76 |        691 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver                                                                                                |         35 |        588 |         27 |         76 |        691 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\data                                                                                           |          9 |         27 |         -6 |          3 |         24 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\data\model                                                                                     |          1 |          2 |          0 |          0 |          2 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\data\repository                                                                                |          8 |         25 |         -6 |          3 |         22 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\di                                                                                             |          1 |        -52 |         -3 |         -7 |        -62 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\dream                                                                                          |          2 |          6 |         -1 |         -1 |          4 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\service                                                                                        |          1 |          5 |          0 |          0 |          5 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\ui                                                                                             |         15 |        513 |         28 |         72 |        613 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\ui (Files)                                                                                     |          1 |          4 |          0 |          1 |          5 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\ui\main                                                                                        |          2 |         50 |          3 |          6 |         59 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\ui\settings                                                                                    |          6 |        164 |          0 |         13 |        177 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\ui\slideshow                                                                                   |          1 |         28 |          3 |          4 |         35 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\ui\sources                                                                                     |          5 |        267 |         22 |         48 |        337 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\utils                                                                                          |          4 |         49 |          6 |          5 |         60 |
+| app\src\main\java\com\vincentwetzel\androidscreensaver\viewmodel                                                                                      |          3 |         40 |          3 |          4 |         47 |
+| app\src\main\res                                                                                                                                      |          1 |         40 |          0 |          6 |         46 |
+| app\src\main\res\layout                                                                                                                               |          1 |         40 |          0 |          6 |         46 |
++-------------------------------------------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++-------------------------------------------------------------------------------------------------------------------------------------------------------+--------------+------------+------------+------------+------------+
+| filename                                                                                                                                              | language     | code       | comment    | blank      | total      |
++-------------------------------------------------------------------------------------------------------------------------------------------------------+--------------+------------+------------+------------+------------+
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\AGENTS.md                                                                                              | Markdown     |          2 |          0 |          0 |          2 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\ARCHITECTURE.md                                                                                        | Markdown     |         15 |          0 |          3 |         18 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\BUILD.md                                                                                               | Markdown     |         10 |          0 |          5 |         15 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\CHANGELOG.md                                                                                           | Markdown     |         39 |          0 |          0 |         39 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\CODING_STANDARDS.md                                                                                    | Markdown     |         93 |          0 |         22 |        115 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\README.md                                                                                              | Markdown     |          4 |          0 |          0 |          4 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\TODO.md                                                                                                | Markdown     |          1 |          0 |          0 |          1 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\USER_GUIDE.md                                                                                          | Markdown     |          8 |          0 |          4 |         12 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\build.gradle.kts                                                                                   | Kotlinscript |          9 |          1 |          2 |         12 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\AndroidManifest.xml                                                                       | XML          |          3 |          0 |          1 |          4 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\data\model\FolderError.kt                       | Kotlin       |          2 |          0 |          0 |          2 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\data\repository\AbstractPhotoRepository.kt      | Kotlin       |          7 |          0 |          1 |          8 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\data\repository\BaseCloudPhotoRepository.kt     | Kotlin       |         50 |         -1 |          9 |         58 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\data\repository\DropboxPhotoRepository.kt       | Kotlin       |        -47 |          0 |         -6 |        -53 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\data\repository\FolderBrowserActivity.kt        | Kotlin       |          0 |          0 |          1 |          1 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\data\repository\GalleryFolderBrowserActivity.kt | Kotlin       |          0 |          0 |          1 |          1 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\data\repository\GalleryPhotoRepository.kt       | Kotlin       |         15 |          0 |          1 |         16 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\data\repository\GoogleDrivePhotoRepository.kt   | Kotlin       |         -3 |         -8 |         -5 |        -16 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\data\repository\GoogleDriveRepository.kt        | Kotlin       |          3 |          3 |          1 |          7 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\di\RepositoryModule.kt                          | Kotlin       |        -52 |         -3 |         -7 |        -62 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\dream\PhotoScreensaverService.kt                | Kotlin       |          9 |          0 |          0 |          9 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\dream\SlideshowManager.kt                       | Kotlin       |         -3 |         -1 |         -1 |         -5 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\service\ScheduleService.kt                      | Kotlin       |          5 |          0 |          0 |          5 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\ScreensaverPreviewActivity.kt                | Kotlin       |          4 |          0 |          1 |          5 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\main\MainActivity.kt                         | Kotlin       |         54 |          3 |          6 |         63 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\main\SourceType.kt                           | Kotlin       |         -4 |          0 |          0 |         -4 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\settings\DebugSettingsActivity.kt            | Kotlin       |         32 |          0 |          2 |         34 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\settings\DecorationSettingsActivity.kt       | Kotlin       |         25 |         -1 |          7 |         31 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\settings\PhotoInfoSettingsActivity.kt        | Kotlin       |         12 |          0 |          1 |         13 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\settings\ScheduleSettingsActivity.kt         | Kotlin       |         29 |          0 |          1 |         30 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\settings\SettingsFragment.kt                 | Kotlin       |         57 |          1 |          1 |         59 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\settings\VideoPlaybackSettingsActivity.kt    | Kotlin       |          9 |          0 |          1 |         10 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\slideshow\SlideshowView.kt                   | Kotlin       |         28 |          3 |          4 |         35 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\sources\DropboxAuthActivity.kt               | Kotlin       |        112 |         12 |         23 |        147 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\sources\FolderAdapter.kt                     | Kotlin       |          3 |          0 |          0 |          3 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\sources\FolderBrowserActivity.kt             | Kotlin       |        130 |          9 |         20 |        159 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\sources\GalleryFolderBrowserActivity.kt      | Kotlin       |         11 |          0 |          2 |         13 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\ui\sources\GoogleDriveAuthActivity.kt           | Kotlin       |         11 |          1 |          3 |         15 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\utils\DropboxAccountManager.kt                  | Kotlin       |         32 |          1 |          2 |         35 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\utils\DropboxOAuthConfig.kt                     | Kotlin       |          0 |         -2 |          0 |         -2 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\utils\GoogleAccountManager.kt                   | Kotlin       |          4 |          2 |          1 |          7 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\utils\SettingsManager.kt                        | Kotlin       |         13 |          5 |          2 |         20 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\viewmodel\CloudFolderViewModel.kt               | Kotlin       |        131 |         41 |         28 |        200 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\viewmodel\GalleryViewModel.kt                   | Kotlin       |         15 |          1 |          1 |         17 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\java\com\vincentwetzel\androidscreensaver\viewmodel\GoogleDriveViewModel.kt               | Kotlin       |       -106 |        -39 |        -25 |       -170 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\app\src\main\res\layout\activity_dropbox_auth.xml                                                      | XML          |         40 |          0 |          6 |         46 |
+| e:\coding_workspaces\Kotlin\AndroidScreensaver\test.py                                                                                                | Python       |        -19 |         -2 |         -4 |        -25 |
+| Total                                                                                                                                                 |              |        793 |         26 |        115 |        934 |
++-------------------------------------------------------------------------------------------------------------------------------------------------------+--------------+------------+------------+------------+------------+

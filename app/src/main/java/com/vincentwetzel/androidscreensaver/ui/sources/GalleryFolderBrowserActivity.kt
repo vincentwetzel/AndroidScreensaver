@@ -39,8 +39,6 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_ACCOUNT_ID = "account_id"
-        const val EXTRA_SELECTED_FOLDERS = "selected_folders"
-        const val RESULT_SELECTED_FOLDERS = "selected_folders_result"
     }
 
     private val permissionLauncher = registerForActivityResult(
@@ -54,8 +52,12 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                 viewModel.loadFolders(parentFolderId = null, forceRefresh = true, addToBackStack = false, mediaFilter = mediaFilter)
             }
         } else {
-            Toast.makeText(this, "Photo permission is required to browse Gallery folders", Toast.LENGTH_LONG).show()
             binding.progressBar.visibility = View.GONE
+            com.google.android.material.snackbar.Snackbar.make(
+                binding.root,
+                com.vincentwetzel.androidscreensaver.data.model.FolderError.PermissionError().userMessage(),
+                com.google.android.material.snackbar.Snackbar.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -65,6 +67,13 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         accountId = intent.getStringExtra(EXTRA_ACCOUNT_ID)
+
+        if (accountId == null) {
+            android.util.Log.e("GalleryFolderBrowser", "accountId is missing from intent!")
+            android.widget.Toast.makeText(this, "Error: Account ID is missing", android.widget.Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
 
         setupToolbar()
 
@@ -113,7 +122,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val hasImages = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
             val hasVideo = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
-            hasImages && hasVideo
+            hasImages || hasVideo
         } else {
             ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
         }
@@ -144,9 +153,14 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
     private suspend fun setupRecyclerView(mediaFilter: String?) {
         adapter = FolderAdapter(
             onSelectionStateChanged = { selectedIds, deselectedIds ->
+                // Capture synchronous state to prevent corruption if the user navigates
+                // before the coroutine resumes from reading DataStore.
+                val visibleFolders = adapter.getVisibleFolders().associateBy { f -> f.id }
+                val photoCount = adapter.getPhotoCount()
+                
                 lifecycleScope.launch {
-                    saveSelections()
-                    updateSummary(selectedIds.size, adapter.getPhotoCount())
+                    saveSelections(selectedIds, deselectedIds, visibleFolders)
+                    updateSummary(selectedIds.size, photoCount)
                 }
             },
             onFolderClick = { folderId ->
@@ -178,6 +192,13 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
     }
 
     private fun setupButtons() {
+        binding.swipeRefresh.setOnRefreshListener {
+            lifecycleScope.launch {
+                val mediaFilter = getContentFilter()
+                viewModel.loadFolders(parentFolderId = viewModel.currentFolderId.value, forceRefresh = true, addToBackStack = false, mediaFilter = mediaFilter)
+            }
+        }
+
         binding.btnSelectAll.setOnClickListener {
             adapter.selectAll()
         }
@@ -187,18 +208,28 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun saveSelections() {
+    private suspend fun saveSelections(
+        selectedIds: Set<String>, 
+        deselectedIds: Set<String>, 
+        visibleFolders: Map<String, com.vincentwetzel.androidscreensaver.data.model.PhotoFolder>
+    ) {
         val dreamSourceType = com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
         accountId?.let { id ->
             val account = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(this, dreamSourceType, id)
             account?.let {
+                val existingFolders = it.selectedFolders.associateBy { sf -> sf.folderId }
                 val updated = it.copy(
-                    selectedFolders = adapter.getSelectedFolders().map { folderId ->
+                    selectedFolders = selectedIds.map { folderId ->
+                        val visible = visibleFolders[folderId]
+                        val existing = existingFolders[folderId]
                         com.vincentwetzel.androidscreensaver.data.model.SelectedFolder(
-                            folderId = folderId, folderName = folderId, path = folderId, isSelected = true
+                            folderId = folderId,
+                            folderName = visible?.name ?: existing?.folderName ?: folderId,
+                            path = visible?.path ?: existing?.path ?: folderId,
+                            isSelected = true
                         )
                     },
-                    deselectedFolders = adapter.getDeselectedFolders()
+                    deselectedFolders = deselectedIds
                 )
                 com.vincentwetzel.androidscreensaver.utils.SettingsManager.saveAccount(this, updated)
             }
@@ -217,13 +248,9 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                             binding.recyclerFolders.visibility = View.VISIBLE
                             binding.emptyState.visibility = View.GONE
                             adapter.submitList(folders)
-                            // Restore selected folders after list is submitted
-                            launch { restoreSelectedFolders() }
+                            updateSummary(adapter.getSelectedFolders().size, adapter.getPhotoCount())
                             // Set parent folder context for auto-checking subfolders
                             adapter.setCurrentParentFolderId(viewModel.currentFolderId.value)
-                            // Update title to show current folder name
-                            val currentFolder = folders.find { it.id == viewModel.currentFolderId.value }
-                            supportActionBar?.title = currentFolder?.name ?: "Browse Folders"
                         }
                         binding.progressBar.visibility = View.GONE
                     }
@@ -243,6 +270,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                 launch {
                     viewModel.isLoading.collectLatest { isLoading ->
                         binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+                        binding.swipeRefresh.isRefreshing = isLoading
                     }
                 }
 
@@ -250,6 +278,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                     viewModel.error.collectLatest { error ->
                         error?.let {
                             binding.progressBar.visibility = View.GONE
+                            binding.swipeRefresh.isRefreshing = false
                             com.google.android.material.snackbar.Snackbar.make(
                                 binding.root,
                                 it.userMessage(),
@@ -292,7 +321,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                 if (newText.isNullOrBlank()) {
                     lifecycleScope.launch {
                         val mediaFilter = getContentFilter()
-                        viewModel.loadFolders(parentFolderId = viewModel.currentFolderId.value, mediaFilter = mediaFilter)
+                        viewModel.loadFolders(parentFolderId = viewModel.currentFolderId.value, addToBackStack = false, mediaFilter = mediaFilter)
                     }
                 }
                 return true

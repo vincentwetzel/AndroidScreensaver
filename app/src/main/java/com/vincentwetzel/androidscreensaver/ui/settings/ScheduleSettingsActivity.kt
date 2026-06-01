@@ -70,9 +70,10 @@ class ScheduleSettingsActivity : AppCompatActivity() {
     }
 
     private suspend fun loadCurrentSettings() {
-        isUpdatingUI = true
         val config = SettingsManager.getSlideshowConfig(this)
         val schedules = if (isAutostart) config.autostartSchedules else config.autostopSchedules
+
+        isUpdatingUI = true
 
         if (schedules.isNotEmpty()) {
             val first = schedules.first()
@@ -188,28 +189,38 @@ class ScheduleSettingsActivity : AppCompatActivity() {
      * Read current UI values and persist to DataStore
      */
     private fun saveCurrentSettings() {
+        // Capture synchronous state to prevent corruption if the user switches tabs 
+        // before the coroutine resumes from reading DataStore.
+        val currentIsAutostart = isAutostart
+        val currentEnabled = binding.switchEnabled.isChecked
+        val currentHour = selectedHour
+        val currentMinute = selectedMinute
+        val currentDays = selectedDays.toSet()
+        val currentRepeat = binding.switchRepeat.isChecked
+        val currentCharging = binding.switchCharging.isChecked
+
         lifecycleScope.launch {
             val config = SettingsManager.getSlideshowConfig(this@ScheduleSettingsActivity)
 
             val newSchedule = ScheduleConfig(
-                enabled = binding.switchEnabled.isChecked,
-                timeHour = selectedHour,
-                timeMinute = selectedMinute,
-                daysOfWeek = selectedDays.toSet(),
-                schedulePreset = if (selectedDays.size == 5 && !selectedDays.contains(DayOfWeek.SATURDAY) && !selectedDays.contains(DayOfWeek.SUNDAY)) {
+                enabled = currentEnabled,
+                timeHour = currentHour,
+                timeMinute = currentMinute,
+                daysOfWeek = currentDays,
+                schedulePreset = if (currentDays.size == 5 && !currentDays.contains(DayOfWeek.SATURDAY) && !currentDays.contains(DayOfWeek.SUNDAY)) {
                     SchedulePreset.WEEKDAYS
-                } else if (selectedDays.size == 2 && selectedDays.contains(DayOfWeek.SATURDAY) && selectedDays.contains(DayOfWeek.SUNDAY)) {
+                } else if (currentDays.size == 2 && currentDays.contains(DayOfWeek.SATURDAY) && currentDays.contains(DayOfWeek.SUNDAY)) {
                     SchedulePreset.WEEKENDS
-                } else if (selectedDays.size == 7) {
+                } else if (currentDays.size == 7) {
                     SchedulePreset.EVERY_DAY
                 } else {
                     SchedulePreset.CUSTOM
                 },
-                repeat = binding.switchRepeat.isChecked,
-                onlyWhenCharging = binding.switchCharging.isChecked
+                repeat = currentRepeat,
+                onlyWhenCharging = currentCharging
             )
 
-            val newConfig = if (isAutostart) {
+            val newConfig = if (currentIsAutostart) {
                 config.copy(autostartSchedules = listOf(newSchedule))
             } else {
                 config.copy(autostopSchedules = listOf(newSchedule))

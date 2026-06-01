@@ -93,6 +93,7 @@ Preview or DreamService starts
 - ViewModel work runs in `viewModelScope`.
 - Main source cards read persisted per-account selected media counts so card refreshes do not block on recursive cloud API counts; repository prefetch refreshes those counts in the background.
 - UI settings/account reads are suspend calls and must run from coroutines. Activities use `lifecycleScope`, while `ScheduleService` performs schedule reads on an IO coroutine before setting alarms.
+- Settings and folder-browser save paths snapshot current UI or adapter state before DataStore reads, then merge the snapshot into the freshly loaded config to avoid stale lifecycle-resume state overwriting newer user choices.
 
 ## Screensaver Implementation
 

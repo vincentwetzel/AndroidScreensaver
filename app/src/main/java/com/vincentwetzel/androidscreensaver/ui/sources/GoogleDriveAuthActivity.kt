@@ -68,6 +68,7 @@ class GoogleDriveAuthActivity : AppCompatActivity() {
             }
         }
 
+        binding.btnSignIn.filterTouchesWhenObscured = true
         binding.btnSignIn.setOnClickListener {
             startGoogleSignIn()
         }

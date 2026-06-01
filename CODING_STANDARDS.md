@@ -24,6 +24,7 @@ This file defines engineering standards for Android Screensaver. Architecture de
 - Do not use Hilt `@IntoMap` multibindings for `PhotoRepository` collections. Inject concrete repositories and assemble the map explicitly in `RepositoryModule`.
 - Use DataStore for persisted app settings. Settings and folder selections persist immediately on user interaction; do not add manual Save buttons.
 - Treat `SettingsManager` reads and writes as suspend operations. Access them from coroutines instead of adding `runBlocking` bridges in UI code.
+- When saving UI state around a suspend read-modify-write, snapshot all view values and adapter state before the first suspension, then merge that captured state into the fresh DataStore config. Do not read mutable view state after a DataStore read resumes.
 - Model hierarchical folder selection with explicit selected and deselected states. Do not treat the absence of a selection as enough when parent cascade behavior exists.
 
 ## Concurrency And Lifecycle

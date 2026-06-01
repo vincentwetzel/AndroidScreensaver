@@ -22,6 +22,7 @@ After enabling a source, tap it to browse folders:
 - Selected folders include nested subfolders automatically.
 - Deselect a nested folder to exclude it.
 - Pull down to refresh and detect new or removed folders.
+- Pull-to-refresh reloads the folder you are currently viewing without changing your folder navigation history.
 - Use **Re-authenticate** from the folder browser menu, or the in-screen button that appears after an authentication error, to refresh cloud account access without removing the account.
 - Use **Select All** and **Deselect All** for quick selection.
 - Source cards show the last saved selected-folder media count while refreshed counts are prepared in the background.
@@ -91,7 +92,7 @@ Settings are accessed through **Menu > Settings**.
 
 ### Gallery
 
-Shows photo folders from your device, such as Camera, Screenshots, and Downloads. Android 13+ uses scoped photo access; older Android versions may require photo read permission.
+Shows photo folders from your device, such as Camera, Screenshots, and Downloads. Android 13+ uses scoped media access and can browse when either image or video permission is granted; older Android versions may require photo read permission.
 
 ### Google Drive
 

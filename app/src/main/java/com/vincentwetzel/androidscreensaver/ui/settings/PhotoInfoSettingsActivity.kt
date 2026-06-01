@@ -96,7 +96,6 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
 
         // Master toggle
         binding.switchEnabled.isChecked = config.enabled
-        updateFieldVisibility(config.enabled)
 
         // Field toggles
         binding.switchFilename.isChecked = config.showFileName
@@ -108,6 +107,9 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
         binding.switchDescription.isChecked = config.showDescription
         binding.switchDimensions.isChecked = config.showDimensions
         binding.switchFilesize.isChecked = config.showFileSize
+        
+        // Update visibility based on loaded state
+        updateFieldVisibility(config.enabled)
 
         // Fade duration
         val fadeIndex = when (config.fadeOutAfterSeconds) {
@@ -315,6 +317,11 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
         binding.switchDescription.visibility = visibility
         binding.switchDimensions.visibility = visibility
         binding.switchFilesize.visibility = visibility
+
+        // Also hide dependent fields if master is disabled. 
+        // If master is enabled, restore their visibility based on their parent toggle's state.
+        binding.switchFilenameExt.visibility = if (enabled && binding.switchFilename.isChecked) View.VISIBLE else View.GONE
+        binding.switchFolderPath.visibility = if (enabled && binding.switchFolder.isChecked) View.VISIBLE else View.GONE
     }
 
     /**
@@ -324,19 +331,21 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
         if (isInitializing) return
         
         lifecycleScope.launch {
-            val newConfig = currentConfig.copy(
-                enabled = binding.switchEnabled.isChecked,
-                showFileName = binding.switchFilename.isChecked,
-                showFileNameWithExtension = binding.switchFilenameExt.isChecked,
-                showFolderName = binding.switchFolder.isChecked,
-                showFolderFullPath = binding.switchFolderPath.isChecked,
-                showDateTaken = binding.switchDate.isChecked,
-                showSourceName = binding.switchSource.isChecked,
-                showDescription = binding.switchDescription.isChecked,
-                showDimensions = binding.switchDimensions.isChecked,
-                showFileSize = binding.switchFilesize.isChecked,
+            // Capture synchronous UI state before suspending to prevent data corruption
+            // if the user interacts with the UI during the DataStore read.
+            
+            val currentEnabled = binding.switchEnabled.isChecked
+            val currentShowFileName = binding.switchFilename.isChecked
+            val currentShowFileNameExt = binding.switchFilenameExt.isChecked
+            val currentShowFolderName = binding.switchFolder.isChecked
+            val currentShowFolderFullPath = binding.switchFolderPath.isChecked
+            val currentShowDateTaken = binding.switchDate.isChecked
+            val currentShowSourceName = binding.switchSource.isChecked
+            val currentShowDescription = binding.switchDescription.isChecked
+            val currentShowDimensions = binding.switchDimensions.isChecked
+            val currentShowFileSize = binding.switchFilesize.isChecked
 
-                fadeOutAfterSeconds = when (binding.spinnerFadeDuration.selectedItemPosition) {
+            val currentFadeOutAfterSeconds = when (binding.spinnerFadeDuration.selectedItemPosition) {
                     0 -> 2
                     1 -> 3
                     2 -> 5
@@ -344,62 +353,87 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
                     4 -> 10
                     5 -> 15
                     else -> Int.MAX_VALUE // Never
-                },
-                fadeOutEnabled = binding.spinnerFadeDuration.selectedItemPosition < 6,
-                fadeAnimationDurationMs = when (binding.spinnerFadeAnimation.selectedItemPosition) {
+            }
+            val currentFadeOutEnabled = binding.spinnerFadeDuration.selectedItemPosition < 6
+            val currentFadeAnimationDurationMs = when (binding.spinnerFadeAnimation.selectedItemPosition) {
                     0 -> 500
                     1 -> 1000
                     2 -> 1500
                     3 -> 2000
                     else -> 1000
-                },
+            }
 
-                position = when (binding.spinnerPosition.selectedItemPosition) {
+            val currentPosition = when (binding.spinnerPosition.selectedItemPosition) {
                     0 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_LEFT
                     1 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_RIGHT
                     2 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_LEFT
                     3 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_RIGHT
                     4 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.CENTER
                     else -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_LEFT
-                },
-                layout = when (binding.spinnerLayout.selectedItemPosition) {
+            }
+            val currentLayout = when (binding.spinnerLayout.selectedItemPosition) {
                     0 -> PhotoInfoLayout.HORIZONTAL
                     1 -> PhotoInfoLayout.VERTICAL
                     2 -> PhotoInfoLayout.COMPACT
                     else -> PhotoInfoLayout.HORIZONTAL
-                },
-                separator = when (binding.spinnerSeparator.selectedItemPosition) {
+            }
+            val currentSeparator = when (binding.spinnerSeparator.selectedItemPosition) {
                     0 -> PhotoInfoSeparator.BULLET
                     1 -> PhotoInfoSeparator.PIPE
                     2 -> PhotoInfoSeparator.DASH
                     3 -> PhotoInfoSeparator.SLASH
                     4 -> PhotoInfoSeparator.COMMA
                     else -> PhotoInfoSeparator.BULLET
-                },
-                background = when (binding.spinnerBackground.selectedItemPosition) {
+            }
+            val currentBackground = when (binding.spinnerBackground.selectedItemPosition) {
                     0 -> PhotoInfoBackground.NONE
                     1 -> PhotoInfoBackground.SEMI_TRANSPARENT
                     2 -> PhotoInfoBackground.SOLID
                     3 -> PhotoInfoBackground.GRADIENT_FADE
                     else -> PhotoInfoBackground.SEMI_TRANSPARENT
-                },
+            }
 
-                // Opacity sliders
-                backgroundOpacity = binding.sliderBgOpacity.value.toInt(),
-                textOpacity = binding.sliderTextOpacity.value.toInt(),
+            // Opacity sliders
+            val currentBgOpacity = binding.sliderBgOpacity.value.toInt()
+            val currentTextOpacity = binding.sliderTextOpacity.value.toInt()
 
-                // Text shadow
-                textShadow = binding.switchTextShadow.isChecked,
-                shadowIntensity = when (binding.spinnerShadowIntensity.selectedItemPosition) {
+            // Text shadow
+            val currentTextShadow = binding.switchTextShadow.isChecked
+            val currentShadowIntensity = when (binding.spinnerShadowIntensity.selectedItemPosition) {
                     0 -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.LIGHT
                     1 -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.MEDIUM
                     2 -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.HEAVY
                     else -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.MEDIUM
-                }
-            )
+            }
 
             val config = SettingsManager.getSlideshowConfig(this@PhotoInfoSettingsActivity)
+            
+            val newConfig = config.photoInfoConfig.copy(
+                enabled = currentEnabled,
+                showFileName = currentShowFileName,
+                showFileNameWithExtension = currentShowFileNameExt,
+                showFolderName = currentShowFolderName,
+                showFolderFullPath = currentShowFolderFullPath,
+                showDateTaken = currentShowDateTaken,
+                showSourceName = currentShowSourceName,
+                showDescription = currentShowDescription,
+                showDimensions = currentShowDimensions,
+                showFileSize = currentShowFileSize,
+                fadeOutAfterSeconds = currentFadeOutAfterSeconds,
+                fadeOutEnabled = currentFadeOutEnabled,
+                fadeAnimationDurationMs = currentFadeAnimationDurationMs,
+                position = currentPosition,
+                layout = currentLayout,
+                separator = currentSeparator,
+                background = currentBackground,
+                backgroundOpacity = currentBgOpacity,
+                textOpacity = currentTextOpacity,
+                textShadow = currentTextShadow,
+                shadowIntensity = currentShadowIntensity
+            )
+
             SettingsManager.saveSlideshowConfig(this@PhotoInfoSettingsActivity, config.copy(photoInfoConfig = newConfig))
+            currentConfig = newConfig
         }
     }
 

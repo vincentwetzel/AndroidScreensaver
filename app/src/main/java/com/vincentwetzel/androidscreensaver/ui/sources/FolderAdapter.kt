@@ -55,7 +55,7 @@ class FolderAdapter(
         selectedFolderIds.addAll(visibleIds)
         deselectedFolderIds.removeAll(visibleIds.toSet())
         notifyDataSetChanged()
-        onSelectionStateChanged(selectedFolderIds, deselectedFolderIds)
+        onSelectionStateChanged(selectedFolderIds.toSet(), deselectedFolderIds.toSet())
     }
 
     fun deselectAll() {
@@ -63,7 +63,7 @@ class FolderAdapter(
         selectedFolderIds.removeAll(visibleIds.toSet())
         deselectedFolderIds.addAll(visibleIds)
         notifyDataSetChanged()
-        onSelectionStateChanged(selectedFolderIds, deselectedFolderIds)
+        onSelectionStateChanged(selectedFolderIds.toSet(), deselectedFolderIds.toSet())
     }
 
     fun getSelectedFolders(): Set<String> {
@@ -72,6 +72,10 @@ class FolderAdapter(
 
     fun getDeselectedFolders(): Set<String> {
         return deselectedFolderIds.toSet()
+    }
+
+    fun getVisibleFolders(): List<PhotoFolder> {
+        return folders.toList()
     }
 
     fun setSelectedFolders(ids: Set<String>) {
@@ -157,7 +161,7 @@ class FolderAdapter(
                     selectedFolderIds.remove(folder.id)
                     deselectedFolderIds.add(folder.id)
                 }
-                onSelectionStateChanged(selectedFolderIds, deselectedFolderIds)
+                onSelectionStateChanged(selectedFolderIds.toSet(), deselectedFolderIds.toSet())
             }
 
             // Clicking anywhere on the row navigates into the folder
