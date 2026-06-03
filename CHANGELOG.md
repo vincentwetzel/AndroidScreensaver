@@ -32,6 +32,7 @@
 - **Injected Dropbox app key from local.properties** - `DROPBOX_APP_KEY` is now read from `local.properties`, sanitized, and exposed through `BuildConfig.DROPBOX_APP_KEY` for the Dropbox PKCE OAuth flow.
 
 ### Added
+- **Low-battery auto-exit** - Added a Display & Power setting to exit the screensaver when the device is not charging and battery level is at or below the configured threshold.
 - **Re-authenticate GUI options** - Added a clear way to re-authenticate cloud accounts directly from the app GUI. A "Re-authenticate" option is now available in the three-dot menu of source cards on the main screen, as well as in the top-right options menu while browsing folders. This resolves token expiration errors without requiring the user to remove and re-add their account.
 - **In-screen re-authenticate button** - Added a prominent "Re-authenticate" button directly to the center of the folder browser empty-state whenever an authentication error prevents folders from loading. The button automatically disappears upon successful sign-in.
 - **Dropbox PKCE OAuth flow** - Dropbox sign-in now uses the modern PKCE flow with explicit read-only scopes and a `BuildConfig` app key, avoiding the legacy OAuth endpoint.
@@ -49,6 +50,19 @@
 - **Remove account option** — Source cards on the main screen now have a "more" menu with a "Remove account" option. This allows users to remove individual accounts (e.g., a second Google Drive account) after a confirmation dialog.
 
 ### Fixed
+- **Photo info settings persistence** - Added DataStore keys for all photo-info overlay options so field visibility, date format, layout, position, font, opacity, background, shadow, separator, and fade behavior survive app restarts.
+- **Google Drive account-picker authorization flow** - Replaced the failing Google Sign-In scope path with Android's Google AccountPicker plus `GoogleAccountCredential` Drive verification. Drive API clients now request read-only Drive access through the selected account before saving the account configuration.
+- **Google Drive auth diagnostic logging** - Added detailed Google Drive sign-in diagnostics for `InvalidScope` failures, including installed package name, signing certificate SHA-1/SHA-256, Google Play Services status/version, account-picker result extras, credential state, and safe token-probe results without logging OAuth token values. Token probes now use full Google userinfo scope URIs and test both Account-object and account-name token APIs.
+- **Google Drive OAuth setup diagnostics** - `InvalidScope` auth failures now show a clearer setup error and log the Drive API, consent scope, test user, package name, and SHA-1 checklist needed to fix Cloud Console configuration. Build and user docs now include the missing Drive API/scope setup steps.
+- **Google Drive Android TV auth trap** - Disabled Google Drive sign-in on Android TV because Drive scopes cannot use Google's device authorization flow and the app's current account-picker path requires interactive account selection.
+- **Short video looping cap** - Short videos now only loop after ExoPlayer reports their duration and use a bounded timeout, preventing looped clips from blocking slideshow advancement forever.
+- **Sensitive log cleanup** - Replaced several account ID, URI, and exception logs with hashed IDs or sanitized class names to reduce the chance of leaking cloud account or media details in debug logs.
+- **SourceType import cleanup** - Removed legacy `dream.SourceType` import aliases from auth activities in favor of the unified `data.model.SourceType`, adhering to the strict "zero backward compatibility" architecture rule.
+- **Debug Settings polish** - Cleaned up fully qualified `Toast` and `PackageManager` usage in `DebugSettingsActivity` by adding proper imports.
+- **Dropbox PKCE Auth Rotation Crash** - Fixed a critical bug in `DropboxAuthActivity` where the aggressive shutdown of the `OkHttpClient` in `onDestroy()` caused the Dropbox SDK's token exchange to fail with a `RejectedExecutionException` if the activity was destroyed while the OAuth browser was open. The HTTP client is now properly scoped as a lazy companion singleton so it persists across configuration changes without leaking.
+- **Debug Settings NPE risk** - Fixed a `NullPointerException` vulnerability in `DebugSettingsActivity` where attempting to export logs while external storage was unmounted or unavailable would crash the app. Safely validates `getExternalFilesDir` before file creation.
+- **Debug Settings Export Crash** - Hardened the `FileProvider` URI generation during log export with a fallback `try-catch` to prevent potential `IllegalArgumentException` crashes if the device's provider paths differ from expectations.
+- **Code styling & Tapjacking protection** - Cleaned up fully qualified coroutine and system references in `DebugSettingsActivity`, and extended obscured touch filtering (`filterTouchesWhenObscured`) to the debug overlay switch to strictly enforce OWASP UI guidelines across all interactable settings.
 - **Security API deprecations** - Migrated `EncryptedSharedPreferences` initialization in `DropboxAccountManager` from the deprecated `MasterKeys` API to the modern `MasterKey.Builder` equivalent.
 - **Cloud re-auth selection preservation** - Google Drive and Dropbox re-authentication now preserves existing enabled state, selected folders, deselected folders, cached counts, and last sync metadata when the provider returns a changed account ID.
 - **Dropbox SSL handshake failure** - Fixed a `SSLV3_ALERT_HANDSHAKE_FAILURE` during the Dropbox PKCE token exchange by overriding the default HTTP requestor with `OkHttp3Requestor`, ensuring compatibility with modern TLS cipher suites. Also pinned the dynamic `5.+` Dropbox SDK dependency to `5.4.6` in compliance with coding standards.
@@ -109,6 +123,11 @@
 - **Gallery folder permission handling** - Fixed Android 13+ Gallery folder browsing so either image or video permission is sufficient based on available media access, and permission denial now surfaces the typed folder error message.
 - **Sensitive UI hardening** - Added obscured-touch filtering to Google Drive/Dropbox sign-in, re-authenticate, debug export/reset/crash controls, and guarded Debug Settings so it closes in release builds.
 - **Settings polish cleanup** - Removed noisy video settings debug logging, stopped resetting custom video volume when toggling audio mode, initialized custom dialogs from current saved values, preserved custom auto-exit summaries, and made formatting locale-stable.
+- **Auth button double-tap race condition** - Fixed an issue where users could rapidly tap the sign-in buttons in Google Drive and Dropbox authentication screens, launching multiple concurrent OAuth browser flows. Buttons now properly disable while the intent or browser is launching.
+- **Google Drive auth coroutine crash** - Added a missing `try-catch` block around the Google Drive authentication processing coroutine. If the repository fails to fetch the token or save the account, it now gracefully alerts the user instead of fatally crashing the application.
+- **Dropbox OAuth start exception handling** - Added error catching around the Dropbox PKCE start intent to ensure the sign-in button reliably re-enables if the intent fails to launch.
+- **Dropbox Kotlin compilation error** - Fixed a Kotlin smart cast error in `DropboxAuthActivity` where a mutable nullable `OkHttpClient` property was passed to `OkHttp3Requestor`, breaking compilation. Safely bound the client to an immutable local reference before usage.
+- **Debug log export** - Fixed the non-functional "Export Logs" button in Debug Settings. It now correctly uses a Share intent with a `FileProvider` to allow developers to export the `debug-logcat.txt` file, complying with secure file sharing standards.
 
 ## 1.10.0
 

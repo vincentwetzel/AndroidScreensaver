@@ -14,7 +14,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import android.util.Log
 import com.dropbox.core.oauth.DbxCredential
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import com.dropbox.core.v2.users.FullAccount
@@ -24,16 +27,20 @@ class DropboxAccountManager @Inject constructor(
     @ApplicationContext context: Context
 ) : BaseAccountManager<DropboxAccountManager.AccountState>(context) {
     private val ACCESS_TOKEN_PREF_NAME = "dropbox_access_tokens"
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-    private val sharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        ACCESS_TOKEN_PREF_NAME,
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private val masterKey by lazy {
+        MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+    }
+    private val sharedPreferences by lazy {
+        EncryptedSharedPreferences.create(
+            context,
+            ACCESS_TOKEN_PREF_NAME,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
 
     data class AccountState(
         val accountId: String,
@@ -43,7 +50,9 @@ class DropboxAccountManager @Inject constructor(
     )
 
     init {
-        checkExistingSignIn()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            checkExistingSignIn()
+        }
     }
 
     /**
@@ -83,11 +92,11 @@ class DropboxAccountManager @Inject constructor(
                 val email = currentAccount.email
 
                 if (accountStates.containsKey(accountId)) {
-                    Log.d("DropboxAccountManager", "Account $accountId already authenticated. Updating token.")
+                    Log.d("DropboxAccountManager", "Account already authenticated. Updating token.")
                 }
 
                 accountStates[accountId] = AccountState(accountId, credential, client, email)
-                Log.d("DropboxAccountManager", "Authenticated Dropbox account: $accountId")
+                Log.d("DropboxAccountManager", "Authenticated Dropbox account")
 
                 val credJson = JSONObject().apply {
                     put("accessToken", credential.accessToken)
@@ -104,7 +113,7 @@ class DropboxAccountManager @Inject constructor(
 
                 accountId
             } catch (e: Exception) {
-                Log.e("DropboxAccountManager", "Error getting Dropbox user info or creating client", e)
+                Log.e("DropboxAccountManager", "Error getting Dropbox user info or creating client")
                 null
             }
         }
@@ -142,9 +151,9 @@ class DropboxAccountManager @Inject constructor(
                     val email = sharedPreferences.getString("${accountId}_email", null)
                     
                     accountStates[accountId] = AccountState(accountId, credential, client, email)
-                    Log.d("DropboxAccountManager", "Restored existing Dropbox account: $accountId")
+                    Log.d("DropboxAccountManager", "Restored existing Dropbox account")
                 } catch (e: Exception) {
-                    Log.e("DropboxAccountManager", "Failed to restore existing Dropbox account $accountId", e)
+                    Log.e("DropboxAccountManager", "Failed to restore existing Dropbox account")
                     // Clean up obsolete/legacy token formats (Zero Backward Compatibility)
                     sharedPreferences.edit()
                         .remove(accountId)
@@ -193,7 +202,7 @@ class DropboxAccountManager @Inject constructor(
             .remove(accountId)
             .remove("${accountId}_email")
             .apply()
-        Log.d("DropboxAccountManager", "Removed Dropbox account: $accountId")
+        Log.d("DropboxAccountManager", "Removed Dropbox account")
     }
 
     /**
@@ -216,9 +225,9 @@ class DropboxAccountManager @Inject constructor(
             for (accountState in accountsToRevoke) {
                 try {
                     accountState.client.auth().tokenRevoke()
-                    Log.d("DropboxAccountManager", "Revoked token for account: ${accountState.accountId}")
+                    Log.d("DropboxAccountManager", "Revoked token for account")
                 } catch (e: Exception) {
-                    Log.e("DropboxAccountManager", "Failed to revoke token for ${accountState.accountId}", e)
+                    Log.e("DropboxAccountManager", "Failed to revoke token for account")
                 }
             }
             signOutAll() // Clear local state after attempting to revoke remotely

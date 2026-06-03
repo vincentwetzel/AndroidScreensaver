@@ -48,10 +48,14 @@ Use this to get the debug keystore SHA-1 fingerprint for Google Cloud Console se
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
 2. Select project `androidscreensaver`.
-3. Edit the Android OAuth Client:
+3. Enable **APIs & Services > Library > Google Drive API** for the project.
+4. Configure the OAuth consent screen:
+   - Add `https://www.googleapis.com/auth/drive.readonly` under **Data Access** or **Scopes**.
+   - Add your test Google account email under **Audience > Test users** if the app is unpublished.
+5. Edit or create the Android OAuth Client:
    - **Package name:** `com.vincentwetzel.androidscreensaver.debug` for debug builds.
+   - **Package name:** `com.vincentwetzel.androidscreensaver` for release builds.
    - **SHA-1 fingerprint:** Run `./gradlew signingReport`.
-4. Add your test Google account email under **OAuth Consent Screen > Test users**.
 
 ## Dropbox OAuth Setup
 
@@ -126,6 +130,18 @@ The only custom properties currently retained are:
 - Verify the SHA-1 fingerprint matches the debug keystore.
 - Verify the package name includes `.debug` for debug builds.
 - Do not call `requestIdToken()` with the Android Client ID. Use a Web Client ID only when ID tokens are needed.
+
+### Google Drive Auth Fails with InvalidScope
+
+- Enable the **Google Drive API** in the same Cloud project as the Android OAuth client.
+- Add `https://www.googleapis.com/auth/drive.readonly` to the OAuth consent screen's **Data Access** or **Scopes** list.
+- If the app is unpublished or in testing, add the signed-in Google account under **Audience > Test users**.
+- Verify the Android OAuth client package name matches the installed build:
+  - Debug: `com.vincentwetzel.androidscreensaver.debug`
+  - Release: `com.vincentwetzel.androidscreensaver`
+- Verify the Android OAuth client SHA-1 matches the `signingReport` entry for the same build variant you installed.
+- Google Drive sign-in uses Android's Google AccountPicker and `GoogleAccountCredential` to request read-only Drive access for the selected account.
+- Debug builds log `GoogleDriveAuthEnv`, `GoogleAccountManager`, and `GoogleDriveDiagnostic` entries during sign-in, including package name, signing certificate SHA-1/SHA-256, Google Play Services version/status, selected account details, credential state, and token-probe results without printing OAuth tokens. The diagnostic probes test full userinfo scopes, Drive metadata, and Drive readonly through both Account-object and account-name token APIs.
 
 ### Activation Card Does Not Hide
 

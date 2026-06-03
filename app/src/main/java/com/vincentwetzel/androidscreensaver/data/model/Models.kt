@@ -140,6 +140,8 @@ data class SlideshowConfig(
     val dimScreenAfter: Boolean = false,
     val dimScreenAfterMinutes: Int = 5,
     val dimLevel: Int = 50,
+    val stopOnLowBattery: Boolean = false,
+    val lowBatteryThreshold: Int = 20,
     
     // Caching
     val cacheConfig: CacheConfig = CacheConfig(),

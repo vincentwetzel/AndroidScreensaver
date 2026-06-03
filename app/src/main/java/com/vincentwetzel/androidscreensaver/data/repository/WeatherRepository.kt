@@ -75,7 +75,7 @@ class WeatherRepository @Inject constructor() {
                     )
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+            android.util.Log.e("WeatherRepository", "Failed to fetch weather data: ${e.javaClass.simpleName}")
                 null
             }
         }
@@ -117,6 +117,7 @@ class WeatherRepository @Inject constructor() {
                     response.isSuccessful
                 }
             } catch (e: Exception) {
+            android.util.Log.e("WeatherRepository", "Weather API unavailable: ${e.javaClass.simpleName}")
                 false
             }
         }

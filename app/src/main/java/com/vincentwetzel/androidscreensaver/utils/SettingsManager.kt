@@ -41,10 +41,35 @@ object SettingsManager {
         val BACKGROUND_COLOR = intPreferencesKey("background_color")
         val SCREEN_ORIENTATION = stringPreferencesKey("screen_orientation")
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
+        val STOP_ON_LOW_BATTERY = booleanPreferencesKey("stop_on_low_battery")
+        val LOW_BATTERY_THRESHOLD = intPreferencesKey("low_battery_threshold")
 
         // Photo info
         val PHOTO_INFO_ENABLED = booleanPreferencesKey("photo_info_enabled")
+        val PHOTO_INFO_SHOW_FILE_NAME = booleanPreferencesKey("photo_info_show_file_name")
+        val PHOTO_INFO_SHOW_FILE_NAME_EXT = booleanPreferencesKey("photo_info_show_file_name_ext")
+        val PHOTO_INFO_SHOW_FOLDER_NAME = booleanPreferencesKey("photo_info_show_folder_name")
+        val PHOTO_INFO_SHOW_FOLDER_PATH = booleanPreferencesKey("photo_info_show_folder_path")
+        val PHOTO_INFO_SHOW_DATE_TAKEN = booleanPreferencesKey("photo_info_show_date_taken")
+        val PHOTO_INFO_DATE_FORMAT = stringPreferencesKey("photo_info_date_format")
+        val PHOTO_INFO_SHOW_SOURCE_NAME = booleanPreferencesKey("photo_info_show_source_name")
+        val PHOTO_INFO_SHOW_DESCRIPTION = booleanPreferencesKey("photo_info_show_description")
+        val PHOTO_INFO_SHOW_DIMENSIONS = booleanPreferencesKey("photo_info_show_dimensions")
+        val PHOTO_INFO_SHOW_FILE_SIZE = booleanPreferencesKey("photo_info_show_file_size")
         val PHOTO_INFO_FADE = intPreferencesKey("photo_info_fade_seconds")
+        val PHOTO_INFO_FADE_ENABLED = booleanPreferencesKey("photo_info_fade_enabled")
+        val PHOTO_INFO_FADE_ANIM_DUR = intPreferencesKey("photo_info_fade_anim_dur")
+        val PHOTO_INFO_POSITION = stringPreferencesKey("photo_info_position")
+        val PHOTO_INFO_LAYOUT = stringPreferencesKey("photo_info_layout")
+        val PHOTO_INFO_SEPARATOR = stringPreferencesKey("photo_info_separator")
+        val PHOTO_INFO_FONT_SIZE = stringPreferencesKey("photo_info_font_size")
+        val PHOTO_INFO_FONT_COLOR = intPreferencesKey("photo_info_font_color")
+        val PHOTO_INFO_FONT_FAMILY = stringPreferencesKey("photo_info_font_family")
+        val PHOTO_INFO_TEXT_SHADOW = booleanPreferencesKey("photo_info_text_shadow")
+        val PHOTO_INFO_SHADOW_INTENSITY = stringPreferencesKey("photo_info_shadow_intensity")
+        val PHOTO_INFO_BACKGROUND = stringPreferencesKey("photo_info_background")
+        val PHOTO_INFO_BG_OPACITY = intPreferencesKey("photo_info_bg_opacity")
+        val PHOTO_INFO_TEXT_OPACITY = intPreferencesKey("photo_info_text_opacity")
 
         // Video playback
         val VIDEO_AUDIO_MODE = stringPreferencesKey("video_audio_mode")
@@ -135,6 +160,8 @@ object SettingsManager {
                 preferences[PreferencesKeys.SCREEN_ORIENTATION] ?: ScreenOrientation.SYSTEM_DEFAULT.name
             ) ?: ScreenOrientation.SYSTEM_DEFAULT,
             keepScreenOn = preferences[PreferencesKeys.KEEP_SCREEN_ON] ?: false,
+            stopOnLowBattery = preferences[PreferencesKeys.STOP_ON_LOW_BATTERY] ?: false,
+            lowBatteryThreshold = preferences[PreferencesKeys.LOW_BATTERY_THRESHOLD] ?: 20,
 
             // Decorations
             dateDecoration = if (preferences[PreferencesKeys.DECORATION_DATE] == true) DecorationConfig() else null,
@@ -144,7 +171,46 @@ object SettingsManager {
             // Photo info
             photoInfoConfig = PhotoInfoConfig(
                 enabled = preferences[PreferencesKeys.PHOTO_INFO_ENABLED] ?: false,
+                showFileName = preferences[PreferencesKeys.PHOTO_INFO_SHOW_FILE_NAME] ?: true,
+                showFileNameWithExtension = preferences[PreferencesKeys.PHOTO_INFO_SHOW_FILE_NAME_EXT] ?: false,
+                showFolderName = preferences[PreferencesKeys.PHOTO_INFO_SHOW_FOLDER_NAME] ?: false,
+                showFolderFullPath = preferences[PreferencesKeys.PHOTO_INFO_SHOW_FOLDER_PATH] ?: false,
+                showDateTaken = preferences[PreferencesKeys.PHOTO_INFO_SHOW_DATE_TAKEN] ?: true,
+                dateFormat = enumValueOfOrNull<PhotoInfoDateFormat>(
+                    preferences[PreferencesKeys.PHOTO_INFO_DATE_FORMAT] ?: PhotoInfoDateFormat.SHORT_DATE.name
+                ) ?: PhotoInfoDateFormat.SHORT_DATE,
+                showSourceName = preferences[PreferencesKeys.PHOTO_INFO_SHOW_SOURCE_NAME] ?: false,
+                showDescription = preferences[PreferencesKeys.PHOTO_INFO_SHOW_DESCRIPTION] ?: false,
+                showDimensions = preferences[PreferencesKeys.PHOTO_INFO_SHOW_DIMENSIONS] ?: false,
+                showFileSize = preferences[PreferencesKeys.PHOTO_INFO_SHOW_FILE_SIZE] ?: false,
                 fadeOutAfterSeconds = preferences[PreferencesKeys.PHOTO_INFO_FADE] ?: 5,
+                fadeOutEnabled = preferences[PreferencesKeys.PHOTO_INFO_FADE_ENABLED] ?: true,
+                fadeAnimationDurationMs = preferences[PreferencesKeys.PHOTO_INFO_FADE_ANIM_DUR] ?: 1000,
+                position = enumValueOfOrNull<ClockPosition>(
+                    preferences[PreferencesKeys.PHOTO_INFO_POSITION] ?: ClockPosition.BOTTOM_LEFT.name
+                ) ?: ClockPosition.BOTTOM_LEFT,
+                layout = enumValueOfOrNull<PhotoInfoLayout>(
+                    preferences[PreferencesKeys.PHOTO_INFO_LAYOUT] ?: PhotoInfoLayout.HORIZONTAL.name
+                ) ?: PhotoInfoLayout.HORIZONTAL,
+                separator = enumValueOfOrNull<PhotoInfoSeparator>(
+                    preferences[PreferencesKeys.PHOTO_INFO_SEPARATOR] ?: PhotoInfoSeparator.BULLET.name
+                ) ?: PhotoInfoSeparator.BULLET,
+                fontSize = enumValueOfOrNull<ClockSize>(
+                    preferences[PreferencesKeys.PHOTO_INFO_FONT_SIZE] ?: ClockSize.MEDIUM.name
+                ) ?: ClockSize.MEDIUM,
+                fontColor = preferences[PreferencesKeys.PHOTO_INFO_FONT_COLOR] ?: 0xFFFFFFFF.toInt(),
+                fontFamily = enumValueOfOrNull<DecorationFontFamily>(
+                    preferences[PreferencesKeys.PHOTO_INFO_FONT_FAMILY] ?: DecorationFontFamily.SYSTEM_DEFAULT.name
+                ) ?: DecorationFontFamily.SYSTEM_DEFAULT,
+                textShadow = preferences[PreferencesKeys.PHOTO_INFO_TEXT_SHADOW] ?: true,
+                shadowIntensity = enumValueOfOrNull<ShadowIntensity>(
+                    preferences[PreferencesKeys.PHOTO_INFO_SHADOW_INTENSITY] ?: ShadowIntensity.MEDIUM.name
+                ) ?: ShadowIntensity.MEDIUM,
+                background = enumValueOfOrNull<PhotoInfoBackground>(
+                    preferences[PreferencesKeys.PHOTO_INFO_BACKGROUND] ?: PhotoInfoBackground.SEMI_TRANSPARENT.name
+                ) ?: PhotoInfoBackground.SEMI_TRANSPARENT,
+                backgroundOpacity = preferences[PreferencesKeys.PHOTO_INFO_BG_OPACITY] ?: 60,
+                textOpacity = preferences[PreferencesKeys.PHOTO_INFO_TEXT_OPACITY] ?: 100,
             ),
 
             // Video playback
@@ -207,6 +273,8 @@ object SettingsManager {
             preferences[PreferencesKeys.BACKGROUND_COLOR] = config.backgroundColor
             preferences[PreferencesKeys.SCREEN_ORIENTATION] = config.screenOrientation.name
             preferences[PreferencesKeys.KEEP_SCREEN_ON] = config.keepScreenOn
+            preferences[PreferencesKeys.STOP_ON_LOW_BATTERY] = config.stopOnLowBattery
+            preferences[PreferencesKeys.LOW_BATTERY_THRESHOLD] = config.lowBatteryThreshold
 
             // Decorations
             preferences[PreferencesKeys.DECORATION_DATE] = config.dateDecoration != null
@@ -215,7 +283,30 @@ object SettingsManager {
 
             // Photo info
             preferences[PreferencesKeys.PHOTO_INFO_ENABLED] = config.photoInfoConfig.enabled
+            preferences[PreferencesKeys.PHOTO_INFO_SHOW_FILE_NAME] = config.photoInfoConfig.showFileName
+            preferences[PreferencesKeys.PHOTO_INFO_SHOW_FILE_NAME_EXT] = config.photoInfoConfig.showFileNameWithExtension
+            preferences[PreferencesKeys.PHOTO_INFO_SHOW_FOLDER_NAME] = config.photoInfoConfig.showFolderName
+            preferences[PreferencesKeys.PHOTO_INFO_SHOW_FOLDER_PATH] = config.photoInfoConfig.showFolderFullPath
+            preferences[PreferencesKeys.PHOTO_INFO_SHOW_DATE_TAKEN] = config.photoInfoConfig.showDateTaken
+            preferences[PreferencesKeys.PHOTO_INFO_DATE_FORMAT] = config.photoInfoConfig.dateFormat.name
+            preferences[PreferencesKeys.PHOTO_INFO_SHOW_SOURCE_NAME] = config.photoInfoConfig.showSourceName
+            preferences[PreferencesKeys.PHOTO_INFO_SHOW_DESCRIPTION] = config.photoInfoConfig.showDescription
+            preferences[PreferencesKeys.PHOTO_INFO_SHOW_DIMENSIONS] = config.photoInfoConfig.showDimensions
+            preferences[PreferencesKeys.PHOTO_INFO_SHOW_FILE_SIZE] = config.photoInfoConfig.showFileSize
             preferences[PreferencesKeys.PHOTO_INFO_FADE] = config.photoInfoConfig.fadeOutAfterSeconds
+            preferences[PreferencesKeys.PHOTO_INFO_FADE_ENABLED] = config.photoInfoConfig.fadeOutEnabled
+            preferences[PreferencesKeys.PHOTO_INFO_FADE_ANIM_DUR] = config.photoInfoConfig.fadeAnimationDurationMs
+            preferences[PreferencesKeys.PHOTO_INFO_POSITION] = config.photoInfoConfig.position.name
+            preferences[PreferencesKeys.PHOTO_INFO_LAYOUT] = config.photoInfoConfig.layout.name
+            preferences[PreferencesKeys.PHOTO_INFO_SEPARATOR] = config.photoInfoConfig.separator.name
+            preferences[PreferencesKeys.PHOTO_INFO_FONT_SIZE] = config.photoInfoConfig.fontSize.name
+            preferences[PreferencesKeys.PHOTO_INFO_FONT_COLOR] = config.photoInfoConfig.fontColor
+            preferences[PreferencesKeys.PHOTO_INFO_FONT_FAMILY] = config.photoInfoConfig.fontFamily.name
+            preferences[PreferencesKeys.PHOTO_INFO_TEXT_SHADOW] = config.photoInfoConfig.textShadow
+            preferences[PreferencesKeys.PHOTO_INFO_SHADOW_INTENSITY] = config.photoInfoConfig.shadowIntensity.name
+            preferences[PreferencesKeys.PHOTO_INFO_BACKGROUND] = config.photoInfoConfig.background.name
+            preferences[PreferencesKeys.PHOTO_INFO_BG_OPACITY] = config.photoInfoConfig.backgroundOpacity
+            preferences[PreferencesKeys.PHOTO_INFO_TEXT_OPACITY] = config.photoInfoConfig.textOpacity
 
             // Video playback
             preferences[PreferencesKeys.VIDEO_AUDIO_MODE] = config.videoAudioMode.name
@@ -487,7 +578,7 @@ object SettingsManager {
                     photoCount = photoCount
                 )
             } catch (e: Exception) {
-                android.util.Log.e("SettingsManager", "Failed to parse individual account JSON", e)
+                android.util.Log.e("SettingsManager", "Failed to parse individual account JSON")
                 null
             }
         }

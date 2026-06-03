@@ -6,7 +6,7 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
 
 - **Multiple photo sources**
   - **Gallery** - Browse and select folders from device photos via MediaStore.
-  - **Google Drive** - Browse and select folders from one or more Google accounts with OAuth2 authentication.
+  - **Google Drive** - Browse and select folders from one or more Google accounts with read-only OAuth2 authentication.
   - **Dropbox** - Browse and select Dropbox folders from one or more accounts with PKCE OAuth, thumbnails, and local cache support.
   - Planned: Google Photos, OneDrive, and local network sources.
 
@@ -15,7 +15,7 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
   - Display effects including crop-to-fit, scale-to-fit, zoom, and pan.
   - Photo ordering by date, name, or size.
   - Content Type filter for images only, videos only, or both.
-  - Background color, screen rotation, keep-screen-on, match-orientation, and touch-exit settings.
+  - Background color, screen rotation, keep-screen-on, low-battery auto-exit, match-orientation, and touch-exit settings.
   - Network-only cloud loading works on Wi-Fi or Ethernet.
   - Burn-in protection gently shifts persistent overlays during long-running screensaver sessions.
 
@@ -23,7 +23,7 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
   - Videos play with Media3/ExoPlayer and auto-advance when finished.
   - Audio modes: mute, system volume, or custom absolute device volume.
   - Minimum and maximum video duration filters.
-  - Short videos loop automatically.
+  - Short videos loop automatically with a bounded timeout so playback still advances.
 
 - **Screensaver activation**
   - Android DreamService integration, configurable from **Settings > Display > Screen saver**.
@@ -73,7 +73,7 @@ app/src/main/java/com/vincentwetzel/androidscreensaver/
 |   |-- settings/       # Settings screens
 |   |-- slideshow/      # SlideshowView and NoSourcesView
 |   `-- sources/        # Source auth and folder browser screens
-|-- utils/              # SettingsManager, OAuth config, account helpers
+|-- utils/              # SettingsManager and account helpers
 `-- viewmodel/          # Main, Gallery, shared cloud folder, and source ViewModels
 ```
 

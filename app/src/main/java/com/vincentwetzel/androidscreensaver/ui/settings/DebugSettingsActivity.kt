@@ -1,17 +1,25 @@
 package com.vincentwetzel.androidscreensaver.ui.settings
 
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.MenuItem
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.pm.PackageInfoCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
+import androidx.core.content.FileProvider
 import com.vincentwetzel.androidscreensaver.BuildConfig
 import com.vincentwetzel.androidscreensaver.databinding.ActivityDebugSettingsBinding
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlin.system.exitProcess
 import java.io.File
 
 /**
@@ -27,7 +35,7 @@ class DebugSettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         if (!BuildConfig.DEBUG) {
-            android.widget.Toast.makeText(this, "Debug settings disabled in release builds", android.widget.Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Debug settings disabled in release builds", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
@@ -61,7 +69,7 @@ class DebugSettingsActivity : AppCompatActivity() {
             appendLine("Free Memory: ${freeMemory} MB")
             appendLine("")
             val packageInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0L))
+                packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0L))
             } else {
                 @Suppress("DEPRECATION")
                 packageManager.getPackageInfo(packageName, 0)
@@ -73,6 +81,7 @@ class DebugSettingsActivity : AppCompatActivity() {
 
     private fun setupListeners() {
         // Debug overlay toggle
+        binding.switchDebugOverlay.filterTouchesWhenObscured = true
         binding.switchDebugOverlay.setOnCheckedChangeListener { _, isChecked ->
             Snackbar.make(binding.root,
                 "Debug overlay ${if (isChecked) "enabled" else "disabled"}",
@@ -82,7 +91,35 @@ class DebugSettingsActivity : AppCompatActivity() {
         // Export logs
         binding.btnExportLogs.filterTouchesWhenObscured = true
         binding.btnExportLogs.setOnClickListener {
-            Snackbar.make(binding.root, "Logs exported to Downloads", Snackbar.LENGTH_SHORT).show()
+            val externalDir = getExternalFilesDir(null)
+            if (externalDir == null) {
+                Snackbar.make(binding.root, "External storage unavailable.", Snackbar.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val logFile = File(externalDir, "debug-logcat.txt")
+            if (!logFile.exists()) {
+                Snackbar.make(binding.root, "Log file not found.", Snackbar.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            try {
+                val fileUri = FileProvider.getUriForFile(
+                    this,
+                    "${BuildConfig.APPLICATION_ID}.provider",
+                    logFile
+                )
+
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_STREAM, fileUri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+
+                startActivity(Intent.createChooser(shareIntent, "Export Log File"))
+            } catch (e: Exception) {
+                Snackbar.make(binding.root, "Failed to export logs: ${e.message}", Snackbar.LENGTH_LONG).show()
+            }
         }
 
         // Reset settings
@@ -101,16 +138,16 @@ class DebugSettingsActivity : AppCompatActivity() {
                                 file.delete()
                             }
                         }
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        withContext(NonCancellable) {
+                            withContext(Dispatchers.Main) {
                                 try {
                                     Snackbar.make(binding.root, "Settings reset. Exiting app...", Snackbar.LENGTH_LONG).show()
                                 } catch (e: Exception) {
                                     // Ignore if views are detached during destruction
                                 }
                             }
-                            kotlinx.coroutines.delay(1500)
-                            kotlin.system.exitProcess(0)
+                            delay(1500)
+                            exitProcess(0)
                         }
                     }
                 }

@@ -107,17 +107,18 @@ class SlideshowManager @Inject constructor(
 
                     for (account in enabledAccounts) {
                         try {
-                            android.util.Log.d(TAG, "Loading $sourceType photos for account: ${account.accountId}")
+                            val safeAccountId = account.accountId.hashCode().toString()
+                            android.util.Log.d(TAG, "Loading $sourceType photos for account: $safeAccountId")
 
                             // Google Drive specific authentication check
                             if (sourceType == SourceType.GOOGLE_DRIVE && !driveRepository.isAccountAuthenticated(account.accountId)) {
-                                android.util.Log.w(TAG, "Account ${account.accountId} is not authenticated for Google Drive, skipping")
+                                android.util.Log.w(TAG, "Account $safeAccountId is not authenticated for Google Drive, skipping")
                                 continue
                             }
 
                             // Gallery specific permission check
                             if (sourceType == SourceType.GALLERY && !hasGalleryPermission()) {
-                                android.util.Log.w(TAG, "Gallery photo access requires permission for ${account.accountId}, skipping")
+                                android.util.Log.w(TAG, "Gallery photo access requires permission for $safeAccountId, skipping")
                                 continue
                             }
                             
@@ -157,9 +158,10 @@ class SlideshowManager @Inject constructor(
 
                             folderPhotosList.forEach { allPhotos.addAll(it) }
 
-                            android.util.Log.d(TAG, "Loaded ${allPhotos.size} photos so far from $sourceType account: ${account.accountId}")
+                            android.util.Log.d(TAG, "Loaded ${allPhotos.size} photos so far from $sourceType account: $safeAccountId")
                         } catch (e: Exception) {
-                            android.util.Log.e(TAG, "Error loading $sourceType photos for ${account.accountId}", e)
+                            val safeAccountId = account.accountId.hashCode().toString()
+                            android.util.Log.e(TAG, "Error loading $sourceType photos for $safeAccountId: ${e.javaClass.simpleName}")
                         }
                     }
                 }
@@ -184,7 +186,7 @@ class SlideshowManager @Inject constructor(
 
             android.util.Log.d(TAG, "After media type filter (${config.mediaTypeFilter}): ${filteredPhotos.size} photos")
             if (filteredPhotos.isEmpty() && uniquePhotos.isNotEmpty()) {
-                android.util.Log.w(TAG, "Warning: Had ${uniquePhotos.size} photos but filtered to 0. Sample URIs: ${uniquePhotos.take(3).map { it.uri }}")
+                android.util.Log.w(TAG, "Warning: Had ${uniquePhotos.size} photos but filtered to 0. Sample IDs: ${uniquePhotos.take(3).map { it.id }}")
             }
 
             loadedPhotos = filteredPhotos
@@ -251,11 +253,11 @@ class SlideshowManager @Inject constructor(
                 if (photo.uri.startsWith("content://")) {
                     // Gallery photos: content:// URIs - already local, Coil can load directly
                     preloadCache[photo.id] = true
-                    android.util.Log.d(TAG, "Preloaded Gallery photo: ${photo.uri}")
+                    android.util.Log.d(TAG, "Preloaded Gallery photo: ${photo.id}")
                 } else if (photo.uri.startsWith("file://")) {
                     // Google Drive cached photos: file:// URIs - already downloaded
                     preloadCache[photo.id] = true
-                    android.util.Log.d(TAG, "Preloaded cached Drive photo: ${photo.uri}")
+                    android.util.Log.d(TAG, "Preloaded cached Drive photo: ${photo.id}")
                 } else {
                     // Remote URLs or Cloud IDs (Google Drive, Dropbox, etc.)
                     val localPath = downloadPhotoToLocalCache(photo)
@@ -267,7 +269,7 @@ class SlideshowManager @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.e(TAG, "Error preloading photo: ${photo.uri}", e)
+                android.util.Log.e(TAG, "Error preloading photo: ${e.javaClass.simpleName}")
             }
         }
     }

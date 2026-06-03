@@ -9,9 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.slider.Slider
 import kotlinx.coroutines.launch
-import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoBackground
-import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoDateFormat
 import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoConfig
 import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoLayout
 import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoSeparator

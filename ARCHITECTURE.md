@@ -29,7 +29,7 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 - **GalleryPhotoRepository** - MediaStore access for local photos and videos, with cached folder/media counts and content-type-aware media listing.
 - **GoogleDrivePhotoRepository** - Google Drive media access with account-scoped routing, recursive folder traversal, background count prefetching, thumbnail metadata, and local cache paths.
 - **DropboxPhotoRepository** - Dropbox media access with recursive listing, paginated folder search, background count prefetching, thumbnails, and local cache support.
-- **GoogleDriveRepository** - Delegates auth and Drive service creation to `GoogleAccountManager`.
+- **GoogleDriveRepository** - Delegates account selection and Drive service creation to `GoogleAccountManager`, and verifies read-only Drive access before sign-in is finalized.
 - **DropboxRepository** - Delegates Dropbox auth, account metadata, and API clients to `DropboxAccountManager`.
 - **SettingsManager** - DataStore-backed preferences for slideshow config, source state, selected folders, and account configs.
 
@@ -71,7 +71,7 @@ Preview or DreamService starts
 | `GalleryPhotoRepository` | MediaStore-based local photo/video access |
 | `GoogleDrivePhotoRepository` | Google Drive media access with account-scoped URLs and cache paths |
 | `DropboxPhotoRepository` | Dropbox media access with thumbnail and local cache support |
-| `GoogleDriveRepository` | Google Sign-In and Drive service client facade |
+| `GoogleDriveRepository` | Google account selection, Drive access verification, and Drive service client facade |
 | `DropboxRepository` | Dropbox account and client facade |
 | `BaseAccountManager` | Abstract class centralizing common multi-account maps and auth queries |
 | `GoogleAccountManager` | Per-account Google auth, credentials, and Drive services |
@@ -136,6 +136,8 @@ All settings are persisted through DataStore Preferences.
 | `background_color` | Int | `0xFF000000` | Slideshow background color |
 | `screen_orientation` | String | `SYSTEM_DEFAULT` | Screen orientation lock |
 | `keep_screen_on` | Boolean | `false` | Prevent screen dimming |
+| `stop_on_low_battery` | Boolean | `false` | Exit the DreamService when battery level is at or below the configured threshold and the device is not charging |
+| `low_battery_threshold` | Int | `20` | Battery percentage threshold for low-battery auto-exit |
 | `enable_cache` | Boolean | `true` | Enable media caching |
 | `cache_limit_mb` | Int | `500` | Custom cache size limit |
 | `cache_use_preset` | Boolean | `true` | Use preset cache limit |
@@ -144,6 +146,7 @@ All settings are persisted through DataStore Preferences.
 | `exit_trigger` | String | `TOUCH` | How to exit screensaver |
 | `timer_enabled` | Boolean | `false` | Enable timer behavior |
 | `photo_info_enabled` | Boolean | `false` | Show photo metadata overlay |
+| `photo_info_*` | Boolean/String/Int | varies | Persisted photo-info fields, layout, position, separator, date format, font, opacity, background, shadow, and fade behavior |
 | `decoration_date` | Boolean | `false` | Show date overlay |
 | `decoration_clock` | Boolean | `false` | Show clock overlay |
 | `decoration_weather` | Boolean | `false` | Show weather overlay |
@@ -158,7 +161,7 @@ All settings are persisted through DataStore Preferences.
 - `SlideshowView.showPhoto()` applies match-orientation behavior.
 - `SlideshowView.startAutoAdvance()` reloads config each cycle so setting changes can take effect mid-slideshow.
 - `ScreensaverPreviewActivity` loads source state and slideshow config asynchronously before rendering, matching the suspend settings contract used by DreamService.
-- DreamService handles touch exit, receiver cleanup, timeout cleanup, and battery-saver pause behavior.
+- DreamService handles touch exit, receiver cleanup, timeout cleanup, battery-saver pause behavior, and optional low-battery auto-exit while not charging.
 
 ## Coding Standards
 

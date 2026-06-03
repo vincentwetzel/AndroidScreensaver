@@ -6,9 +6,13 @@ This file is the active backlog and quality checklist. Completed release history
 
 ### New Sources
 
-- [ ] Google Photos integration.
-- [ ] OneDrive integration.
+- [ ] Google Photos integration (Note: Supports Device Flow natively for Android TV).
+- [ ] OneDrive integration (Note: Implement hybrid auth. MSAL for mobile, Device Flow for Android TV).
 - [ ] Local network source support through SMB/WebDAV or similar.
+
+### Device Compatibility
+- [ ] Disable/Grey out Dropbox on Android TV. Dropbox does not support Device Authorization Grant and requires a full browser, which TVs lack.
+- [ ] Revisit Google Drive Android TV support if Google adds Drive scope support for Device Authorization Grant.
 
 ### Quality
 

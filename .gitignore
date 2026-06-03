@@ -21,10 +21,7 @@ release/
 # Gradle files
 .gradle/
 build/
-.gradle-native/
-.gradle-project-cache/
-.gradle-temp/
-.gradle-user-home/
+.gradle-*
 gradle/gradle-daemon-jvm.properties
 
 # Local configuration file (sdk path, etc)

@@ -66,7 +66,7 @@ Settings are accessed through **Menu > Settings**.
 - Date overlay.
 - Clock overlay.
 - Weather overlay.
-- Photo information overlay.
+- Photo information overlay, including persisted field visibility, date format, position, layout, font, opacity, background, shadow, separator, and fade behavior.
 - Persistent overlays gently shift position during playback to reduce OLED/AMOLED burn-in risk.
 
 ### Schedule & Timer
@@ -79,6 +79,7 @@ Settings are accessed through **Menu > Settings**.
 
 - Screen rotation.
 - Keep screen on.
+- Auto-exit on low battery with a configurable threshold.
 - Background color.
 - Exit trigger.
 
@@ -96,7 +97,7 @@ Shows photo folders from your device, such as Camera, Screenshots, and Downloads
 
 ### Google Drive
 
-Shows folders from one or more Google Drive accounts. The app requests read-only access and cannot modify or delete Drive files.
+Shows folders from one or more Google Drive accounts. The app requests read-only access and cannot modify or delete Drive files. Google Drive sign-in is disabled on Android TV because Drive scopes cannot use Google's device authorization flow.
 
 Authenticated source cards must show `Signed in as [account email]`.
 
@@ -104,7 +105,7 @@ If sign-in expires or a token is revoked, open the source card's three-dot menu 
 
 ### Dropbox
 
-Shows folders from one or more Dropbox accounts. The app uses the Dropbox OAuth browser flow, then opens the shared cloud folder browser for the signed-in account. It can cache thumbnails and downloaded media locally so selected Dropbox photos and videos load faster after first access.
+Shows folders from one or more Dropbox accounts. The app uses the Dropbox OAuth browser flow, then opens the shared cloud folder browser for the signed-in account. It can cache thumbnails and downloaded media locally so selected Dropbox photos and videos load faster after first access. Dropbox requires a browser-based OAuth flow, so Android TV devices without a usable browser may not be able to complete sign-in.
 
 Authenticated source cards must show `Signed in as [account email]`.
 
@@ -117,7 +118,7 @@ Dropbox sign-in requires `DROPBOX_APP_KEY` to be configured at build time. If au
 | Activation card still shows after selecting | Close and reopen the app to refresh detection. |
 | Screensaver does not start | Check that **Android Screensaver** is selected in system screen saver settings. |
 | No photos showing | Verify folders are selected and contain photos or videos matching the Content Type filter. |
-| Google Drive sign-in fails | Check that your device has a Google account added. |
+| Google Drive sign-in fails | Check that your device has a Google account added and that the Google Cloud project has Drive API enabled, the read-only Drive scope added to OAuth consent, the signed-in account added as a test user for unpublished apps, and an Android OAuth client matching the installed package/SHA-1. |
 | 403 error when adding Google account | If the app is unpublished, add the Google account email to Google Cloud Console test users. |
 | Dropbox sign-in does not start | Confirm `DROPBOX_APP_KEY` is set in `local.properties` before building the app. |
 | Cloud folders fail after prior sign-in | Use **Re-authenticate** from the source card menu or folder browser. |

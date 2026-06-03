@@ -65,6 +65,31 @@ class PhotoScreensaverService : DreamService() {
         }
     }
 
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_BATTERY_CHANGED) {
+                if (slideshowManager.config.stopOnLowBattery) {
+                    val status = intent.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
+                    val isCharging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
+                                     status == android.os.BatteryManager.BATTERY_STATUS_FULL
+                    
+                    // Only exit if not charging, otherwise it could immediately restart and loop
+                    if (!isCharging) {
+                        val level = intent.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+                        val scale = intent.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1)
+                        if (level != -1 && scale != -1) {
+                            val batteryPct = level * 100 / scale.toFloat()
+                            if (batteryPct <= slideshowManager.config.lowBatteryThreshold) {
+                                android.util.Log.d(TAG, "Battery level $batteryPct% is below threshold ${slideshowManager.config.lowBatteryThreshold}% and not charging, finishing screensaver.")
+                                finish()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         android.util.Log.d("PhotoScreensaver", "onAttachedToWindow - screensaver started!")
@@ -79,6 +104,12 @@ class PhotoScreensaverService : DreamService() {
             this, 
             powerSaveReceiver, 
             IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED), 
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        ContextCompat.registerReceiver(
+            this, 
+            batteryReceiver, 
+            IntentFilter(Intent.ACTION_BATTERY_CHANGED), 
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
 
@@ -255,6 +286,11 @@ class PhotoScreensaverService : DreamService() {
             unregisterReceiver(powerSaveReceiver)
         } catch (e: Exception) {
             android.util.Log.w(TAG, "powerSaveReceiver not registered")
+        }
+        try {
+            unregisterReceiver(batteryReceiver)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "batteryReceiver not registered")
         }
         serviceScope.cancel()
         

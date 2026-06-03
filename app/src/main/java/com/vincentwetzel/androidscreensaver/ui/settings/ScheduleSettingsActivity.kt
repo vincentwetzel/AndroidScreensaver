@@ -8,7 +8,6 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.tabs.TabLayout
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
-import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.DayOfWeek
 import com.vincentwetzel.androidscreensaver.data.model.ScheduleConfig
 import com.vincentwetzel.androidscreensaver.data.model.SchedulePreset

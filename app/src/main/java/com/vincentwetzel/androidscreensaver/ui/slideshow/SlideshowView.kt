@@ -150,10 +150,31 @@ class SlideshowView @JvmOverloads constructor(
         // Initialize ExoPlayer — volume and repeat mode set dynamically in showVideo()
         videoPlayer = ExoPlayer.Builder(context).build().apply {
             // playWhenReady is set dynamically based on videoAutoPlay config
-            repeatMode = Player.REPEAT_MODE_OFF // Set dynamically in showVideo()
+            repeatMode = Player.REPEAT_MODE_OFF // Set dynamically in showPhoto()
             addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_ENDED) {
+                    if (playbackState == Player.STATE_READY) {
+                        // Check duration and apply loop dynamically for short videos
+                        val durationMs = duration
+                        val isShort = durationMs in 1..15000L // 15 seconds threshold
+                        val shouldLoop = slideshowManager.config.videoLoopShort && isShort
+                        
+                        repeatMode = if (shouldLoop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+                        
+                        // Set a reasonable cap for looping short videos so they don't play forever
+                        if (shouldLoop) {
+                            val slideDurationMs = slideshowManager.config.slideDurationSeconds * 1000L
+                            val loopTimeoutMs = maxOf(slideDurationMs, durationMs * 2).coerceAtMost(30000L)
+                            videoDurationJob?.cancel()
+                            videoDurationJob = slideshowScope.launch {
+                                delay(loopTimeoutMs)
+                                if (isPlayingVideo) {
+                                    android.util.Log.d(TAG, "Short video loop timeout reached ($loopTimeoutMs ms), advancing")
+                                    advanceToNext()
+                                }
+                            }
+                        }
+                    } else if (playbackState == Player.STATE_ENDED) {
                         // Video finished, advance to next
                         android.util.Log.d(TAG, "Video ended, advancing to next")
                         advanceToNext()
@@ -421,12 +442,9 @@ class SlideshowView @JvmOverloads constructor(
             // Apply audio mode and volume
             applyAudioMode(config)
 
-            // Apply loop setting for short videos
-            videoPlayer?.repeatMode = if (config.videoLoopShort) {
-                Player.REPEAT_MODE_ONE
-            } else {
-                Player.REPEAT_MODE_OFF
-            }
+            // Loop setting is deferred until video is prepared (STATE_READY) 
+            // so we can dynamically check its duration
+            videoPlayer?.repeatMode = Player.REPEAT_MODE_OFF
 
             // Apply auto play setting
             videoPlayer?.playWhenReady = config.videoAutoPlay

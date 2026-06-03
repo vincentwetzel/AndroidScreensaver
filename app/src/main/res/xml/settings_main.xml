@@ -250,6 +250,22 @@
             app:defaultValue="false"
             app:iconSpaceReserved="false" />
 
+        <SwitchPreferenceCompat
+            app:key="stop_on_low_battery"
+            app:title="Auto-Exit on Low Battery"
+            app:summary="Exit screensaver when battery is low"
+            app:defaultValue="false"
+            app:iconSpaceReserved="false" />
+
+        <SeekBarPreference
+            app:key="low_battery_threshold"
+            app:title="Low Battery Threshold"
+            app:defaultValue="20"
+            app:min="5"
+            android:max="50"
+            app:showSeekBarValue="true"
+            app:iconSpaceReserved="false" />
+
     </PreferenceCategory>
 
     <!-- Data & Network Category -->

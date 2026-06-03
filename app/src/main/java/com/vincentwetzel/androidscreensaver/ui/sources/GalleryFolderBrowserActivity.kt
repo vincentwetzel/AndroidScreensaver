@@ -225,7 +225,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
                         com.vincentwetzel.androidscreensaver.data.model.SelectedFolder(
                             folderId = folderId,
                             folderName = visible?.name ?: existing?.folderName ?: folderId,
-                            path = visible?.path ?: existing?.path ?: folderId,
+                            path = existing?.path ?: folderId,
                             isSelected = true
                         )
                     },

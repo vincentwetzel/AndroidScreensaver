@@ -40,6 +40,10 @@ android {
         val dropboxAppKey = localProperties.getProperty("DROPBOX_APP_KEY", "default_key").replace("\"", "").replace("'", "").trim()
         manifestPlaceholders["DROPBOX_APP_KEY"] = dropboxAppKey
         buildConfigField("String", "DROPBOX_APP_KEY", "\"$dropboxAppKey\"")
+
+        // Google TV Client ID for Device Authorization Grant
+        val googleTvClientId = localProperties.getProperty("GOOGLE_TV_CLIENT_ID", "default_key").replace("\"", "").replace("'", "").trim()
+        buildConfigField("String", "GOOGLE_TV_CLIENT_ID", "\"$googleTvClientId\"")
     }
 
     buildTypes {

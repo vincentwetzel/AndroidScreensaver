@@ -1,6 +1,9 @@
 package com.vincentwetzel.androidscreensaver.ui.sources
 
+import android.app.UiModeManager
+import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
@@ -16,7 +19,6 @@ import com.vincentwetzel.androidscreensaver.data.model.SourceType
 import com.vincentwetzel.androidscreensaver.databinding.ActivityDropboxAuthBinding
 import com.vincentwetzel.androidscreensaver.utils.DropboxAccountManager
 import com.vincentwetzel.androidscreensaver.utils.SettingsManager
-import com.vincentwetzel.androidscreensaver.dream.SourceType as DreamSourceType
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -34,11 +36,19 @@ class DropboxAuthActivity : AppCompatActivity() {
     lateinit var accountManager: DropboxAccountManager
 
     private var authStarted = false
-    private var okHttpClient: OkHttpClient? = null
 
     companion object {
         const val EXTRA_ACCOUNT_NAME = "account_name"
         const val EXTRA_ACCOUNT_ID = "account_id"
+
+        @Volatile
+        private var sharedOkHttpClient: OkHttpClient? = null
+
+        private fun getOkHttpClient(): OkHttpClient {
+            return sharedOkHttpClient ?: synchronized(this) {
+                sharedOkHttpClient ?: OkHttpClient().also { sharedOkHttpClient = it }
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,15 +69,26 @@ class DropboxAuthActivity : AppCompatActivity() {
         val existingAccountId = intent.getStringExtra(EXTRA_ACCOUNT_ID)
         if (existingAccountId != null) {
             lifecycleScope.launch {
-                val account = SettingsManager.getAccount(this@DropboxAuthActivity, DreamSourceType.DROPBOX, existingAccountId)
+                val account = SettingsManager.getAccount(this@DropboxAuthActivity, SourceType.DROPBOX, existingAccountId)
                 binding.btnSignIn.text = "Re-authenticate${account?.accountEmail?.let { " as $it" } ?: ""}"
             }
         }
 
-        binding.btnSignIn.filterTouchesWhenObscured = true
-        binding.btnSignIn.setOnClickListener {
-            startDropboxAuth()
+        if (isTvDevice()) {
+            binding.btnSignIn.isEnabled = false
+            binding.btnSignIn.text = "Not Supported on TV"
+            Toast.makeText(this, "Dropbox authentication requires a web browser and is not supported on Android TV.", Toast.LENGTH_LONG).show()
+        } else {
+            binding.btnSignIn.filterTouchesWhenObscured = true
+            binding.btnSignIn.setOnClickListener {
+                startDropboxAuth()
+            }
         }
+    }
+
+    private fun isTvDevice(): Boolean {
+        val uiModeManager = getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
+        return uiModeManager.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -75,35 +96,35 @@ class DropboxAuthActivity : AppCompatActivity() {
         outState.putBoolean("authStarted", authStarted)
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        okHttpClient?.let { client ->
-            client.dispatcher.executorService.shutdown()
-            client.connectionPool.evictAll()
-        }
-    }
-
     private fun startDropboxAuth() {
+        if (authStarted) return
+        binding.btnSignIn.isEnabled = false
+
         if (BuildConfig.DROPBOX_APP_KEY == "default_key" || BuildConfig.DROPBOX_APP_KEY.isBlank()) {
             Toast.makeText(this, "Error: DROPBOX_APP_KEY not set in local.properties", Toast.LENGTH_LONG).show()
             authStarted = false
+            binding.btnSignIn.isEnabled = true
             return
         }
 
-        if (okHttpClient == null) {
-            okHttpClient = OkHttpClient()
-        }
+        val client = getOkHttpClient()
 
-        // Launches the Dropbox OAuth flow in the system browser using PKCE (Proof Key for Code Exchange)
-        val requestConfig = DbxRequestConfig.newBuilder("AndroidScreensaver")
-            .withHttpRequestor(OkHttp3Requestor(okHttpClient))
-            .build()
-        // Scopes MUST be explicitly provided to force the modern OAuth endpoint.
-        // Without scopes, the Dropbox SDK falls back to a legacy endpoint that triggers 
-        // the "malicious app" security alert even when using PKCE.
-        val scopes = listOf("files.content.read", "files.metadata.read", "account_info.read")
-        Auth.startOAuth2PKCE(this, BuildConfig.DROPBOX_APP_KEY, requestConfig, scopes)
-        authStarted = true
+        try {
+            // Launches the Dropbox OAuth flow in the system browser using PKCE (Proof Key for Code Exchange)
+            val requestConfig = DbxRequestConfig.newBuilder("AndroidScreensaver")
+                .withHttpRequestor(OkHttp3Requestor(client))
+                .build()
+            // Scopes MUST be explicitly provided to force the modern OAuth endpoint.
+            // Without scopes, the Dropbox SDK falls back to a legacy endpoint that triggers 
+            // the "malicious app" security alert even when using PKCE.
+            val scopes = listOf("files.content.read", "files.metadata.read", "account_info.read")
+            Auth.startOAuth2PKCE(this, BuildConfig.DROPBOX_APP_KEY, requestConfig, scopes)
+            authStarted = true
+        } catch (e: Exception) {
+            authStarted = false
+            binding.btnSignIn.isEnabled = true
+            Toast.makeText(this, "Failed to start authentication.", Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onResume() {
@@ -130,9 +151,9 @@ class DropboxAuthActivity : AppCompatActivity() {
                     val accountId = returnedAccountId
 
                     // Save/update the account in SettingsManager, migrating existing selections if the ID changed
-                    var existingAccount = SettingsManager.getAccount(this@DropboxAuthActivity, DreamSourceType.DROPBOX, accountId)
+                    var existingAccount = SettingsManager.getAccount(this@DropboxAuthActivity, SourceType.DROPBOX, accountId)
                     if (existingAccount == null && existingAccountId != null) {
-                        existingAccount = SettingsManager.getAccount(this@DropboxAuthActivity, DreamSourceType.DROPBOX, existingAccountId)
+                        existingAccount = SettingsManager.getAccount(this@DropboxAuthActivity, SourceType.DROPBOX, existingAccountId)
                     }
 
                     val updatedAccount = AccountConfig(
@@ -151,7 +172,7 @@ class DropboxAuthActivity : AppCompatActivity() {
 
                     // Cleanup old account reference if the ID changed during re-auth
                     if (existingAccountId != null && existingAccountId != accountId && existingAccount != null) {
-                        SettingsManager.removeAccount(this@DropboxAuthActivity, DreamSourceType.DROPBOX, existingAccountId)
+                        SettingsManager.removeAccount(this@DropboxAuthActivity, SourceType.DROPBOX, existingAccountId)
                     }
 
                     Toast.makeText(this@DropboxAuthActivity, "Successfully signed in as $accountEmail", Toast.LENGTH_LONG).show()
@@ -164,7 +185,8 @@ class DropboxAuthActivity : AppCompatActivity() {
                     finish()
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
-                    Toast.makeText(this@DropboxAuthActivity, "Authentication error: ${e.message}", Toast.LENGTH_LONG).show()
+                    android.util.Log.e("DropboxAuth", "Error during Dropbox authentication: ${e.javaClass.simpleName}")
+                    Toast.makeText(this@DropboxAuthActivity, "Authentication error occurred.", Toast.LENGTH_LONG).show()
                 } finally {
                     binding.progressBar.visibility = View.GONE
                     binding.btnSignIn.isEnabled = true

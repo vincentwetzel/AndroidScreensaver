@@ -51,7 +51,7 @@ class DropboxPhotoRepository @Inject constructor(
         val cacheKey = "${accountId}_${parentFolderId ?: "ROOT"}"
         val cached = folderCache[cacheKey]
         if (!forceRefresh && cached != null && !cached.isStale) {
-            Log.d(TAG, "Returning cached folders for account $accountId, folder $parentFolderId")
+            Log.d(TAG, "Returning cached folders")
             return cached.data
         }
 
@@ -91,7 +91,7 @@ class DropboxPhotoRepository @Inject constructor(
                 } while (result.hasMore)
 
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to list Dropbox folders for $accountId, path $path", e)
+            Log.e(TAG, "Failed to list Dropbox folders")
                 throw e
             }
 
@@ -145,9 +145,10 @@ class DropboxPhotoRepository @Inject constructor(
                         }
 
                         if (matchesFilter) {
-                            val safeFileName = entry.pathLower.replace("/", "_")
+                            val safeFileId = entry.pathLower.hashCode().toString()
+                            val ext = entry.name.substringAfterLast('.', "").takeIf { it.isNotEmpty() }?.let { ".$it" } ?: ""
                             val photoCacheDir = File(context.cacheDir, "dropbox_photos")
-                            val photoCacheFile = File(photoCacheDir, "${accountId}_$safeFileName")
+                            val photoCacheFile = File(photoCacheDir, "${accountId.hashCode()}_$safeFileId$ext")
                             val uri = if (photoCacheFile.exists()) {
                                 "file://${photoCacheFile.absolutePath}"
                             } else {
@@ -155,7 +156,7 @@ class DropboxPhotoRepository @Inject constructor(
                             }
 
                             val thumbCacheDir = File(context.cacheDir, "dropbox_thumbnails")
-                            val thumbCacheFile = File(thumbCacheDir, "${accountId}_${safeFileName}_thumb.jpeg")
+                            val thumbCacheFile = File(thumbCacheDir, "${accountId.hashCode()}_${safeFileId}_thumb.jpeg")
                             val thumbnailUri = if (thumbCacheFile.exists()) {
                                 "file://${thumbCacheFile.absolutePath}"
                             } else {
@@ -182,7 +183,7 @@ class DropboxPhotoRepository @Inject constructor(
             } while (result.hasMore)
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to collect Dropbox photos for $accountId, path $rootPath", e)
+        Log.e(TAG, "Failed to collect Dropbox photos")
             throw e
         }
 
@@ -199,8 +200,9 @@ class DropboxPhotoRepository @Inject constructor(
             if (entry is FileMetadata) {
                 // Check for cached full photo
                 val photoCacheDir = File(context.cacheDir, "dropbox_photos")
-                val safeFileName = entry.pathLower.replace("/", "_")
-                val photoCacheFile = File(photoCacheDir, "${accountId}_$safeFileName")
+                val safeFileId = entry.pathLower.hashCode().toString()
+                val ext = entry.name.substringAfterLast('.', "").takeIf { it.isNotEmpty() }?.let { ".$it" } ?: ""
+                val photoCacheFile = File(photoCacheDir, "${accountId.hashCode()}_$safeFileId$ext")
                 val uri = if (photoCacheFile.exists()) {
                     "file://${photoCacheFile.absolutePath}"
                 } else {
@@ -209,7 +211,7 @@ class DropboxPhotoRepository @Inject constructor(
 
                 // Check for cached thumbnail
                 val thumbCacheDir = File(context.cacheDir, "dropbox_thumbnails")
-                val thumbCacheFile = File(thumbCacheDir, "${accountId}_${entry.pathLower.replace("/", "_")}_thumb.jpeg")
+                val thumbCacheFile = File(thumbCacheDir, "${accountId.hashCode()}_${safeFileId}_thumb.jpeg")
                 val thumbnailUri = if (thumbCacheFile.exists()) {
                     "file://${thumbCacheFile.absolutePath}"
                 } else {
@@ -230,7 +232,7 @@ class DropboxPhotoRepository @Inject constructor(
                 )
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get metadata for Dropbox photo $photoId, account $accountId", e)
+        Log.e(TAG, "Failed to get metadata for Dropbox photo")
         }
         null
     }
@@ -243,7 +245,7 @@ class DropboxPhotoRepository @Inject constructor(
             val link = client.files().getTemporaryLink(photoId)
             return@withContext link.link
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get temporary link for Dropbox photo $photoId, account $accountId", e)
+        Log.e(TAG, "Failed to get temporary link for Dropbox photo")
         }
         null
     }
@@ -258,13 +260,14 @@ class DropboxPhotoRepository @Inject constructor(
 
         val cacheDir = File(context.cacheDir, "dropbox_thumbnails")
         if (!cacheDir.exists()) cacheDir.mkdirs()
-        val cacheFile = File(cacheDir, "${accountId}_${photoId.replace("/", "_")}_thumb.jpeg")
+    val safeFileId = photoId.hashCode().toString()
+    val cacheFile = File(cacheDir, "${accountId.hashCode()}_${safeFileId}_thumb.jpeg")
 
         if (cacheFile.exists()) {
             return@withContext "file://${cacheFile.absolutePath}"
         }
 
-        val tempFile = File(cacheDir, "${accountId}_${photoId.replace("/", "_")}_thumb.tmp.${java.util.UUID.randomUUID()}")
+    val tempFile = File(cacheDir, "${accountId.hashCode()}_${safeFileId}_thumb.tmp.${java.util.UUID.randomUUID()}")
         try {
             tempFile.outputStream().use { out ->
                 client.files().getThumbnailBuilder(photoId)
@@ -274,12 +277,12 @@ class DropboxPhotoRepository @Inject constructor(
                     .download(out)
             }
             if (!tempFile.renameTo(cacheFile) && !cacheFile.exists()) {
-                Log.e(TAG, "Failed to rename thumbnail temp file to cache file: ${cacheFile.absolutePath}")
+                Log.e(TAG, "Failed to rename thumbnail temp file to cache file")
                 return@withContext null
             }
             return@withContext "file://${cacheFile.absolutePath}"
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get thumbnail for Dropbox photo $photoId, account $accountId", e)
+        Log.e(TAG, "Failed to get thumbnail for Dropbox photo")
         } finally {
             if (tempFile.exists()) tempFile.delete()
         }
@@ -323,7 +326,7 @@ class DropboxPhotoRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to search Dropbox folders for account $accountId, query '$query'", e)
+        Log.e(TAG, "Failed to search Dropbox folders")
         }
         folders
     }
@@ -346,32 +349,32 @@ class DropboxPhotoRepository @Inject constructor(
             val cacheDir = File(context.cacheDir, "dropbox_photos")
             if (!cacheDir.exists()) cacheDir.mkdirs()
 
-            // Use the full path with safe character replacement to prevent collisions
-            val safeFileName = photoId.replace("/", "_")
-            val cacheFile = File(cacheDir, "${accountId}_$safeFileName")
+        val safeFileId = photoId.hashCode().toString()
+        val ext = photoId.substringAfterLast('.', "").takeIf { it.isNotEmpty() }?.let { ".$it" } ?: ""
+        val cacheFile = File(cacheDir, "${accountId.hashCode()}_$safeFileId$ext")
 
             if (cacheFile.exists()) {
-                Log.d(TAG, "Photo already in cache: ${cacheFile.absolutePath}")
+            Log.d(TAG, "Photo already in cache")
                 return@withContext "file://${cacheFile.absolutePath}"
             }
 
-            val tempFile = File(cacheDir, "${accountId}_${safeFileName}.tmp.${java.util.UUID.randomUUID()}")
+        val tempFile = File(cacheDir, "${accountId.hashCode()}_${safeFileId}.tmp.${java.util.UUID.randomUUID()}")
             try {
                 tempFile.outputStream().use { out ->
                     client.files().downloadBuilder(photoId).start().download(out)
                 }
                 if (!tempFile.renameTo(cacheFile) && !cacheFile.exists()) {
-                    Log.e(TAG, "Failed to rename temp file to cache file: ${cacheFile.absolutePath}")
+                    Log.e(TAG, "Failed to rename temp file to cache file")
                     return@withContext null
                 }
             } finally {
                 if (tempFile.exists()) tempFile.delete()
             }
 
-            Log.d(TAG, "Downloaded Dropbox photo to local cache: ${cacheFile.absolutePath}")
+        Log.d(TAG, "Downloaded Dropbox photo to local cache")
             "file://${cacheFile.absolutePath}"
         } catch (e: Exception) {
-            Log.e(TAG, "Error downloading Dropbox photo $photoId to local cache", e)
+        Log.e(TAG, "Error downloading Dropbox photo to local cache")
             null
         }
     }
@@ -395,7 +398,7 @@ class DropboxPhotoRepository @Inject constructor(
                 result = client.files().listFolderContinue(result.cursor)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get subfolders for Dropbox folder $folderId", e)
+        Log.e(TAG, "Failed to get subfolders for Dropbox folder")
         }
         subfolders
     }

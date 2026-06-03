@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.preference.ListPreference
 import androidx.preference.Preference
+import androidx.preference.SeekBarPreference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
 import androidx.lifecycle.lifecycleScope
@@ -165,6 +166,32 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 SettingsManager.saveSlideshowConfig(
                     appContext, config.copy(keepScreenOn = newValue as Boolean)
                 )
+            }
+            true
+        }
+
+        // Stop on low battery
+        findPreference<SwitchPreferenceCompat>("stop_on_low_battery")?.setOnPreferenceChangeListener { _, newValue ->
+            val isEnabled = newValue as Boolean
+            val appContext = requireContext().applicationContext
+            lifecycleScope.launch {
+                val config = SettingsManager.getSlideshowConfig(appContext)
+                SettingsManager.saveSlideshowConfig(
+                    appContext, config.copy(stopOnLowBattery = isEnabled)
+                )
+                findPreference<SeekBarPreference>("low_battery_threshold")?.isEnabled = isEnabled
+            }
+            true
+        }
+
+        // Low battery threshold
+        findPreference<SeekBarPreference>("low_battery_threshold")?.setOnPreferenceChangeListener { preference, newValue ->
+            val value = newValue as Int
+            preference.summary = "$value%"
+            val appContext = requireContext().applicationContext
+            lifecycleScope.launch {
+                val config = SettingsManager.getSlideshowConfig(appContext)
+                SettingsManager.saveSlideshowConfig(appContext, config.copy(lowBatteryThreshold = value))
             }
             true
         }
@@ -577,6 +604,18 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         // Keep screen on - init state
         findPreference<SwitchPreferenceCompat>("keep_screen_on")?.isChecked = config.keepScreenOn
+
+        // Stop on low battery - init state
+        findPreference<SwitchPreferenceCompat>("stop_on_low_battery")?.let { pref ->
+            pref.isChecked = config.stopOnLowBattery
+            findPreference<SeekBarPreference>("low_battery_threshold")?.isEnabled = config.stopOnLowBattery
+        }
+
+        // Low battery threshold - init state
+        findPreference<SeekBarPreference>("low_battery_threshold")?.let { pref ->
+            pref.value = config.lowBatteryThreshold
+            pref.summary = "${config.lowBatteryThreshold}%"
+        }
 
         // Sync interval
         findPreference<ListPreference>("sync_interval")?.let { pref ->

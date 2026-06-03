@@ -2,9 +2,10 @@ package com.vincentwetzel.androidscreensaver.data.repository
 
 import android.content.Context
 import android.content.Intent
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.api.services.drive.Drive
 import com.vincentwetzel.androidscreensaver.utils.GoogleAccountManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,13 +30,13 @@ class GoogleDriveRepository @Inject constructor(
     /**
      * Get the sign-in intent to launch Google authentication
      */
-    fun getSignInIntent(): Intent = accountManager.getSignInIntent()
+    suspend fun getSignInIntent(): Intent = accountManager.getSignInIntent()
 
     /**
      * Handle the sign-in result. Returns the accountId if successful, null otherwise.
      */
-    fun handleSignInResult(account: GoogleSignInAccount?): String? {
-        return accountManager.handleSignInResult(account)
+    fun handleSignInResult(data: Intent?): String? {
+        return accountManager.handleSignInResult(data)
     }
 
     /**
@@ -56,13 +57,6 @@ class GoogleDriveRepository @Inject constructor(
         val id = accountId ?: accountManager.getAuthenticatedAccountIds().firstOrNull()
             ?: return null
         return accountManager.getDriveService(id)
-    }
-
-    /**
-     * Get the GoogleSignInAccount for a specific account.
-     */
-    fun getAccount(accountId: String): GoogleSignInAccount? {
-        return accountManager.getAccount(accountId)
     }
 
     /**
@@ -108,5 +102,18 @@ class GoogleDriveRepository @Inject constructor(
      */
     suspend fun revokeAll() {
         accountManager.revokeAll()
+    }
+
+    /**
+     * Verifies that the app has been granted the required Drive scopes.
+     * Throws UserRecoverableAuthIOException if scopes are missing.
+     */
+    @Throws(Exception::class)
+    suspend fun verifyDriveAccess(accountId: String) = withContext(Dispatchers.IO) {
+        val service = getDriveService(accountId)
+            ?: throw IllegalStateException("Drive service not found for account")
+
+        // Lightweight API call forces the credential to fetch an OAuth token
+        service.about().get().setFields("user").execute()
     }
 }

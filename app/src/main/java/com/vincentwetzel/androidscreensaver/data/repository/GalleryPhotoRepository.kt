@@ -84,7 +84,7 @@ class GalleryPhotoRepository @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.w("GalleryPhotoRepo", "Prefetch failed: ${e.message}")
+            android.util.Log.w("GalleryPhotoRepo", "Prefetch failed: ${e.javaClass.simpleName}")
             }
         }
     }
@@ -111,7 +111,7 @@ class GalleryPhotoRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.w("GalleryPhotoRepo", "Failed to get relative path for folder $folderId: ${e.message}")
+            android.util.Log.w("GalleryPhotoRepo", "Failed to get relative path for folder $folderId")
         }
         return null
     }
@@ -189,8 +189,8 @@ class GalleryPhotoRepository @Inject constructor(
                 // Sort folders by name (case-insensitive without extra string allocations)
                 folders.sortWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
             } catch (e: Exception) {
-                e.printStackTrace()
-                throw Exception("Failed to list folders: ${e.message}")
+            android.util.Log.e("GalleryPhotoRepo", "Failed to list folders: ${e.javaClass.simpleName}")
+                throw e
             }
 
             folders.also { folderCache[cacheKey] = CacheEntry(it) }
@@ -335,8 +335,8 @@ class GalleryPhotoRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
-            throw Exception("Failed to list photos: ${e.message}")
+        android.util.Log.e("GalleryPhotoRepo", "Failed to list photos: ${e.javaClass.simpleName}")
+            throw e
         }
 
         photoListCache[cacheKey] = PhotoListCacheEntry(photos)
@@ -417,7 +417,7 @@ class GalleryPhotoRepository @Inject constructor(
             }
             null
         } catch (e: Exception) {
-            e.printStackTrace()
+        android.util.Log.e("GalleryPhotoRepo", "Error accessing MediaStore: ${e.javaClass.simpleName}")
             null
         }
     }
@@ -487,7 +487,7 @@ class GalleryPhotoRepository @Inject constructor(
                 photoCountCache[cacheKey] = CountCacheEntry(count)
                 count
             } catch (e: Exception) {
-                e.printStackTrace()
+            android.util.Log.e("GalleryPhotoRepo", "Failed to count folder media: ${e.javaClass.simpleName}")
                 0
             }
         }
@@ -529,7 +529,7 @@ class GalleryPhotoRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.w("GalleryPhotoRepo", "Failed to get subfolders for $folderId: ${e.message}")
+            android.util.Log.w("GalleryPhotoRepo", "Failed to get subfolders for folder $folderId")
         }
         subfolders
     }

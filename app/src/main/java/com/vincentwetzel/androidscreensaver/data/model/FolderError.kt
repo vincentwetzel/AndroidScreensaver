@@ -20,6 +20,10 @@ sealed class FolderError {
             val message = e.message?.lowercase(java.util.Locale.ROOT) ?: ""
             return when {
                 // Network errors
+                e is java.net.UnknownHostException ||
+                e is java.net.SocketTimeoutException ||
+                e is java.net.ConnectException ||
+                e is java.net.SocketException ||
                 message.contains("network") ||
                 message.contains("unable to resolve") ||
                 message.contains("connection") ||
@@ -29,6 +33,7 @@ sealed class FolderError {
                 message.contains("socket") -> NetworkError()
 
                 // Auth errors
+                e is SecurityException ||
                 message.contains("auth") ||
                 message.contains("unauthorized") ||
                 message.contains("401") ||
@@ -52,7 +57,7 @@ sealed class FolderError {
                 message.contains("empty") ||
                 message.contains("no ") -> EmptyError()
 
-                else -> UnknownError(e.message ?: "An unexpected error occurred.")
+                else -> UnknownError("An unexpected error occurred: ${e.javaClass.simpleName}")
             }
         }
     }

@@ -113,7 +113,7 @@ abstract class BaseCloudPhotoRepository(
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.w("BaseCloudPhotoRepo", "Prefetch failed for $accountId: ${e.message}")
+                android.util.Log.w("BaseCloudPhotoRepo", "Prefetch failed for account: ${e.javaClass.simpleName}")
             }
         }
     }
