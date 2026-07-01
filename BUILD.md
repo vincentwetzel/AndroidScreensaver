@@ -77,7 +77,7 @@ If `DROPBOX_APP_KEY` is missing, Dropbox authentication shows an error instead o
 3. Ensure the app registration allows delegated read access for Microsoft Graph `Files.Read` and `User.Read`, plus `offline_access` if you want refresh support.
 4. Android TV uses Microsoft device code flow, so verify the account you sign in with can complete browser-based verification on a second device.
 
-The app stores OneDrive tokens in encrypted shared preferences and keeps downloaded OneDrive media in the app cache directory.
+The app stores OneDrive tokens in encrypted shared preferences, initializes that storage lazily to avoid keystore work during dependency setup, and keeps downloaded OneDrive media in the app cache directory. The signed-in account label comes from the Graph `mail` or `userPrincipalName` field when available.
 
 ## Troubleshooting
 

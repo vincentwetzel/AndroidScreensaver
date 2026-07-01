@@ -15,7 +15,7 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
   - Shuffle/random order, configurable slide duration, and multiple transition effects.
   - Display effects including crop-to-fit, scale-to-fit, zoom, and pan.
   - Photo ordering by date, name, or size.
-  - Content Type filter for images only, videos only, or both.
+  - Content Type filter for images only, videos only, or both, enforced through repository and folder-browser filtering.
   - Background color, screen rotation, keep-screen-on, low-battery auto-exit, match-orientation, and touch-exit settings.
   - Network-only cloud loading works on Wi-Fi or Ethernet.
   - Burn-in protection gently shifts persistent overlays during long-running screensaver sessions.
@@ -39,7 +39,7 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
 ## Quick Start
 
 1. Build and run in Android Studio or with `./gradlew installDebug`.
-2. Enable a source such as Gallery, Google Drive, Dropbox, or OneDrive. Remote sources can be added more than once for different accounts.
+2. Enable a source such as Gallery, Google Drive, Dropbox, or OneDrive. Remote sources can be added more than once for different accounts, and authenticated source cards always show the signed-in account email.
 3. Tap the source card and select folders. Folder selections save immediately.
 4. Source cards reuse the saved selected-folder count while repositories refresh media counts in the background.
 5. Use **Re-authenticate** from a remote source card or folder browser menu if a cloud token expires.

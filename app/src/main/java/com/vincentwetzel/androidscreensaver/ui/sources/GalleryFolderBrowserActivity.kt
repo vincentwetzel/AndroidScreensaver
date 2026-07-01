@@ -18,6 +18,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.databinding.ActivityFolderBrowserBinding
 import com.vincentwetzel.androidscreensaver.viewmodel.GalleryViewModel
@@ -109,13 +110,10 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
     /**
      * Get the current content filter setting and map it to a string for the repository.
      */
-    private suspend fun getContentFilter(): String? {
+    private suspend fun getContentFilter(): MediaTypeFilter {
         val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(this)
-        return when (config.mediaTypeFilter) {
-            com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "images"
-            com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY -> "videos"
-            else -> null // BOTH
-        }
+        // The ViewModel now expects MediaTypeFilter directly, so we can pass it as is.
+        return config.mediaTypeFilter
     }
 
     private fun hasGalleryPermissions(): Boolean {
@@ -150,7 +148,7 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun setupRecyclerView(mediaFilter: String?) {
+    private suspend fun setupRecyclerView(mediaFilter: MediaTypeFilter?) {
         adapter = FolderAdapter(
             onSelectionStateChanged = { selectedIds, deselectedIds ->
                 // Capture synchronous state to prevent corruption if the user navigates
@@ -294,9 +292,9 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
 
     private suspend fun updateSummary(folderCount: Int, itemCount: Int) {
         if (itemCount > 0) {
-            val label = when (getContentFilter()) {
-                "images" -> "photos"
-                "videos" -> "videos"
+            val label = when (getContentFilter()) { // getContentFilter() now returns MediaTypeFilter
+                MediaTypeFilter.IMAGES_ONLY -> "photos"
+                MediaTypeFilter.VIDEOS_ONLY -> "videos"
                 else -> "items"
             }
             binding.summaryText.text = "$folderCount folders selected, $itemCount $label"

@@ -52,6 +52,7 @@ Settings are accessed through **Menu > Settings**.
 
 - Media order: shuffle, date, and name sorting.
 - Content Type filter: Images Only, Videos Only, or Both.
+- Folder browser summaries and row labels follow the active Content Type filter, so selected counts are shown as photos, videos, or items to match what the repositories are loading.
 - Match device orientation for letterboxed photos when orientation differs.
 
 ### Slideshow
@@ -118,7 +119,7 @@ Shows folders from one or more OneDrive accounts. On phones and tablets, the app
 
 Authenticated source cards must show `Signed in as [account email]`. If sign-in expires, use **Re-authenticate** from the source card or folder browser instead of removing and re-adding the account.
 
-OneDrive sign-in requires `ONEDRIVE_CLIENT_ID` to be configured in the app build. The current implementation stores the authenticated account by Graph user ID and caches media through the repository's local app cache.
+OneDrive sign-in requires `ONEDRIVE_CLIENT_ID` to be configured in the app build. The current implementation stores the authenticated account by a stable per-account key and prefers the Graph `mail` or `userPrincipalName` field for the signed-in account email when available, while still caching media through the repository's local app cache.
 
 ## Troubleshooting
 

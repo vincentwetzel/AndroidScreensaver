@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import coil.transform.RoundedCornersTransformation
 import com.vincentwetzel.androidscreensaver.R
+import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
 
 /**
@@ -19,7 +20,7 @@ import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
 class FolderAdapter(
     private val onSelectionStateChanged: (selectedIds: Set<String>, deselectedIds: Set<String>) -> Unit,
     private val onFolderClick: (String) -> Unit,
-    private val mediaFilter: String? = null
+    private val mediaFilter: MediaTypeFilter? = null
 ) : RecyclerView.Adapter<FolderAdapter.FolderViewHolder>() {
 
     private val folders = mutableListOf<PhotoFolder>()
@@ -95,8 +96,8 @@ class FolderAdapter(
      * Get the correct label based on the content filter: "photos", "videos", or "items"
      */
     private fun getMediaLabel(): String = when (mediaFilter) {
-        "images" -> "photos"
-        "videos" -> "videos"
+        MediaTypeFilter.IMAGES_ONLY -> "photos"
+        MediaTypeFilter.VIDEOS_ONLY -> "videos"
         else -> "items"
     }
 

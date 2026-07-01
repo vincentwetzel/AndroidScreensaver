@@ -2,6 +2,10 @@
 
 ## 1.11.0 (In Progress)
 
+### Changed
+- Switched the folder browser and slideshow content-filter plumbing to pass `MediaTypeFilter` directly instead of lowercased string aliases. This keeps repository queries, folder labels, and ViewModel state aligned with the persisted enum values.
+- Hardened OneDrive auth storage by lazily initializing encrypted shared preferences, recovering from keystore corruption, and storing account tokens under a stable per-account key. OneDrive device flow now records the Graph `mail` or `userPrincipalName` when available so the app can keep showing the signed-in account email.
+
 ### Documentation
 - Removed `PROGRESS.md` and consolidated active planning into `TODO.md`; release history remains in this changelog.
 - Cleaned up duplicated documentation-agent rules and corrected corrupted punctuation/checklist glyphs in project markdown.

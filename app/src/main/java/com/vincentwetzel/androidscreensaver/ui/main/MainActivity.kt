@@ -25,6 +25,7 @@ import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.databinding.ActivityMainBinding
 import com.vincentwetzel.androidscreensaver.databinding.ActivityMainTvBinding
 import com.vincentwetzel.androidscreensaver.data.model.AccountConfig
+import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import com.vincentwetzel.androidscreensaver.data.model.SelectedFolder
 import com.vincentwetzel.androidscreensaver.ui.settings.SettingsActivity
 import com.vincentwetzel.androidscreensaver.ui.sources.FolderBrowserActivity
@@ -598,15 +599,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Get the content filter as a string for the repository: "images", "videos", or null for both
+     * Get the content filter as a MediaTypeFilter for the repository prefetching
      */
-    private suspend fun getContentFilterFilter(): String? {
+    private suspend fun getContentFilterFilter(): MediaTypeFilter {
         val config = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getSlideshowConfig(this)
-        return when (config.mediaTypeFilter) {
-            com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "images"
-            com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY -> "videos"
-            else -> null // BOTH
-        }
+        return config.mediaTypeFilter
     }
 
     private fun showAddSourcesDialog() {

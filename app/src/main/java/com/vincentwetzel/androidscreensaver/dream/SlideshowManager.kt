@@ -143,19 +143,13 @@ class SlideshowManager @Inject constructor(
                                 selectedFolders
                             }
 
-                            val mediaFilterString = when (config.mediaTypeFilter) {
-                                com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY -> "images"
-                                com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY -> "videos"
-                                else -> null
-                            }
-
                             // Chunk execution to prevent OOM spikes and Rate Limiting on dozens of folders
                             val folderPhotosList = mutableListOf<List<Photo>>()
                             foldersToLoad.chunked(5).forEach { chunk ->
                                 val results = chunk.map { folder ->
                                     async { 
                                         try {
-                                            photoRepository.listPhotos(folder.id, excludedFolderIds, mediaFilterString) 
+                                            photoRepository.listPhotos(folder.id, excludedFolderIds, config.mediaTypeFilter) 
                                         } catch (e: Exception) {
                                             if (e is kotlinx.coroutines.CancellationException) throw e
                                             // Isolate the failure so it doesn't cancel the entire parent IO coroutine scope

@@ -38,6 +38,7 @@ This file defines engineering standards for Android Screensaver. Architecture de
 ## Data, Media, And Caching
 
 - Apply Content Type filters as early as possible in repository queries and counts, not only in UI code.
+- Pass `MediaTypeFilter` values through the UI/ViewModel/repository stack directly instead of converting them into lowercased string aliases.
 - Do not download full media upfront. Repositories should fetch metadata and let Coil, ExoPlayer, or repository cache paths load media just in time.
 - Do not load large datasets into memory for filtering when platform or remote query APIs can do the filtering.
 - Namespace memory cache keys and disk cache filenames with source and `accountId` where applicable.
@@ -47,6 +48,7 @@ This file defines engineering standards for Android Screensaver. Architecture de
 
 - **Secret Management:** Do not hardcode production OAuth keys, API tokens, or secrets. Use `local.properties`, environment variables, or Gradle-injected `buildConfigField` values. *Note: OAuth Client IDs are public by necessity, but Client Secrets must never be shipped in the APK.*
 - **Token Storage:** Always store sensitive credentials (such as OAuth access and refresh tokens) securely using Android's `EncryptedSharedPreferences`. Standard non-sensitive preferences can remain in `DataStore`.
+- Initialize encrypted token storage lazily when it may otherwise block startup or hit keystore I/O on the main thread.
 - **Data Leakage & Logging (OWASP Mobile):** Do not log OAuth tokens, refresh tokens, authorization headers, or sensitive user personal data (PII).
 - **Network Security:** All remote internet traffic must use HTTPS (TLS 1.2/1.3). Cleartext HTTP traffic must remain disabled.
 - **Data Privacy (GDPR Compliance):** The app acts as a local client. All cached user data, photos, and tokens must remain strictly on-device and must be comprehensively deleted when the user signs out or clears the app cache.

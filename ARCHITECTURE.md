@@ -9,7 +9,6 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 - **Activities** - Single-screen UIs such as `MainActivity`, settings screens, auth screens, and folder browsers.
 - **Adapters** - RecyclerView adapters for source and folder lists.
 - **Views** - Observe ViewModels through `StateFlow`/`LiveData`.
-- **FolderBrowserActivity** - Shared cloud folder browser for Google Drive and Dropbox. It can launch source-specific re-authentication from the toolbar or auth-error empty state, then reload the current folder for the same account.
 - **FolderBrowserActivity** - Shared cloud folder browser for Google Drive, Dropbox, and OneDrive. It can launch source-specific re-authentication from the toolbar or auth-error empty state, then reload the current folder for the same account.
 - **SlideshowView** - Custom `FrameLayout` that renders photos/videos, transitions, overlays, and playback behavior.
 - **NoSourcesView** - Setup guidance when no sources are configured.
@@ -33,7 +32,7 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 - **OneDrivePhotoRepository** - OneDrive Graph API media access with account-scoped routing, recursive folder traversal, folder search, thumbnail metadata, and local cache downloads.
 - **GoogleDriveRepository** - Delegates account selection and Drive service creation to `GoogleAccountManager`, and verifies read-only Drive access before sign-in is finalized.
 - **DropboxRepository** - Delegates Dropbox auth, account metadata, and API clients to `DropboxAccountManager`.
-- **OneDriveAuthManager** - Manages OneDrive auth with MSAL on phones/tablets, device code flow on Android TV, and encrypted per-account token storage.
+- **OneDriveAuthManager** - Manages OneDrive auth with MSAL on phones/tablets, device code flow on Android TV, and encrypted per-account token storage initialized lazily for keystore safety.
 - **SettingsManager** - DataStore-backed preferences for slideshow config, source state, selected folders, and account configs.
 
 ### Service Layer (`dream/`)
@@ -96,6 +95,7 @@ Preview or DreamService starts
 - `SlideshowManager` chunk-loads selected folders in small concurrent batches to limit memory/API spikes.
 - ViewModel work runs in `viewModelScope`.
 - Main source cards read persisted per-account selected media counts so card refreshes do not block on recursive cloud API counts; repository prefetch refreshes those counts in the background.
+- Folder browser ViewModels retain the active `MediaTypeFilter` enum directly so navigation, refresh, and summary labels stay aligned with repository filtering.
 - UI settings/account reads are suspend calls and must run from coroutines. Activities use `lifecycleScope`, while `ScheduleService` performs schedule reads on an IO coroutine before setting alarms.
 - Settings and folder-browser save paths snapshot current UI or adapter state before DataStore reads, then merge the snapshot into the freshly loaded config to avoid stale lifecycle-resume state overwriting newer user choices.
 

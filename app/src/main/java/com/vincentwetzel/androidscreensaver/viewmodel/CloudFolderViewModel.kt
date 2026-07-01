@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vincentwetzel.androidscreensaver.data.model.FolderError
 import com.vincentwetzel.androidscreensaver.data.model.FolderError.Companion.fromException
+import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
 import com.vincentwetzel.androidscreensaver.data.model.SourceType
 import com.vincentwetzel.androidscreensaver.data.repository.PhotoRepository
@@ -39,7 +40,7 @@ class CloudFolderViewModel @Inject constructor(
     val currentFolderId: StateFlow<String?> = _currentFolderId.asStateFlow()
 
     // Track the active media filter so it persists during back navigation
-    private var currentMediaFilter: String? = null
+    private var currentMediaFilter: MediaTypeFilter? = null
 
     // Back stack for folder navigation
     private val _navigationBackStack = mutableListOf<String?>()
@@ -74,7 +75,7 @@ class CloudFolderViewModel @Inject constructor(
     /**
      * Load folders from the cloud source for the configured account.
      */
-    fun loadFolders(parentFolderId: String? = null, forceRefresh: Boolean = false, addToBackStack: Boolean = true, mediaFilter: String? = currentMediaFilter) {
+    fun loadFolders(parentFolderId: String? = null, forceRefresh: Boolean = false, addToBackStack: Boolean = true, mediaFilter: MediaTypeFilter? = currentMediaFilter) {
         currentMediaFilter = mediaFilter
         val id = accountId ?: run {
             _error.value = FolderError.UnknownError("No account configured for folder browsing")

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.vincentwetzel.androidscreensaver.data.model.FolderError
 import com.vincentwetzel.androidscreensaver.data.model.FolderError.Companion.fromException
+import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
 import com.vincentwetzel.androidscreensaver.data.repository.GalleryPhotoRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,7 +33,7 @@ class GalleryViewModel @Inject constructor(
     val currentFolderId: StateFlow<String?> = _currentFolderId.asStateFlow()
 
     // Track the active media filter so it persists during back navigation
-    private var currentMediaFilter: String? = null
+    private var currentMediaFilter: MediaTypeFilter? = null
 
     // Back stack for folder navigation
     private val _navigationBackStack = mutableListOf<String?>()
@@ -52,7 +53,7 @@ class GalleryViewModel @Inject constructor(
      * Load folders from Gallery (buckets)
      * Cache is in the repository, so it persists across Activity recreations
      */
-    fun loadFolders(parentFolderId: String? = null, forceRefresh: Boolean = false, addToBackStack: Boolean = true, mediaFilter: String? = currentMediaFilter) {
+    fun loadFolders(parentFolderId: String? = null, forceRefresh: Boolean = false, addToBackStack: Boolean = true, mediaFilter: MediaTypeFilter? = currentMediaFilter) {
         currentMediaFilter = mediaFilter
         currentJob?.cancel()
         currentJob = viewModelScope.launch {
