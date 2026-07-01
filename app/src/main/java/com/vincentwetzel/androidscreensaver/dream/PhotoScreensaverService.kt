@@ -40,7 +40,7 @@ class PhotoScreensaverService : DreamService() {
     private var gestureDetector: GestureDetector? = null
     private var timeoutHandler: Handler? = null
     private var timeoutRunnable: Runnable? = null
-    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
+    private var serviceJob: Job? = null
     
     private val stopReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -53,7 +53,8 @@ class PhotoScreensaverService : DreamService() {
     private val powerSaveReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == PowerManager.ACTION_POWER_SAVE_MODE_CHANGED) {
-                if (slideshowManager.config.respectBatterySaver) {
+                // Ensure config is loaded and slideshow is running to prevent UninitializedPropertyAccessException
+                if (slideshowView != null && slideshowManager.config.respectBatterySaver) {
                     val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
                     if (powerManager.isPowerSaveMode) {
                         slideshowView?.pause()
@@ -68,7 +69,8 @@ class PhotoScreensaverService : DreamService() {
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_BATTERY_CHANGED) {
-                if (slideshowManager.config.stopOnLowBattery) {
+                // Ensure config is loaded and slideshow is running to prevent UninitializedPropertyAccessException
+                if (slideshowView != null && slideshowManager.config.stopOnLowBattery) {
                     val status = intent.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
                     val isCharging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
                                      status == android.os.BatteryManager.BATTERY_STATUS_FULL
@@ -116,8 +118,12 @@ class PhotoScreensaverService : DreamService() {
         isInteractive = false
         isScreenBright = false
 
-        serviceScope.launch {
-            // Check if any sources are configured
+        // Ensure a fresh job is created for this attachment lifecycle to prevent silent cancellation drops
+        serviceJob?.cancel()
+        serviceJob = Job()
+        
+        CoroutineScope(Dispatchers.Main + serviceJob!!).launch {
+            // Check if any sources configured
             val hasSources = SettingsManager.hasAnySourceConfigured(this@PhotoScreensaverService)
             
             if (!hasSources) {
@@ -292,7 +298,8 @@ class PhotoScreensaverService : DreamService() {
         } catch (e: Exception) {
             android.util.Log.w(TAG, "batteryReceiver not registered")
         }
-        serviceScope.cancel()
+        serviceJob?.cancel()
+        serviceJob = null
         
         // Clean up timeout handler
         timeoutHandler?.removeCallbacksAndMessages(null)

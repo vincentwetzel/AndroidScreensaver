@@ -7,7 +7,7 @@ This file is the active backlog and quality checklist. Completed release history
 ### New Sources
 
 - [ ] Google Photos integration (Note: Supports Device Flow natively for Android TV).
-- [ ] OneDrive integration (Note: Implement hybrid auth. MSAL for mobile, Device Flow for Android TV).
+- [x] OneDrive integration (Note: Implement hybrid auth. MSAL for mobile, Device Flow for Android TV).
 - [ ] Local network source support through SMB/WebDAV or similar.
 
 ### Device Compatibility

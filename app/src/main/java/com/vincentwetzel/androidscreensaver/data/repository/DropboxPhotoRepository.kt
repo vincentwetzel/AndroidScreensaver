@@ -4,11 +4,9 @@ import android.content.Context
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
 import com.vincentwetzel.androidscreensaver.data.model.SourceType
+import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,13 +17,14 @@ import com.dropbox.core.v2.files.ListFolderResult
 import com.dropbox.core.v2.files.ThumbnailFormat
 import com.dropbox.core.v2.files.ThumbnailSize
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
+import java.net.URLEncoder
+import java.util.UUID
 
 @Singleton
 class DropboxPhotoRepository @Inject constructor(
     @ApplicationContext context: Context,
     private val dropboxRepository: DropboxRepository
-) : BaseCloudPhotoRepository(context, "source_dropbox") {
+) : BaseCloudPhotoRepository(context, com.vincentwetzel.androidscreensaver.dream.SourceType.DROPBOX) {
 
     companion object {
         private const val TAG = "DropboxPhotoRepository"
@@ -91,7 +90,8 @@ class DropboxPhotoRepository @Inject constructor(
                 } while (result.hasMore)
 
             } catch (e: Exception) {
-            Log.e(TAG, "Failed to list Dropbox folders")
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e(TAG, "Failed to list Dropbox folders")
                 throw e
             }
 
@@ -100,9 +100,10 @@ class DropboxPhotoRepository @Inject constructor(
         }
     }
 
-    override suspend fun listPhotosForAccount(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: String?, accountId: String): List<Photo> = withContext(Dispatchers.IO) {
+    override suspend fun listPhotosForAccount(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: MediaTypeFilter?, accountId: String): List<Photo> = withContext(Dispatchers.IO) {
         val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
-        val cacheKey = "${accountId}_${folderId}_${normalizedFilter}_${excludedFolderIds.hashCode()}"
+        val exclusionsKey = if (excludedFolderIds.isEmpty()) "none" else excludedFolderIds.sorted().joinToString(",")
+        val cacheKey = "${accountId}_${folderId}_${normalizedFilter}_$exclusionsKey"
         val cached = photoListCache[cacheKey]
         if (cached != null && !cached.isStale) {
             return@withContext cached.data
@@ -145,10 +146,11 @@ class DropboxPhotoRepository @Inject constructor(
                         }
 
                         if (matchesFilter) {
-                            val safeFileId = entry.pathLower.hashCode().toString()
+                            val safeFileId = entry.pathLower.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
+                            val safeAccountId = URLEncoder.encode(accountId, "UTF-8")
                             val ext = entry.name.substringAfterLast('.', "").takeIf { it.isNotEmpty() }?.let { ".$it" } ?: ""
                             val photoCacheDir = File(context.cacheDir, "dropbox_photos")
-                            val photoCacheFile = File(photoCacheDir, "${accountId.hashCode()}_$safeFileId$ext")
+                            val photoCacheFile = File(photoCacheDir, "${safeAccountId}_$safeFileId$ext")
                             val uri = if (photoCacheFile.exists()) {
                                 "file://${photoCacheFile.absolutePath}"
                             } else {
@@ -156,7 +158,7 @@ class DropboxPhotoRepository @Inject constructor(
                             }
 
                             val thumbCacheDir = File(context.cacheDir, "dropbox_thumbnails")
-                            val thumbCacheFile = File(thumbCacheDir, "${accountId.hashCode()}_${safeFileId}_thumb.jpeg")
+                            val thumbCacheFile = File(thumbCacheDir, "${safeAccountId}_${safeFileId}_thumb.jpeg")
                             val thumbnailUri = if (thumbCacheFile.exists()) {
                                 "file://${thumbCacheFile.absolutePath}"
                             } else {
@@ -183,7 +185,8 @@ class DropboxPhotoRepository @Inject constructor(
             } while (result.hasMore)
 
         } catch (e: Exception) {
-        Log.e(TAG, "Failed to collect Dropbox photos")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e(TAG, "Failed to collect Dropbox photos")
             throw e
         }
 
@@ -200,9 +203,10 @@ class DropboxPhotoRepository @Inject constructor(
             if (entry is FileMetadata) {
                 // Check for cached full photo
                 val photoCacheDir = File(context.cacheDir, "dropbox_photos")
-                val safeFileId = entry.pathLower.hashCode().toString()
+                val safeFileId = entry.pathLower.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
+                val safeAccountId = URLEncoder.encode(accountId, "UTF-8")
                 val ext = entry.name.substringAfterLast('.', "").takeIf { it.isNotEmpty() }?.let { ".$it" } ?: ""
-                val photoCacheFile = File(photoCacheDir, "${accountId.hashCode()}_$safeFileId$ext")
+                val photoCacheFile = File(photoCacheDir, "${safeAccountId}_$safeFileId$ext")
                 val uri = if (photoCacheFile.exists()) {
                     "file://${photoCacheFile.absolutePath}"
                 } else {
@@ -211,7 +215,7 @@ class DropboxPhotoRepository @Inject constructor(
 
                 // Check for cached thumbnail
                 val thumbCacheDir = File(context.cacheDir, "dropbox_thumbnails")
-                val thumbCacheFile = File(thumbCacheDir, "${accountId.hashCode()}_${safeFileId}_thumb.jpeg")
+                val thumbCacheFile = File(thumbCacheDir, "${safeAccountId}_${safeFileId}_thumb.jpeg")
                 val thumbnailUri = if (thumbCacheFile.exists()) {
                     "file://${thumbCacheFile.absolutePath}"
                 } else {
@@ -232,7 +236,8 @@ class DropboxPhotoRepository @Inject constructor(
                 )
             }
         } catch (e: Exception) {
-        Log.e(TAG, "Failed to get metadata for Dropbox photo")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e(TAG, "Failed to get metadata for Dropbox photo")
         }
         null
     }
@@ -245,7 +250,8 @@ class DropboxPhotoRepository @Inject constructor(
             val link = client.files().getTemporaryLink(photoId)
             return@withContext link.link
         } catch (e: Exception) {
-        Log.e(TAG, "Failed to get temporary link for Dropbox photo")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e(TAG, "Failed to get temporary link for Dropbox photo")
         }
         null
     }
@@ -260,14 +266,15 @@ class DropboxPhotoRepository @Inject constructor(
 
         val cacheDir = File(context.cacheDir, "dropbox_thumbnails")
         if (!cacheDir.exists()) cacheDir.mkdirs()
-    val safeFileId = photoId.hashCode().toString()
-    val cacheFile = File(cacheDir, "${accountId.hashCode()}_${safeFileId}_thumb.jpeg")
+        val safeFileId = photoId.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
+        val safeAccountId = URLEncoder.encode(accountId, "UTF-8")
+        val cacheFile = File(cacheDir, "${safeAccountId}_${safeFileId}_thumb.jpeg")
 
         if (cacheFile.exists()) {
             return@withContext "file://${cacheFile.absolutePath}"
         }
 
-    val tempFile = File(cacheDir, "${accountId.hashCode()}_${safeFileId}_thumb.tmp.${java.util.UUID.randomUUID()}")
+        val tempFile = File(cacheDir, "${safeAccountId}_${safeFileId}_thumb.tmp.${UUID.randomUUID()}")
         try {
             tempFile.outputStream().use { out ->
                 client.files().getThumbnailBuilder(photoId)
@@ -282,7 +289,8 @@ class DropboxPhotoRepository @Inject constructor(
             }
             return@withContext "file://${cacheFile.absolutePath}"
         } catch (e: Exception) {
-        Log.e(TAG, "Failed to get thumbnail for Dropbox photo")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e(TAG, "Failed to get thumbnail for Dropbox photo")
         } finally {
             if (tempFile.exists()) tempFile.delete()
         }
@@ -326,12 +334,13 @@ class DropboxPhotoRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-        Log.e(TAG, "Failed to search Dropbox folders")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e(TAG, "Failed to search Dropbox folders")
         }
         folders
     }
 
-    override suspend fun getFilteredFolderMediaCountForAccount(folderId: String, mediaTypeFilter: String?, accountId: String): Int {
+    override suspend fun getFilteredFolderMediaCountForAccount(folderId: String, mediaTypeFilter: MediaTypeFilter?, accountId: String): Int {
         val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
         val cacheKey = "${accountId}_${folderId}_${normalizedFilter}"
         val cached = photoCountCache[cacheKey]
@@ -349,16 +358,17 @@ class DropboxPhotoRepository @Inject constructor(
             val cacheDir = File(context.cacheDir, "dropbox_photos")
             if (!cacheDir.exists()) cacheDir.mkdirs()
 
-        val safeFileId = photoId.hashCode().toString()
-        val ext = photoId.substringAfterLast('.', "").takeIf { it.isNotEmpty() }?.let { ".$it" } ?: ""
-        val cacheFile = File(cacheDir, "${accountId.hashCode()}_$safeFileId$ext")
+            val safeFileId = photoId.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
+            val safeAccountId = URLEncoder.encode(accountId, "UTF-8")
+            val ext = photoId.substringAfterLast('.', "").takeIf { it.isNotEmpty() }?.let { ".$it" } ?: ""
+            val cacheFile = File(cacheDir, "${safeAccountId}_$safeFileId$ext")
 
             if (cacheFile.exists()) {
-            Log.d(TAG, "Photo already in cache")
+                Log.d(TAG, "Photo already in cache")
                 return@withContext "file://${cacheFile.absolutePath}"
             }
 
-        val tempFile = File(cacheDir, "${accountId.hashCode()}_${safeFileId}.tmp.${java.util.UUID.randomUUID()}")
+            val tempFile = File(cacheDir, "${safeAccountId}_${safeFileId}.tmp.${UUID.randomUUID()}")
             try {
                 tempFile.outputStream().use { out ->
                     client.files().downloadBuilder(photoId).start().download(out)
@@ -371,10 +381,11 @@ class DropboxPhotoRepository @Inject constructor(
                 if (tempFile.exists()) tempFile.delete()
             }
 
-        Log.d(TAG, "Downloaded Dropbox photo to local cache")
+            Log.d(TAG, "Downloaded Dropbox photo to local cache")
             "file://${cacheFile.absolutePath}"
         } catch (e: Exception) {
-        Log.e(TAG, "Error downloading Dropbox photo to local cache")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e(TAG, "Error downloading Dropbox photo to local cache")
             null
         }
     }
@@ -398,8 +409,23 @@ class DropboxPhotoRepository @Inject constructor(
                 result = client.files().listFolderContinue(result.cursor)
             }
         } catch (e: Exception) {
-        Log.e(TAG, "Failed to get subfolders for Dropbox folder")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e(TAG, "Failed to get subfolders for Dropbox folder")
         }
         subfolders
+    }
+
+    override suspend fun syncPhotos(): Boolean {
+        val success = super.syncPhotos()
+        withContext(Dispatchers.IO) {
+            try {
+                File(context.cacheDir, "dropbox_photos").deleteRecursively()
+                File(context.cacheDir, "dropbox_thumbnails").deleteRecursively()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e(TAG, "Failed to clear Dropbox disk cache: ${e.javaClass.simpleName}")
+            }
+        }
+        return success
     }
 }

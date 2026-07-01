@@ -1,0 +1,16 @@
+{
+  "client_id": "e0976175-6063-461b-902d-b3b2ada8079b",
+  "authorization_user_agent": "DEFAULT",
+  "redirect_uri": "msauth://com.vincentwetzel.androidscreensaver.debug/mFva8cfSlQYJ8+g3obMzz+A0xYU=",
+  "account_mode": "MULTIPLE",
+  "broker_redirect_uri_registered": false,
+  "authorities": [
+    {
+      "type": "AAD",
+      "audience": {
+        "type": "AzureADandPersonalMicrosoftAccount"
+      },
+      "default": true
+    }
+  ]
+}

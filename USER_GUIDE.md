@@ -9,8 +9,9 @@ Open the app and add or toggle on the sources you want to use:
 - **Gallery** - Photos stored on your device. No sign-in required.
 - **Google Drive** - Photos stored in Google Drive. Requires Google account sign-in.
 - **Dropbox** - Photos stored in Dropbox. Requires Dropbox sign-in.
+- **OneDrive** - Photos stored in OneDrive. Uses MSAL on phones/tablets and device flow on Android TV.
 
-Google Drive and Dropbox can each be added multiple times for separate accounts.
+Google Drive, Dropbox, and OneDrive can each be added multiple times for separate accounts.
 
 ### 2. Select Folders
 
@@ -111,6 +112,14 @@ Authenticated source cards must show `Signed in as [account email]`.
 
 Dropbox sign-in requires `DROPBOX_APP_KEY` to be configured at build time. If authentication expires, use **Re-authenticate** from the source card or folder browser instead of removing and re-adding the account.
 
+### OneDrive
+
+Shows folders from one or more OneDrive accounts. On phones and tablets, the app uses Microsoft MSAL for interactive sign-in. On Android TV, the app uses Microsoft device code flow and displays a code plus verification URL for manual completion on another device.
+
+Authenticated source cards must show `Signed in as [account email]`. If sign-in expires, use **Re-authenticate** from the source card or folder browser instead of removing and re-adding the account.
+
+OneDrive sign-in requires `ONEDRIVE_CLIENT_ID` to be configured in the app build. The current implementation stores the authenticated account by Graph user ID and caches media through the repository's local app cache.
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -122,4 +131,5 @@ Dropbox sign-in requires `DROPBOX_APP_KEY` to be configured at build time. If au
 | 403 error when adding Google account | If the app is unpublished, add the Google account email to Google Cloud Console test users. |
 | Dropbox sign-in does not start | Confirm `DROPBOX_APP_KEY` is set in `local.properties` before building the app. |
 | Cloud folders fail after prior sign-in | Use **Re-authenticate** from the source card menu or folder browser. |
+| OneDrive sign-in fails | Confirm `ONEDRIVE_CLIENT_ID` is configured in the app build and that Microsoft sign-in is allowed for the account you are using. |
 | Gallery shows empty | Ensure the device has photos and permission is granted. |

@@ -13,6 +13,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+
+        // Add this repository for Microsoft MSAL dependencies
+        maven {
+            url = uri("https://pkgs.dev.azure.com/MicrosoftDeviceSDK/DuoSDK-Public/_packaging/Duo-SDK-Feed/maven/v1")
+        }
     }
 }
 

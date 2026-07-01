@@ -44,6 +44,9 @@ android {
         // Google TV Client ID for Device Authorization Grant
         val googleTvClientId = localProperties.getProperty("GOOGLE_TV_CLIENT_ID", "default_key").replace("\"", "").replace("'", "").trim()
         buildConfigField("String", "GOOGLE_TV_CLIENT_ID", "\"$googleTvClientId\"")
+        
+        // OneDrive Client ID
+        buildConfigField("String", "ONEDRIVE_CLIENT_ID", "\"e0976175-6063-461b-902d-b3b2ada8079b\"")
     }
 
     buildTypes {
@@ -150,6 +153,9 @@ dependencies {
     
     // Future Cloud Storage SDKs (disabled for v1.0)
     implementation("com.dropbox.core:dropbox-core-sdk:5.4.6")
+    
+    // Microsoft Authentication Library (MSAL) for OneDrive
+    implementation("com.microsoft.identity.client:msal:5.1.0")
     // implementation("com.microsoft.graph:microsoft-graph:5.80.0")
     // implementation("com.jcifs:jcifs-ng:2.1.9")
     // implementation("com.github.thegrizzlylabs:sardine-android:0.8")

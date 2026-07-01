@@ -70,6 +70,15 @@ The Gradle build sanitizes quotes and whitespace before injecting this value int
 
 If `DROPBOX_APP_KEY` is missing, Dropbox authentication shows an error instead of launching OAuth.
 
+## OneDrive OAuth Setup
+
+1. Use the Microsoft Entra app registration tied to the app's OneDrive client ID.
+2. Keep the OneDrive client ID available to Gradle as `ONEDRIVE_CLIENT_ID` if you need to override the built-in placeholder for local builds.
+3. Ensure the app registration allows delegated read access for Microsoft Graph `Files.Read` and `User.Read`, plus `offline_access` if you want refresh support.
+4. Android TV uses Microsoft device code flow, so verify the account you sign in with can complete browser-based verification on a second device.
+
+The app stores OneDrive tokens in encrypted shared preferences and keeps downloaded OneDrive media in the app cache directory.
+
 ## Troubleshooting
 
 ### Debug Logcat Mirroring
@@ -143,6 +152,12 @@ The only custom properties currently retained are:
 - Google Drive sign-in uses Android's Google AccountPicker and `GoogleAccountCredential` to request read-only Drive access for the selected account.
 - Debug builds log `GoogleDriveAuthEnv`, `GoogleAccountManager`, and `GoogleDriveDiagnostic` entries during sign-in, including package name, signing certificate SHA-1/SHA-256, Google Play Services version/status, selected account details, credential state, and token-probe results without printing OAuth tokens. The diagnostic probes test full userinfo scopes, Drive metadata, and Drive readonly through both Account-object and account-name token APIs.
 
+### OneDrive Sign-In Fails
+
+- Confirm `ONEDRIVE_CLIENT_ID` is present in the app build.
+- Confirm the Microsoft account can complete MSAL interactive sign-in on phones/tablets or device code flow on Android TV.
+- Verify Microsoft Graph delegated read access is allowed for the app registration.
+
 ### Activation Card Does Not Hide
 
 - Close and reopen the app to force a system settings re-check.
@@ -178,6 +193,7 @@ Before building or releasing a new version:
 - [ ] Gallery source folders load and photos display.
 - [ ] Google Drive sign-in works and folders load.
 - [ ] Dropbox sign-in works and folders load.
+- [ ] OneDrive sign-in works and folders load.
 - [ ] Folder browser navigation works in and out of subfolders.
 - [ ] Screensaver is selectable in system settings.
 - [ ] Activation card appears when inactive and hides when active.

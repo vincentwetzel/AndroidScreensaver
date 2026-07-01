@@ -10,7 +10,6 @@ import com.google.android.material.tabs.TabLayout
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.slider.Slider
 import kotlinx.coroutines.launch
-import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.ClockDecorationConfig
 import com.vincentwetzel.androidscreensaver.data.model.ClockFormat
 import com.vincentwetzel.androidscreensaver.data.model.ClockPosition
@@ -34,7 +33,8 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class DecorationSettingsActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityDecorationSettingsBinding
+    private var _binding: ActivityDecorationSettingsBinding? = null
+    private val binding get() = _binding!!
     
     // Current decoration configs
     private lateinit var dateConfig: DecorationConfig
@@ -44,7 +44,7 @@ class DecorationSettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityDecorationSettingsBinding.inflate(layoutInflater)
+        _binding = ActivityDecorationSettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -60,6 +60,11 @@ class DecorationSettingsActivity : AppCompatActivity() {
                 binding.root.post { isInitializing = false }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        _binding = null
     }
 
     private suspend fun loadCurrentSettings() {
@@ -441,115 +446,115 @@ class DecorationSettingsActivity : AppCompatActivity() {
      * Read current UI values and persist to DataStore
      */
     private fun saveCurrentSettings() {
-        if (isInitializing) return
+        if (isInitializing || _binding == null) return
         
+        // Capture synchronous UI state before suspending to prevent data corruption
+        
+        // Save date config (preserve user's enabled state)
+        val currentDatePosition = when (binding.contentDate.spinnerPosition.selectedItemPosition) {
+            0 -> ClockPosition.TOP_LEFT
+            1 -> ClockPosition.TOP_RIGHT
+            2 -> ClockPosition.BOTTOM_LEFT
+            3 -> ClockPosition.BOTTOM_RIGHT
+            4 -> ClockPosition.CENTER
+            else -> ClockPosition.BOTTOM_LEFT
+        }
+        val currentDateFormat = when (binding.contentDate.spinnerDateFormat.selectedItemPosition) {
+            0 -> DateFormat.FULL_DATE
+            1 -> DateFormat.SHORT_DATE
+            2 -> DateFormat.MONTH_DAY
+            3 -> DateFormat.NUMERIC_DATE
+            4 -> DateFormat.ABBREVIATE_MONTH
+            else -> DateFormat.CUSTOM
+        }
+        val currentDateFontSize = binding.contentDate.sliderFontSize.value
+        val currentDateBackground = when (binding.contentDate.spinnerBackground.selectedItemPosition) {
+            0 -> DecorationBackground.NONE
+            1 -> DecorationBackground.SEMI_TRANSPARENT
+            2 -> DecorationBackground.SOLID
+            else -> DecorationBackground.NONE
+        }
+        val currentDateAnimation = if (binding.contentDate.spinnerAnimation.selectedItemPosition == 1) 
+            DecorationAnimation.PULSE_SOFTLY else DecorationAnimation.STATIC
+        val currentDatePulseSpeed = when (binding.contentDate.spinnerPulseSpeed.selectedItemPosition) {
+            0 -> PulseSpeed.SLOW
+            1 -> PulseSpeed.MEDIUM
+            2 -> PulseSpeed.FAST
+            else -> PulseSpeed.MEDIUM
+        }
+        val currentDateOpacity = binding.contentDate.sliderOpacity.value.toInt()
+        val currentDatePulseMinOpacity = binding.contentDate.sliderPulseMinOpacity.value.toInt()
+        val currentDatePulseMaxOpacity = binding.contentDate.sliderPulseMaxOpacity.value.toInt()
+
+        // Save clock config (preserve user's enabled state)
+        val currentClockPosition = when (binding.contentClock.spinnerPosition.selectedItemPosition) {
+            0 -> ClockPosition.TOP_LEFT
+            1 -> ClockPosition.TOP_RIGHT
+            2 -> ClockPosition.BOTTOM_LEFT
+            3 -> ClockPosition.BOTTOM_RIGHT
+            4 -> ClockPosition.CENTER
+            else -> ClockPosition.BOTTOM_RIGHT
+        }
+        val currentClockFormat = if (binding.contentClock.spinnerFormat.selectedItemPosition == 1) 
+            ClockFormat.HOUR_24 else ClockFormat.HOUR_12
+        val currentClockShowSeconds = binding.contentClock.switchShowSeconds.isChecked
+        val currentClockFontSize = binding.contentClock.sliderFontSize.value
+        val currentClockBackground = when (binding.contentClock.spinnerBackground.selectedItemPosition) {
+            0 -> DecorationBackground.NONE
+            1 -> DecorationBackground.SEMI_TRANSPARENT
+            2 -> DecorationBackground.SOLID
+            else -> DecorationBackground.NONE
+        }
+        val currentClockAnimation = if (binding.contentClock.spinnerAnimation.selectedItemPosition == 1) 
+            DecorationAnimation.PULSE_SOFTLY else DecorationAnimation.STATIC
+        val currentClockPulseSpeed = when (binding.contentClock.spinnerPulseSpeed.selectedItemPosition) {
+            0 -> PulseSpeed.SLOW
+            1 -> PulseSpeed.MEDIUM
+            2 -> PulseSpeed.FAST
+            else -> PulseSpeed.MEDIUM
+        }
+        val currentClockOpacity = binding.contentClock.sliderOpacity.value.toInt()
+        val currentClockPulseMinOpacity = binding.contentClock.sliderPulseMinOpacity.value.toInt()
+        val currentClockPulseMaxOpacity = binding.contentClock.sliderPulseMaxOpacity.value.toInt()
+
+        // Save weather config (preserve user's enabled state)
+        val currentWeatherPosition = when (binding.contentWeather.spinnerPosition.selectedItemPosition) {
+            0 -> ClockPosition.TOP_LEFT
+            1 -> ClockPosition.TOP_RIGHT
+            2 -> ClockPosition.BOTTOM_LEFT
+            3 -> ClockPosition.BOTTOM_RIGHT
+            4 -> ClockPosition.CENTER
+            else -> ClockPosition.TOP_RIGHT
+        }
+        val currentWeatherUseDeviceLocation = binding.contentWeather.switchUseDeviceLocation.isChecked
+        val currentWeatherTempUnit = if (binding.contentWeather.spinnerTempUnit.selectedItemPosition == 1) 
+            TemperatureUnit.CELSIUS else TemperatureUnit.FAHRENHEIT
+        val currentWeatherIconStyle = when (binding.contentWeather.spinnerIconStyle.selectedItemPosition) {
+            0 -> WeatherIconStyle.MINIMAL
+            1 -> WeatherIconStyle.DETAILED
+            2 -> WeatherIconStyle.ANIMATED
+            else -> WeatherIconStyle.MINIMAL
+        }
+        val currentWeatherWidgetBackground = when (binding.contentWeather.spinnerWidgetBackground.selectedItemPosition) {
+            0 -> WeatherWidgetBackground.TRANSPARENT
+            1 -> WeatherWidgetBackground.FROSTED_GLASS
+            2 -> WeatherWidgetBackground.SOLID
+            else -> WeatherWidgetBackground.TRANSPARENT
+        }
+        val currentWeatherFontSize = binding.contentWeather.sliderFontSize.value
+        val currentWeatherAnimation = if (binding.contentWeather.spinnerAnimation.selectedItemPosition == 1) 
+            DecorationAnimation.PULSE_SOFTLY else DecorationAnimation.STATIC
+        val currentWeatherPulseSpeed = when (binding.contentWeather.spinnerPulseSpeed.selectedItemPosition) {
+            0 -> PulseSpeed.SLOW
+            1 -> PulseSpeed.MEDIUM
+            2 -> PulseSpeed.FAST
+            else -> PulseSpeed.MEDIUM
+        }
+        val currentWeatherOpacity = binding.contentWeather.sliderOpacity.value.toInt()
+        val currentWeatherPulseMinOpacity = binding.contentWeather.sliderPulseMinOpacity.value.toInt()
+        val currentWeatherPulseMaxOpacity = binding.contentWeather.sliderPulseMaxOpacity.value.toInt()
+
         lifecycleScope.launch {
-            // Capture synchronous UI state before suspending to prevent data corruption
-            
-            // Save date config (preserve user's enabled state)
-            val currentDatePosition = when (binding.contentDate.spinnerPosition.selectedItemPosition) {
-                        0 -> ClockPosition.TOP_LEFT
-                        1 -> ClockPosition.TOP_RIGHT
-                        2 -> ClockPosition.BOTTOM_LEFT
-                        3 -> ClockPosition.BOTTOM_RIGHT
-                        4 -> ClockPosition.CENTER
-                        else -> ClockPosition.BOTTOM_LEFT
-            }
-            val currentDateFormat = when (binding.contentDate.spinnerDateFormat.selectedItemPosition) {
-                        0 -> DateFormat.FULL_DATE
-                        1 -> DateFormat.SHORT_DATE
-                        2 -> DateFormat.MONTH_DAY
-                        3 -> DateFormat.NUMERIC_DATE
-                        4 -> DateFormat.ABBREVIATE_MONTH
-                        else -> DateFormat.CUSTOM
-            }
-            val currentDateFontSize = binding.contentDate.sliderFontSize.value
-            val currentDateBackground = when (binding.contentDate.spinnerBackground.selectedItemPosition) {
-                        0 -> DecorationBackground.NONE
-                        1 -> DecorationBackground.SEMI_TRANSPARENT
-                        2 -> DecorationBackground.SOLID
-                        else -> DecorationBackground.NONE
-            }
-            val currentDateAnimation = if (binding.contentDate.spinnerAnimation.selectedItemPosition == 1) 
-                        DecorationAnimation.PULSE_SOFTLY else DecorationAnimation.STATIC
-            val currentDatePulseSpeed = when (binding.contentDate.spinnerPulseSpeed.selectedItemPosition) {
-                        0 -> PulseSpeed.SLOW
-                        1 -> PulseSpeed.MEDIUM
-                        2 -> PulseSpeed.FAST
-                        else -> PulseSpeed.MEDIUM
-            }
-            val currentDateOpacity = binding.contentDate.sliderOpacity.value.toInt()
-            val currentDatePulseMinOpacity = binding.contentDate.sliderPulseMinOpacity.value.toInt()
-            val currentDatePulseMaxOpacity = binding.contentDate.sliderPulseMaxOpacity.value.toInt()
-
-            // Save clock config (preserve user's enabled state)
-            val currentClockPosition = when (binding.contentClock.spinnerPosition.selectedItemPosition) {
-                        0 -> ClockPosition.TOP_LEFT
-                        1 -> ClockPosition.TOP_RIGHT
-                        2 -> ClockPosition.BOTTOM_LEFT
-                        3 -> ClockPosition.BOTTOM_RIGHT
-                        4 -> ClockPosition.CENTER
-                        else -> ClockPosition.BOTTOM_RIGHT
-            }
-            val currentClockFormat = if (binding.contentClock.spinnerFormat.selectedItemPosition == 1) 
-                        ClockFormat.HOUR_24 else ClockFormat.HOUR_12
-            val currentClockShowSeconds = binding.contentClock.switchShowSeconds.isChecked
-            val currentClockFontSize = binding.contentClock.sliderFontSize.value
-            val currentClockBackground = when (binding.contentClock.spinnerBackground.selectedItemPosition) {
-                        0 -> DecorationBackground.NONE
-                        1 -> DecorationBackground.SEMI_TRANSPARENT
-                        2 -> DecorationBackground.SOLID
-                        else -> DecorationBackground.NONE
-            }
-            val currentClockAnimation = if (binding.contentClock.spinnerAnimation.selectedItemPosition == 1) 
-                        DecorationAnimation.PULSE_SOFTLY else DecorationAnimation.STATIC
-            val currentClockPulseSpeed = when (binding.contentClock.spinnerPulseSpeed.selectedItemPosition) {
-                        0 -> PulseSpeed.SLOW
-                        1 -> PulseSpeed.MEDIUM
-                        2 -> PulseSpeed.FAST
-                        else -> PulseSpeed.MEDIUM
-            }
-            val currentClockOpacity = binding.contentClock.sliderOpacity.value.toInt()
-            val currentClockPulseMinOpacity = binding.contentClock.sliderPulseMinOpacity.value.toInt()
-            val currentClockPulseMaxOpacity = binding.contentClock.sliderPulseMaxOpacity.value.toInt()
-
-            // Save weather config (preserve user's enabled state)
-            val currentWeatherPosition = when (binding.contentWeather.spinnerPosition.selectedItemPosition) {
-                        0 -> ClockPosition.TOP_LEFT
-                        1 -> ClockPosition.TOP_RIGHT
-                        2 -> ClockPosition.BOTTOM_LEFT
-                        3 -> ClockPosition.BOTTOM_RIGHT
-                        4 -> ClockPosition.CENTER
-                        else -> ClockPosition.TOP_RIGHT
-            }
-            val currentWeatherUseDeviceLocation = binding.contentWeather.switchUseDeviceLocation.isChecked
-            val currentWeatherTempUnit = if (binding.contentWeather.spinnerTempUnit.selectedItemPosition == 1) 
-                        TemperatureUnit.CELSIUS else TemperatureUnit.FAHRENHEIT
-            val currentWeatherIconStyle = when (binding.contentWeather.spinnerIconStyle.selectedItemPosition) {
-                        0 -> WeatherIconStyle.MINIMAL
-                        1 -> WeatherIconStyle.DETAILED
-                        2 -> WeatherIconStyle.ANIMATED
-                        else -> WeatherIconStyle.MINIMAL
-            }
-            val currentWeatherWidgetBackground = when (binding.contentWeather.spinnerWidgetBackground.selectedItemPosition) {
-                        0 -> WeatherWidgetBackground.TRANSPARENT
-                        1 -> WeatherWidgetBackground.FROSTED_GLASS
-                        2 -> WeatherWidgetBackground.SOLID
-                        else -> WeatherWidgetBackground.TRANSPARENT
-            }
-            val currentWeatherFontSize = binding.contentWeather.sliderFontSize.value
-            val currentWeatherAnimation = if (binding.contentWeather.spinnerAnimation.selectedItemPosition == 1) 
-                        DecorationAnimation.PULSE_SOFTLY else DecorationAnimation.STATIC
-            val currentWeatherPulseSpeed = when (binding.contentWeather.spinnerPulseSpeed.selectedItemPosition) {
-                        0 -> PulseSpeed.SLOW
-                        1 -> PulseSpeed.MEDIUM
-                        2 -> PulseSpeed.FAST
-                        else -> PulseSpeed.MEDIUM
-            }
-            val currentWeatherOpacity = binding.contentWeather.sliderOpacity.value.toInt()
-            val currentWeatherPulseMinOpacity = binding.contentWeather.sliderPulseMinOpacity.value.toInt()
-            val currentWeatherPulseMaxOpacity = binding.contentWeather.sliderPulseMaxOpacity.value.toInt()
-
             val config = SettingsManager.getSlideshowConfig(this@DecorationSettingsActivity)
 
             val newDateConfig = (config.dateDecoration ?: dateConfig).copy(

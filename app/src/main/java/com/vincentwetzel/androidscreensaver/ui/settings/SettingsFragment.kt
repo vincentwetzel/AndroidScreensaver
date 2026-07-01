@@ -14,6 +14,7 @@ import androidx.preference.SeekBarPreference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.CreationExtras
 import kotlinx.coroutines.launch
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.*
@@ -40,35 +41,34 @@ class SettingsFragment : PreferenceFragmentCompat() {
         setPreferencesFromResource(R.xml.settings_main, rootKey)
 
         setupPreferences()
-        lifecycleScope.launch {
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        viewLifecycleOwner.lifecycleScope.launch {
             syncSettingsFromDataStore()
         }
     }
 
     override fun onResume() {
         super.onResume()
-        // Refresh all preference summaries from DataStore when returning from sub-screens
-        lifecycleScope.launch {
+        // Refresh all preference summaries from DataStore when returning from sub-screens, using the view's lifecycle
+        viewLifecycleOwner.lifecycleScope.launch {
             syncSettingsFromDataStore()
             updateNavigationPreferenceSummaries()
         }
     }
 
     private fun setupPreferences() {
-        // Google Drive source preference is obsolete (configured per-account on main screen)
-        findPreference<Preference>("source_google_drive")?.isVisible = false
-
         // Video playback enabled toggle
         findPreference<SwitchPreferenceCompat>("video_playback_enabled")?.setOnPreferenceChangeListener { _, newValue ->
+            val isEnabled = newValue as Boolean
+            findPreference<Preference>("video_playback")?.isEnabled = isEnabled
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
-                val isEnabled = newValue as Boolean
+            viewLifecycleOwner.lifecycleScope.launch {
                 val config = SettingsManager.getSlideshowConfig(appContext)
                 val newConfig = config.copy(videoPlaybackEnabled = isEnabled)
                 SettingsManager.saveSlideshowConfig(appContext, newConfig)
-
-                // Enable/disable the video settings preference
-                findPreference<Preference>("video_playback")?.isEnabled = isEnabled
             }
             true
         }
@@ -82,7 +82,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         // Photo info master toggle
         findPreference<SwitchPreferenceCompat>("photo_info_enabled")?.setOnPreferenceChangeListener { _, newValue ->
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 val config = SettingsManager.getSlideshowConfig(appContext)
                 val newConfig = config.copy(photoInfoConfig = config.photoInfoConfig.copy(enabled = newValue as Boolean))
                 SettingsManager.saveSlideshowConfig(appContext, newConfig)
@@ -123,7 +123,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         // Clear cache
         findPreference<Preference>("clear_cache")?.setOnPreferenceClickListener {
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            viewLifecycleOwner.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 // Clear Coil's memory and disk cache
                 val imageLoader = coil.Coil.imageLoader(appContext)
                 imageLoader.memoryCache?.clear()
@@ -149,7 +149,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         // Match orientation - add persistence
         findPreference<SwitchPreferenceCompat>("match_orientation")?.setOnPreferenceChangeListener { _, newValue ->
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 val config = SettingsManager.getSlideshowConfig(appContext)
                 SettingsManager.saveSlideshowConfig(
                     appContext, config.copy(matchDeviceOrientation = newValue as Boolean)
@@ -161,7 +161,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         // Keep screen on - add persistence
         findPreference<SwitchPreferenceCompat>("keep_screen_on")?.setOnPreferenceChangeListener { _, newValue ->
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 val config = SettingsManager.getSlideshowConfig(appContext)
                 SettingsManager.saveSlideshowConfig(
                     appContext, config.copy(keepScreenOn = newValue as Boolean)
@@ -173,13 +173,13 @@ class SettingsFragment : PreferenceFragmentCompat() {
         // Stop on low battery
         findPreference<SwitchPreferenceCompat>("stop_on_low_battery")?.setOnPreferenceChangeListener { _, newValue ->
             val isEnabled = newValue as Boolean
+            findPreference<SeekBarPreference>("low_battery_threshold")?.isEnabled = isEnabled
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 val config = SettingsManager.getSlideshowConfig(appContext)
                 SettingsManager.saveSlideshowConfig(
                     appContext, config.copy(stopOnLowBattery = isEnabled)
                 )
-                findPreference<SeekBarPreference>("low_battery_threshold")?.isEnabled = isEnabled
             }
             true
         }
@@ -189,7 +189,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             val value = newValue as Int
             preference.summary = "$value%"
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 val config = SettingsManager.getSlideshowConfig(appContext)
                 SettingsManager.saveSlideshowConfig(appContext, config.copy(lowBatteryThreshold = value))
             }
@@ -199,7 +199,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         // Wi-Fi only - add persistence
         findPreference<SwitchPreferenceCompat>("wifi_only")?.setOnPreferenceChangeListener { _, newValue ->
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 val config = SettingsManager.getSlideshowConfig(appContext)
                 SettingsManager.saveSlideshowConfig(
                     appContext, config.copy(wifiOnly = newValue as Boolean)
@@ -214,7 +214,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         // Decoration date - add persistence
         findPreference<SwitchPreferenceCompat>("decoration_date")?.setOnPreferenceChangeListener { _, newValue ->
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 val config = SettingsManager.getSlideshowConfig(appContext)
                 val currentDeco = config.dateDecoration ?: com.vincentwetzel.androidscreensaver.data.model.DecorationConfig()
                 val newConfig = config.copy(dateDecoration = currentDeco.copy(enabled = newValue as Boolean))
@@ -226,7 +226,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         // Decoration clock - add persistence
         findPreference<SwitchPreferenceCompat>("decoration_clock")?.setOnPreferenceChangeListener { _, newValue ->
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 val config = SettingsManager.getSlideshowConfig(appContext)
                 val currentDeco = config.clockDecoration ?: com.vincentwetzel.androidscreensaver.data.model.ClockDecorationConfig()
                 val newConfig = config.copy(clockDecoration = currentDeco.copy(enabled = newValue as Boolean))
@@ -238,7 +238,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         // Decoration weather - add persistence
         findPreference<SwitchPreferenceCompat>("decoration_weather")?.setOnPreferenceChangeListener { _, newValue ->
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 val config = SettingsManager.getSlideshowConfig(appContext)
                 val currentDeco = config.weatherDecoration ?: com.vincentwetzel.androidscreensaver.data.model.WeatherDecorationConfig()
                 val newConfig = config.copy(weatherDecoration = currentDeco.copy(enabled = newValue as Boolean))
@@ -273,16 +273,16 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
 
         // Set up summary updates for list preferences (with DataStore sync)
-        setupListPreferenceWithSave("display_effect") { _, config, value ->
+        setupListPreferenceWithSave("display_effect") { config, value ->
             config.copy(displayEffect = enumValueOfOrNull<com.vincentwetzel.androidscreensaver.data.model.DisplayEffect>(value))
         }
-        setupListPreferenceWithSave("transition_effect") { _, config, value ->
+        setupListPreferenceWithSave("transition_effect") { config, value ->
             config.copy(transitionEffect = enumValueOfOrNull<com.vincentwetzel.androidscreensaver.data.model.TransitionEffect>(value))
         }
-        setupListPreferenceWithSave("transition_duration") { _, config, value ->
+        setupListPreferenceWithSave("transition_duration") { config, value ->
             config.copy(transitionDurationMs = value.toIntOrNull() ?: 1000)
         }
-        setupListPreferenceWithSave("screen_rotation") { _, config, value ->
+        setupListPreferenceWithSave("screen_rotation") { config, value ->
             val orientation = when (value) {
                 "portrait" -> com.vincentwetzel.androidscreensaver.data.model.ScreenOrientation.PORTRAIT
                 "landscape" -> com.vincentwetzel.androidscreensaver.data.model.ScreenOrientation.LANDSCAPE
@@ -290,7 +290,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             }
             config.copy(screenOrientation = orientation)
         }
-        setupListPreferenceWithSave("sync_interval") { _, config, value ->
+        setupListPreferenceWithSave("sync_interval") { config, value ->
             // Sync interval XML values are minute numbers or "auto"/"custom"/"manual"
             // Map to SyncInterval enum: HOURLY, DAILY, WEEKLY, NEVER
             val interval = when {
@@ -308,10 +308,10 @@ class SettingsFragment : PreferenceFragmentCompat() {
             }
             config.copy(syncInterval = interval)
         }
-        setupListPreferenceWithSave("network_timeout") { _, config, value ->
+        setupListPreferenceWithSave("network_timeout") { config, value ->
             config.copy(networkTimeoutSeconds = value.toIntOrNull() ?: 30)
         }
-        setupListPreferenceWithSave("exit_trigger") { _, config, value ->
+        setupListPreferenceWithSave("exit_trigger") { config, value ->
             val trigger = when (value) {
                 "touch" -> com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger.TOUCH
                 "remote" -> com.vincentwetzel.androidscreensaver.data.model.ScreensaverExitTrigger.REMOTE_BUTTON
@@ -332,7 +332,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             if (index >= 0) preference.summary = listPref.entries[index]
 
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 val filter = when (newValue.toString()) {
                     "images" -> com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY
                     "videos" -> com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY
@@ -353,7 +353,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             if (index >= 0) preference.summary = listPref.entries[index]
 
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 val order = when (newValue.toString()) {
                     "name_asc" -> com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.NAME_A_Z
                     "name_desc" -> com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.NAME_Z_A
@@ -392,7 +392,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
      */
     private fun setupListPreferenceWithSave(
         key: String,
-        transform: (Preference, com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig, String) -> com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig
+        transform: (com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig, String) -> com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig
     ) {
         findPreference<ListPreference>(key)?.setOnPreferenceChangeListener { preference, newValue ->
             val listPref = preference as ListPreference
@@ -401,9 +401,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
             if (index >= 0) preference.summary = listPref.entries[index]
 
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 val config = SettingsManager.getSlideshowConfig(appContext)
-                val newConfig = transform(preference, config, value)
+                val newConfig = transform(config, value)
                 SettingsManager.saveSlideshowConfig(appContext, newConfig)
             }
             true
@@ -435,7 +435,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             }
             // Save to DataStore so slideshow picks it up
             val appContext = requireContext().applicationContext
-            lifecycleScope.launch {
+            viewLifecycleOwner.lifecycleScope.launch {
                 val seconds = newValue.toString().toIntOrNull() ?: 5
                 val config = SettingsManager.getSlideshowConfig(appContext)
                 SettingsManager.saveSlideshowConfig(
@@ -462,7 +462,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 val appContext = requireContext().applicationContext
                 showCustomTimeoutDialog { timeoutValue, timeoutUnit ->
                     // Save the custom timeout after user enters it
-                    lifecycleScope.launch {
+                    viewLifecycleOwner.lifecycleScope.launch {
                         val config = SettingsManager.getSlideshowConfig(appContext)
                         val newConfig = config.copy(
                             timerConfig = config.timerConfig.copy(
@@ -496,7 +496,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 }
                 
                 val appContext = requireContext().applicationContext
-                lifecycleScope.launch {
+                viewLifecycleOwner.lifecycleScope.launch {
                     val config = SettingsManager.getSlideshowConfig(appContext)
                     val newConfig = config.copy(
                         timerConfig = config.timerConfig.copy(
@@ -786,12 +786,12 @@ class SettingsFragment : PreferenceFragmentCompat() {
         val context = requireContext()
         val appContext = context.applicationContext
         
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val config = SettingsManager.getSlideshowConfig(appContext)
             if (!isAdded) return@launch
             
-            var selectedColor = config.backgroundColor
             val dialogView = layoutInflater.inflate(R.layout.dialog_color_picker, null)
+            var selectedColor = config.backgroundColor
             val previewColor = dialogView.findViewById<View>(R.id.preview_color)
             val tvColorHex = dialogView.findViewById<TextView>(R.id.tv_color_hex)
             
@@ -802,15 +802,16 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 .setTitle("Background Color")
                 .setView(dialogView)
                 .setPositiveButton("Save") { _, _ ->
-                    // Save the color
-                    lifecycleScope.launch {
+                    val colorToSave = selectedColor
+                    viewLifecycleOwner.lifecycleScope.launch {
                         val newConfig = SettingsManager.getSlideshowConfig(appContext)
                         SettingsManager.saveSlideshowConfig(
                             appContext,
-                            newConfig.copy(backgroundColor = selectedColor)
+                            newConfig.copy(backgroundColor = colorToSave)
                         )
                         // Update summary
-                        findPreference<Preference>("background_color")?.summary = String.format(java.util.Locale.ROOT, "#%06X", 0xFFFFFF and selectedColor)
+                        findPreference<Preference>("background_color")?.summary =
+                            String.format(java.util.Locale.ROOT, "#%06X", 0xFFFFFF and colorToSave)
                         Toast.makeText(appContext, "Background color saved!", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -851,11 +852,11 @@ class SettingsFragment : PreferenceFragmentCompat() {
         val context = requireContext()
         val appContext = context.applicationContext
         
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val config = SettingsManager.getSlideshowConfig(appContext)
             if (!isAdded) return@launch
             
-            val dialogView = layoutInflater.inflate(R.layout.dialog_custom_cache_size, null)
+            val dialogView = layoutInflater.inflate(R.layout.dialog_custom_cache_size, null) // Must be done on main thread
             val editText = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(
                 R.id.et_cache_size)
                 
@@ -865,8 +866,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 .setTitle("Custom Cache Size")
                 .setView(dialogView)
                 .setPositiveButton("Save") { _, _ ->
-                    lifecycleScope.launch {
-                        val input = editText?.text?.toString()?.toIntOrNull()
+                    val input = editText?.text?.toString()?.toIntOrNull()
+                    viewLifecycleOwner.lifecycleScope.launch {
                         if (input != null && input in 10..10000) {
                             val newConfig = SettingsManager.getSlideshowConfig(appContext)
                             SettingsManager.saveSlideshowConfig(
@@ -897,11 +898,11 @@ class SettingsFragment : PreferenceFragmentCompat() {
         val context = requireContext()
         val appContext = context.applicationContext
         
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val config = SettingsManager.getSlideshowConfig(appContext)
             if (!isAdded) return@launch
             
-            val dialogView = layoutInflater.inflate(R.layout.dialog_custom_timeout, null)
+            val dialogView = layoutInflater.inflate(R.layout.dialog_custom_timeout, null) // Must be done on main thread
             val editText = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(
                 R.id.et_timeout_value)
             val radioGroup = dialogView.findViewById<RadioGroup>(R.id.rg_timeout_unit)

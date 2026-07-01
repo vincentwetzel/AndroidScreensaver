@@ -1,19 +1,18 @@
 package com.vincentwetzel.androidscreensaver.data.repository
 
 import android.content.Context
+import android.util.Log
 import com.google.api.services.drive.Drive
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
 import com.vincentwetzel.androidscreensaver.data.model.SourceType
+import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URLEncoder
-import java.util.concurrent.ConcurrentHashMap
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,7 +25,7 @@ import javax.inject.Singleton
 class GoogleDrivePhotoRepository @Inject constructor(
     @ApplicationContext context: Context,
     private val driveRepository: GoogleDriveRepository
-) : BaseCloudPhotoRepository(context, "source_google_drive") {
+) : BaseCloudPhotoRepository(context, com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE) {
 
     private val driveImageQuery = "mimeType contains 'image/'"
     private val driveVideoQuery = "mimeType contains 'video/'"
@@ -59,7 +58,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 if (!cacheDir.exists()) cacheDir.mkdirs()
 
                 val ext = title?.substringAfterLast('.', "")?.takeIf { it.isNotEmpty() } ?: "jpg"
-                val safeAccountId = accountId.hashCode().toString()
+                val safeAccountId = URLEncoder.encode(accountId, "UTF-8")
                 val safePhotoId = photoId.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
                 val cacheFile = File(cacheDir, "${safeAccountId}_${safePhotoId}.$ext")
                 if (cacheFile.exists()) return@withContext "file://${cacheFile.absolutePath}"
@@ -67,17 +66,18 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 val driveService = driveRepository.getDriveService(accountId)
                     ?: return@withContext null
 
-                val tempFile = File(cacheDir, "${safeAccountId}_${safePhotoId}.$ext.tmp.${java.util.UUID.randomUUID()}")
+                val tempFile = File(cacheDir, "${safeAccountId}_${safePhotoId}.$ext.tmp.${UUID.randomUUID()}")
                 try {
                     tempFile.outputStream().use { out ->
                         driveService.files().get(photoId).executeMediaAndDownloadTo(out)
                     }
                     if (!tempFile.renameTo(cacheFile) && !cacheFile.exists()) {
-                        android.util.Log.e("GoogleDrivePhotoRepo", "Failed to rename temp file to cache file")
+                        Log.e("GoogleDrivePhotoRepo", "Failed to rename temp file to cache file")
                         return@withContext null
                     }
                 } catch (e: Exception) {
-                    android.util.Log.e("GoogleDrivePhotoRepo", "Failed to download photo")
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    Log.e("GoogleDrivePhotoRepo", "Failed to download photo")
                     return@withContext null
                 } finally {
                     if (tempFile.exists()) tempFile.delete()
@@ -85,7 +85,8 @@ class GoogleDrivePhotoRepository @Inject constructor(
 
                 "file://${cacheFile.absolutePath}"
             } catch (e: Exception) {
-                android.util.Log.e("GoogleDrivePhotoRepo", "Error downloading photo: ${e.javaClass.simpleName}")
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("GoogleDrivePhotoRepo", "Error downloading photo: ${e.javaClass.simpleName}")
                 null
             }
         }
@@ -145,8 +146,9 @@ class GoogleDrivePhotoRepository @Inject constructor(
                     nextPageToken = files.nextPageToken
                 } while (nextPageToken != null)
             } catch (e: Exception) {
-        android.util.Log.e("GoogleDrivePhotoRepo", "Failed to list folders: ${e.javaClass.simpleName}")
-            throw e
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("GoogleDrivePhotoRepo", "Failed to list folders: ${e.javaClass.simpleName}")
+                throw e
             }
 
             folders.also { folderCache[cacheKey] = CacheEntry(it) }
@@ -156,7 +158,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
     /**
      * List photos for a specific account.
      */
-    override suspend fun listPhotosForAccount(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: String?, accountId: String): List<Photo> = withContext(Dispatchers.IO) {
+    override suspend fun listPhotosForAccount(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: MediaTypeFilter?, accountId: String): List<Photo> = withContext(Dispatchers.IO) {
         val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
         val exclusionsKey = if (excludedFolderIds.isEmpty()) "none" else excludedFolderIds.sorted().joinToString(",")
         val cacheKey = "${accountId}_${folderId}_${normalizedFilter}_${exclusionsKey}"
@@ -166,7 +168,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
         }
 
         val photos = mutableListOf<Photo>()
-        collectPhotosFromFolder(folderId, excludedFolderIds, photos, accountId, normalizedFilter)
+        collectPhotosFromFolder(folderId, excludedFolderIds, photos, accountId, mediaTypeFilter)
         
         photoListCache[cacheKey] = PhotoListCacheEntry(photos)
         photos
@@ -180,7 +182,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
         excludedFolderIds: Set<String>,
         photos: MutableList<Photo>,
         accountId: String,
-        mediaTypeFilter: String?,
+        mediaTypeFilter: MediaTypeFilter?,
         visited: MutableSet<String> = mutableSetOf()
     ) {
         if (!visited.add(folderId)) return // Prevent infinite recursion from Drive shortcut loops
@@ -189,8 +191,8 @@ class GoogleDrivePhotoRepository @Inject constructor(
 
         try {
             val mediaQuery = when (mediaTypeFilter) {
-                "images" -> "($driveImageQuery)"
-                "videos" -> "($driveVideoQuery)"
+                MediaTypeFilter.IMAGES_ONLY -> "($driveImageQuery)"
+                MediaTypeFilter.VIDEOS_ONLY -> "($driveVideoQuery)"
                 else -> "($driveMediaMimeTypeQuery)"
             }
             val safeFolderId = folderId.replace("'", "\\'")
@@ -222,7 +224,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
                         val finalTitle = if (originalExt.isNotEmpty()) name else "$name.$ext"
                         
                         val encodedAccountId = URLEncoder.encode(accountId, "UTF-8")
-                        val safeAccountId = accountId.hashCode().toString()
+                        val safeAccountId = encodedAccountId
                         val safeFileId = fileId.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
                         val cacheDir = File(context.cacheDir, "drive_photos")
                         val cacheFile = File(cacheDir, "${safeAccountId}_${safeFileId}.$ext")
@@ -253,7 +255,8 @@ class GoogleDrivePhotoRepository @Inject constructor(
             }
 
         } catch (e: Exception) {
-            android.util.Log.e("GoogleDrivePhotoRepo", "Failed to list photos: ${e.javaClass.simpleName}")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("GoogleDrivePhotoRepo", "Failed to list photos: ${e.javaClass.simpleName}")
             throw e
         }
     }
@@ -277,7 +280,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
             val finalTitle = if (originalExt.isNotEmpty()) name else "$name.$ext"
             
             val encodedAccountId = URLEncoder.encode(accountId, "UTF-8")
-            val safeAccountId = accountId.hashCode().toString()
+            val safeAccountId = encodedAccountId
             val safeFileId = file.id?.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_") ?: "unknown"
             val cacheDir = File(context.cacheDir, "drive_photos")
             val cacheFile = File(cacheDir, "${safeAccountId}_${safeFileId}.$ext")
@@ -300,7 +303,8 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 fileSize = file.size?.toString()?.toLongOrNull()
             )
         } catch (e: Exception) {
-            android.util.Log.e("GoogleDrivePhotoRepo", "Failed to get photo metadata for $photoId")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("GoogleDrivePhotoRepo", "Failed to get photo metadata for $photoId")
             null
         }
     }
@@ -354,7 +358,8 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 nextPageToken = files.nextPageToken
             } while (nextPageToken != null)
         } catch (e: Exception) {
-            android.util.Log.e("GoogleDrivePhotoRepo", "Failed to search folders: ${e.javaClass.simpleName}")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("GoogleDrivePhotoRepo", "Failed to search folders: ${e.javaClass.simpleName}")
             throw e
         }
 
@@ -364,7 +369,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
     /**
      * Get filtered folder media count for a specific account.
      */
-    override suspend fun getFilteredFolderMediaCountForAccount(folderId: String, mediaTypeFilter: String?, accountId: String): Int {
+    override suspend fun getFilteredFolderMediaCountForAccount(folderId: String, mediaTypeFilter: MediaTypeFilter?, accountId: String): Int {
         val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
         val cacheKey = "${accountId}_${folderId}_${normalizedFilter}"
         val cached = photoCountCache[cacheKey]
@@ -406,7 +411,8 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 nextPageToken = files.nextPageToken
             } while (nextPageToken != null)
         } catch (e: Exception) {
-            android.util.Log.e("GoogleDrivePhotoRepo", "Failed to get subfolders: ${e.javaClass.simpleName}")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("GoogleDrivePhotoRepo", "Failed to get subfolders: ${e.javaClass.simpleName}")
             throw e
         }
     }
@@ -417,7 +423,8 @@ class GoogleDrivePhotoRepository @Inject constructor(
             try {
                 File(context.cacheDir, "drive_photos").deleteRecursively()
             } catch (e: Exception) {
-                android.util.Log.e("GoogleDrivePhotoRepo", "Failed to clear Google Drive disk cache: ${e.javaClass.simpleName}")
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("GoogleDrivePhotoRepo", "Failed to clear Google Drive disk cache: ${e.javaClass.simpleName}")
             }
         }
         return success

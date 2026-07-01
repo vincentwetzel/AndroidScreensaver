@@ -10,14 +10,15 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 - **Adapters** - RecyclerView adapters for source and folder lists.
 - **Views** - Observe ViewModels through `StateFlow`/`LiveData`.
 - **FolderBrowserActivity** - Shared cloud folder browser for Google Drive and Dropbox. It can launch source-specific re-authentication from the toolbar or auth-error empty state, then reload the current folder for the same account.
+- **FolderBrowserActivity** - Shared cloud folder browser for Google Drive, Dropbox, and OneDrive. It can launch source-specific re-authentication from the toolbar or auth-error empty state, then reload the current folder for the same account.
 - **SlideshowView** - Custom `FrameLayout` that renders photos/videos, transitions, overlays, and playback behavior.
 - **NoSourcesView** - Setup guidance when no sources are configured.
 - **ScreensaverPreviewActivity** - Activity-based preview that mirrors DreamService behavior for testing.
 
 ### ViewModel Layer (`viewmodel/`)
 
-- **MainViewModel** - Manages source-card enablement and authenticated account labels for Gallery, Google Drive, and Dropbox.
-- **CloudFolderViewModel** - Shared cloud folder browsing state for Google Drive, Dropbox, and future cloud sources, routed by explicit source type and account ID.
+- **MainViewModel** - Manages source-card enablement and authenticated account labels for Gallery, Google Drive, Dropbox, and OneDrive.
+- **CloudFolderViewModel** - Shared cloud folder browsing state for Google Drive, Dropbox, OneDrive, and future cloud sources, routed by explicit source type and account ID.
 - **GalleryViewModel** - Gallery folder browsing state.
 - ViewModels expose UI state as flows and should not hold long-lived Android `Context` references.
 
@@ -29,8 +30,10 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 - **GalleryPhotoRepository** - MediaStore access for local photos and videos, with cached folder/media counts and content-type-aware media listing.
 - **GoogleDrivePhotoRepository** - Google Drive media access with account-scoped routing, recursive folder traversal, background count prefetching, thumbnail metadata, and local cache paths.
 - **DropboxPhotoRepository** - Dropbox media access with recursive listing, paginated folder search, background count prefetching, thumbnails, and local cache support.
+- **OneDrivePhotoRepository** - OneDrive Graph API media access with account-scoped routing, recursive folder traversal, folder search, thumbnail metadata, and local cache downloads.
 - **GoogleDriveRepository** - Delegates account selection and Drive service creation to `GoogleAccountManager`, and verifies read-only Drive access before sign-in is finalized.
 - **DropboxRepository** - Delegates Dropbox auth, account metadata, and API clients to `DropboxAccountManager`.
+- **OneDriveAuthManager** - Manages OneDrive auth with MSAL on phones/tablets, device code flow on Android TV, and encrypted per-account token storage.
 - **SettingsManager** - DataStore-backed preferences for slideshow config, source state, selected folders, and account configs.
 
 ### Service Layer (`dream/`)
@@ -42,6 +45,7 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 
 - **RepositoryModule** - Hilt module providing repositories and `SlideshowManager`.
 - Photo repositories are concrete injected singletons. The repository map is assembled explicitly instead of using Hilt map multibindings.
+- OneDrive auth is split between `OneDriveAuthManager` for token handling and `OneDriveAuthActivity` for the UI launch surface.
 
 ## Data Flow
 
@@ -117,6 +121,8 @@ All settings are persisted through DataStore Preferences.
 | `source_google_drive_folders` | StringSet | `{}` | Selected Google Drive folder IDs |
 | `source_dropbox_enabled` | Boolean | `false` | Dropbox source enabled |
 | `source_dropbox_folders` | StringSet | `{}` | Selected Dropbox folder IDs |
+| `source_onedrive_enabled` | Boolean | `false` | OneDrive source enabled |
+| `source_onedrive_folders` | StringSet | `{}` | Selected OneDrive folder IDs |
 | `source_gallery_enabled` | Boolean | `false` | Gallery source enabled |
 | `source_gallery_folders` | StringSet | `{}` | Selected Gallery folder IDs |
 | `source_accounts` | String | `""` | Serialized per-source account configs, URL-encoded account IDs/emails, selected folder IDs/names/paths, deselected folders, auth state, and cached selected media counts |

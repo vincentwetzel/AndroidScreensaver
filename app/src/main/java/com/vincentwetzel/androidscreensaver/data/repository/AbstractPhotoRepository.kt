@@ -2,6 +2,7 @@ package com.vincentwetzel.androidscreensaver.data.repository
 
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
+import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -44,10 +45,10 @@ abstract class AbstractPhotoRepository : PhotoRepository {
         true
     }
 
-    protected fun normalizeMediaFilter(mediaTypeFilter: String?): String {
-        return when {
-            mediaTypeFilter.equals("IMAGES_ONLY", true) || mediaTypeFilter.equals("images", true) -> "images"
-            mediaTypeFilter.equals("VIDEOS_ONLY", true) || mediaTypeFilter.equals("videos", true) -> "videos"
+    protected fun normalizeMediaFilter(mediaTypeFilter: MediaTypeFilter?): String {
+        return when (mediaTypeFilter) {
+            MediaTypeFilter.IMAGES_ONLY -> "images"
+            MediaTypeFilter.VIDEOS_ONLY -> "videos"
             else -> "all"
         }
     }

@@ -14,6 +14,7 @@ import com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig
 import com.vincentwetzel.androidscreensaver.data.model.SourceType
 import com.vincentwetzel.androidscreensaver.data.repository.DropboxPhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDrivePhotoRepository
+import com.vincentwetzel.androidscreensaver.data.repository.OneDrivePhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDriveRepository
 import com.vincentwetzel.androidscreensaver.data.repository.PhotoRepository
 import com.vincentwetzel.androidscreensaver.utils.SettingsManager
@@ -71,6 +72,7 @@ class SlideshowManager @Inject constructor(
         return when (val repository = photoRepositories[photo.sourceType]) {
             is GoogleDrivePhotoRepository -> repository.downloadPhotoToLocalCache(photo.id, accountId, photo.title)
             is DropboxPhotoRepository -> repository.downloadPhotoToLocalCache(photo.id, accountId)
+            is OneDrivePhotoRepository -> repository.downloadPhotoToLocalCache(photo.id, accountId, photo.uri)
             else -> null
         }
     }
@@ -136,7 +138,7 @@ class SlideshowManager @Inject constructor(
                             val excludedFolderIds = account.deselectedFolders
 
                             val foldersToLoad = if (selectedFolders.isEmpty()) {
-                                photoRepository.listFolders(null, forceRefresh = false)
+                                photoRepository.listFolders(account.accountId, forceRefresh = false)
                             } else {
                                 selectedFolders
                             }
@@ -151,7 +153,16 @@ class SlideshowManager @Inject constructor(
                             val folderPhotosList = mutableListOf<List<Photo>>()
                             foldersToLoad.chunked(5).forEach { chunk ->
                                 val results = chunk.map { folder ->
-                                    async { photoRepository.listPhotos(folder.id, excludedFolderIds, mediaFilterString) }
+                                    async { 
+                                        try {
+                                            photoRepository.listPhotos(folder.id, excludedFolderIds, mediaFilterString) 
+                                        } catch (e: Exception) {
+                                            if (e is kotlinx.coroutines.CancellationException) throw e
+                                            // Isolate the failure so it doesn't cancel the entire parent IO coroutine scope
+                                            android.util.Log.e(TAG, "Failed to load folder ${folder.id}: ${e.message}")
+                                            emptyList<Photo>()
+                                        }
+                                    }
                                 }.awaitAll()
                                 folderPhotosList.addAll(results)
                             }
@@ -160,6 +171,7 @@ class SlideshowManager @Inject constructor(
 
                             android.util.Log.d(TAG, "Loaded ${allPhotos.size} photos so far from $sourceType account: $safeAccountId")
                         } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException) throw e
                             val safeAccountId = account.accountId.hashCode().toString()
                             android.util.Log.e(TAG, "Error loading $sourceType photos for $safeAccountId: ${e.javaClass.simpleName}")
                         }
@@ -239,7 +251,8 @@ class SlideshowManager @Inject constructor(
      * Preload a photo into cache
      */
     suspend fun preloadPhoto(photo: Photo) {
-        if (preloadCache[photo.id] == true) return
+        val cacheKey = "${photo.sourceType}_${photo.accountId}_${photo.id}"
+        if (preloadCache[cacheKey] == true) return
 
         withContext(Dispatchers.IO) {
             try {
@@ -252,41 +265,27 @@ class SlideshowManager @Inject constructor(
 
                 if (photo.uri.startsWith("content://")) {
                     // Gallery photos: content:// URIs - already local, Coil can load directly
-                    preloadCache[photo.id] = true
+                    preloadCache[cacheKey] = true
                     android.util.Log.d(TAG, "Preloaded Gallery photo: ${photo.id}")
                 } else if (photo.uri.startsWith("file://")) {
                     // Google Drive cached photos: file:// URIs - already downloaded
-                    preloadCache[photo.id] = true
+                    preloadCache[cacheKey] = true
                     android.util.Log.d(TAG, "Preloaded cached Drive photo: ${photo.id}")
                 } else {
                     // Remote URLs or Cloud IDs (Google Drive, Dropbox, etc.)
                     val localPath = downloadPhotoToLocalCache(photo)
                     if (localPath != null) {
-                        preloadCache[photo.id] = true
+                        preloadCache[cacheKey] = true
                         android.util.Log.d(TAG, "Preloaded remote photo from ${photo.sourceType}: $localPath")
                     } else {
                         android.util.Log.w(TAG, "Failed to download/preload ${photo.sourceType} photo: ${photo.id}")
                     }
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 android.util.Log.e(TAG, "Error preloading photo: ${e.javaClass.simpleName}")
             }
         }
-    }
-
-    /**
-     * Check if a source is enabled (legacy: checks if any account exists for the source)
-     */
-    private suspend fun isSourceEnabled(sourceType: SourceType): Boolean {
-        val accounts = SettingsManager.getAccountsForSource(context, sourceType)
-        return accounts.any { it.enabled }
-    }
-
-    /**
-     * Get selected folders for a source (legacy: returns combined from all accounts)
-     */
-    private suspend fun getSelectedFolders(sourceType: SourceType): List<com.vincentwetzel.androidscreensaver.data.model.PhotoFolder> {
-        return SettingsManager.getSelectedFolders(context, sourceType)
     }
 
     /**

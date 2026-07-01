@@ -3,6 +3,7 @@ package com.vincentwetzel.androidscreensaver.data.repository
 import android.content.Context
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
+import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -13,7 +14,7 @@ import kotlinx.coroutines.launch
  */
 abstract class BaseCloudPhotoRepository(
     protected val context: Context,
-    protected val sourceType: String // e.g., "source_google_drive", "source_dropbox"
+    protected val dreamSourceType: com.vincentwetzel.androidscreensaver.dream.SourceType
 ) : AbstractPhotoRepository() {
 
     /**
@@ -24,9 +25,9 @@ abstract class BaseCloudPhotoRepository(
     // Abstract methods for API-specific network calls
     abstract suspend fun listFoldersForAccount(parentFolderId: String?, forceRefresh: Boolean, accountId: String): List<PhotoFolder>
     
-    abstract suspend fun listPhotosForAccount(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: String?, accountId: String): List<Photo>
+    abstract suspend fun listPhotosForAccount(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: MediaTypeFilter?, accountId: String): List<Photo>
 
-    abstract suspend fun getFilteredFolderMediaCountForAccount(folderId: String, mediaTypeFilter: String?, accountId: String): Int
+    abstract suspend fun getFilteredFolderMediaCountForAccount(folderId: String, mediaTypeFilter: MediaTypeFilter?, accountId: String): Int
 
     abstract suspend fun getSubfolderIdsForAccount(folderId: String, accountId: String): List<String>
 
@@ -38,65 +39,60 @@ abstract class BaseCloudPhotoRepository(
 
     abstract suspend fun searchFoldersForAccount(query: String, accountId: String): List<PhotoFolder>
 
-    // Unified Contract implementation (Routing to first available account)
+    // Unified Contract implementation (Requires explicit account routing)
     override suspend fun listFolders(parentFolderId: String?, forceRefresh: Boolean, accountId: String?): List<PhotoFolder> {
-        val resolvedAccountId = accountId ?: getAuthenticatedAccountIds().firstOrNull() ?: return emptyList()
-        return listFoldersForAccount(parentFolderId, forceRefresh, resolvedAccountId)
+        if (accountId == null) return emptyList()
+        return listFoldersForAccount(parentFolderId, forceRefresh, accountId)
     }
 
-    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: String?, accountId: String?): List<Photo> {
-        val resolvedAccountId = accountId ?: getAuthenticatedAccountIds().firstOrNull() ?: return emptyList()
-        return listPhotosForAccount(folderId, excludedFolderIds, mediaTypeFilter, resolvedAccountId)
+    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: MediaTypeFilter?, accountId: String?): List<Photo> {
+        if (accountId == null) return emptyList()
+        return listPhotosForAccount(folderId, excludedFolderIds, mediaTypeFilter, accountId)
     }
 
     override suspend fun getFolderPhotoCount(folderId: String, accountId: String?): Int {
         return getFilteredFolderMediaCount(folderId, null, accountId)
     }
 
-    override suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: String?, accountId: String?): Int {
-        val resolvedAccountId = accountId ?: getAuthenticatedAccountIds().firstOrNull() ?: return 0
-        return getFilteredFolderMediaCountForAccount(folderId, mediaTypeFilter, resolvedAccountId)
+    override suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: MediaTypeFilter?, accountId: String?): Int {
+        if (accountId == null) return 0
+        return getFilteredFolderMediaCountForAccount(folderId, mediaTypeFilter, accountId)
     }
 
     override suspend fun getSubfolderIds(folderId: String, accountId: String?): List<String> {
-        val resolvedAccountId = accountId ?: getAuthenticatedAccountIds().firstOrNull() ?: return emptyList()
-        return getSubfolderIdsForAccount(folderId, resolvedAccountId)
+        if (accountId == null) return emptyList()
+        return getSubfolderIdsForAccount(folderId, accountId)
     }
 
     override suspend fun getPhotoMetadata(photoId: String, accountId: String?): Photo? {
-        val resolvedAccountId = accountId ?: getAuthenticatedAccountIds().firstOrNull() ?: return null
-        return getPhotoMetadataForAccount(photoId, resolvedAccountId)
+        if (accountId == null) return null
+        return getPhotoMetadataForAccount(photoId, accountId)
     }
 
     override suspend fun getPhotoUrl(photoId: String, accountId: String?): String? {
-        val resolvedAccountId = accountId ?: getAuthenticatedAccountIds().firstOrNull() ?: return null
-        return getPhotoUrlForAccount(photoId, resolvedAccountId)
+        if (accountId == null) return null
+        return getPhotoUrlForAccount(photoId, accountId)
     }
 
     override suspend fun getThumbnailUrl(photoId: String, accountId: String?): String? {
-        val resolvedAccountId = accountId ?: getAuthenticatedAccountIds().firstOrNull() ?: return null
-        return getThumbnailUrlForAccount(photoId, resolvedAccountId)
+        if (accountId == null) return null
+        return getThumbnailUrlForAccount(photoId, accountId)
     }
 
     override suspend fun searchFolders(query: String, accountId: String?): List<PhotoFolder> {
-        val resolvedAccountId = accountId ?: getAuthenticatedAccountIds().firstOrNull() ?: return emptyList()
-        return searchFoldersForAccount(query, resolvedAccountId)
+        if (accountId == null) return emptyList()
+        return searchFoldersForAccount(query, accountId)
     }
 
     // Shared background prefetching
-    open fun prefetchRootFolders(mediaFilter: String? = null) {
+    open fun prefetchRootFolders(mediaFilter: MediaTypeFilter? = null) {
         getAuthenticatedAccountIds().forEach { prefetchRootFolders(it, mediaFilter) }
     }
 
-    fun prefetchRootFolders(accountId: String, mediaFilter: String? = null) {
+    fun prefetchRootFolders(accountId: String, mediaFilter: MediaTypeFilter? = null) {
         prefetchScope.launch {
             try {
                 listFoldersForAccount(null, true, accountId)
-                val dreamSourceType = when(sourceType) {
-                    "source_google_drive" -> com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE
-                    "source_dropbox" -> com.vincentwetzel.androidscreensaver.dream.SourceType.DROPBOX
-                    else -> return@launch
-                }
                 val account = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(context, dreamSourceType, accountId)
                 val selectedIds = account?.selectedFolders?.map { it.folderId }?.toSet() ?: emptySet()
                 if (selectedIds.isNotEmpty()) {
@@ -113,6 +109,7 @@ abstract class BaseCloudPhotoRepository(
                     }
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 android.util.Log.w("BaseCloudPhotoRepo", "Prefetch failed for account: ${e.javaClass.simpleName}")
             }
         }

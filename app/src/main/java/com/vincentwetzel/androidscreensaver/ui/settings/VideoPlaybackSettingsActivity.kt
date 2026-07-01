@@ -24,12 +24,13 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class VideoPlaybackSettingsActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityVideoPlaybackSettingsBinding
+    private var _binding: ActivityVideoPlaybackSettingsBinding? = null
+    private val binding get() = _binding!!
     private var isInitializing = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityVideoPlaybackSettingsBinding.inflate(layoutInflater)
+        _binding = ActivityVideoPlaybackSettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -41,6 +42,11 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
             setupListeners()
             binding.root.post { isInitializing = false }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        _binding = null
     }
 
     private fun setupSpinners() {
@@ -163,42 +169,42 @@ class VideoPlaybackSettingsActivity : AppCompatActivity() {
      * Read current UI values and persist to DataStore
      */
     private fun saveCurrentSettings() {
-        if (isInitializing) return
+        if (isInitializing || _binding == null) return
         
-        lifecycleScope.launch {
-            val videoAudioMode = when (binding.radioAudio.checkedRadioButtonId) {
-                R.id.radio_mute -> VideoAudioMode.MUTE
-                R.id.radio_system_volume -> VideoAudioMode.SYSTEM_VOLUME
-                R.id.radio_custom_volume -> VideoAudioMode.CUSTOM_VOLUME
-                else -> VideoAudioMode.SYSTEM_VOLUME
-            }
-            val videoCustomVolume = binding.sliderVolume.value.toInt()
-            val videoShowControls = binding.switchControls.isChecked
-            val videoMinDurationSeconds = when (binding.spinnerMinDuration.selectedItemPosition) {
-                0 -> 0
-                1 -> 5
-                2 -> 10
-                3 -> 15
-                4 -> 30
-                5 -> 60
-                else -> 0
-            }
-            val videoMaxDurationSeconds = when (binding.spinnerMaxDuration.selectedItemPosition) {
-                0 -> 10
-                1 -> 30
-                2 -> 60
-                3 -> 120
-                4 -> 300
-                else -> Int.MAX_VALUE
-            }
-            val videoPlaybackSpeed = when (binding.spinnerPlaybackSpeed.selectedItemPosition) {
-                0 -> VideoPlaybackSpeed.SLOW_0_5X
-                1 -> VideoPlaybackSpeed.NORMAL
-                2 -> VideoPlaybackSpeed.FAST_1_5X
-                3 -> VideoPlaybackSpeed.FAST_2X
-                else -> VideoPlaybackSpeed.NORMAL
-            }
+        val videoAudioMode = when (binding.radioAudio.checkedRadioButtonId) {
+            R.id.radio_mute -> VideoAudioMode.MUTE
+            R.id.radio_system_volume -> VideoAudioMode.SYSTEM_VOLUME
+            R.id.radio_custom_volume -> VideoAudioMode.CUSTOM_VOLUME
+            else -> VideoAudioMode.SYSTEM_VOLUME
+        }
+        val videoCustomVolume = binding.sliderVolume.value.toInt()
+        val videoShowControls = binding.switchControls.isChecked
+        val videoMinDurationSeconds = when (binding.spinnerMinDuration.selectedItemPosition) {
+            0 -> 0
+            1 -> 5
+            2 -> 10
+            3 -> 15
+            4 -> 30
+            5 -> 60
+            else -> 0
+        }
+        val videoMaxDurationSeconds = when (binding.spinnerMaxDuration.selectedItemPosition) {
+            0 -> 10
+            1 -> 30
+            2 -> 60
+            3 -> 120
+            4 -> 300
+            else -> Int.MAX_VALUE
+        }
+        val videoPlaybackSpeed = when (binding.spinnerPlaybackSpeed.selectedItemPosition) {
+            0 -> VideoPlaybackSpeed.SLOW_0_5X
+            1 -> VideoPlaybackSpeed.NORMAL
+            2 -> VideoPlaybackSpeed.FAST_1_5X
+            3 -> VideoPlaybackSpeed.FAST_2X
+            else -> VideoPlaybackSpeed.NORMAL
+        }
 
+        lifecycleScope.launch {
             val config = SettingsManager.getSlideshowConfig(this@VideoPlaybackSettingsActivity).copy(
                 videoAudioMode = videoAudioMode,
                 videoCustomVolume = videoCustomVolume,

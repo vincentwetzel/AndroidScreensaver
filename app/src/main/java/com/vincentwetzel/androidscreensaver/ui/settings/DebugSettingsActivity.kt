@@ -29,7 +29,8 @@ import java.io.File
 @AndroidEntryPoint
 class DebugSettingsActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityDebugSettingsBinding
+    private var _binding: ActivityDebugSettingsBinding? = null
+    private val binding get() = _binding!!
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,7 +41,7 @@ class DebugSettingsActivity : AppCompatActivity() {
             return
         }
 
-        binding = ActivityDebugSettingsBinding.inflate(layoutInflater)
+        _binding = ActivityDebugSettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -48,6 +49,11 @@ class DebugSettingsActivity : AppCompatActivity() {
 
         setupUI()
         setupListeners()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        _binding = null
     }
 
     private fun setupUI() {
@@ -140,10 +146,12 @@ class DebugSettingsActivity : AppCompatActivity() {
                         }
                         withContext(NonCancellable) {
                             withContext(Dispatchers.Main) {
-                                try {
-                                    Snackbar.make(binding.root, "Settings reset. Exiting app...", Snackbar.LENGTH_LONG).show()
-                                } catch (e: Exception) {
-                                    // Ignore if views are detached during destruction
+                                _binding?.root?.let { root ->
+                                    try {
+                                        Snackbar.make(root, "Settings reset. Exiting app...", Snackbar.LENGTH_LONG).show()
+                                    } catch (e: Exception) {
+                                        // Ignore if views are detached during destruction
+                                    }
                                 }
                             }
                             delay(1500)

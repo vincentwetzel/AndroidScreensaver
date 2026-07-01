@@ -38,6 +38,8 @@ import com.vincentwetzel.androidscreensaver.data.repository.GalleryPhotoReposito
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDrivePhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.DropboxPhotoRepository
 import com.vincentwetzel.androidscreensaver.utils.DropboxAccountManager
+import com.vincentwetzel.androidscreensaver.auth.OneDriveAuthManager
+import com.vincentwetzel.androidscreensaver.data.repository.OneDrivePhotoRepository
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -53,6 +55,8 @@ class MainActivity : AppCompatActivity() {
     @Inject lateinit var googleAccountManager: GoogleAccountManager
     @Inject lateinit var dropboxPhotoRepository: DropboxPhotoRepository
     @Inject lateinit var dropboxAccountManager: DropboxAccountManager
+    @Inject lateinit var onedrivePhotoRepository: OneDrivePhotoRepository
+    @Inject lateinit var onedriveAuthManager: OneDriveAuthManager
 
     private var binding: ActivityMainBinding? = null
     private var bindingTv: ActivityMainTvBinding? = null
@@ -106,6 +110,22 @@ class MainActivity : AppCompatActivity() {
                     
                     showSnackbar("Dropbox connected!")
                     openFolderBrowser(SourceType.DROPBOX, accountId)
+                }
+            }
+        }
+    }
+
+    // Activity result launcher for OneDrive auth
+    private val onedriveAuthLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            lifecycleScope.launch {
+                val accountId = result.data?.getStringExtra("account_id")
+                if (accountId != null) {
+                    buildSourceCards()
+                    refreshSourceCards()
+                    openFolderBrowser(SourceType.ONEDRIVE, accountId)
                 }
             }
         }
@@ -173,6 +193,9 @@ class MainActivity : AppCompatActivity() {
         val dropboxAccounts = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccountsForSource(
             this, com.vincentwetzel.androidscreensaver.dream.SourceType.DROPBOX
         )
+        val onedriveAccounts = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccountsForSource(
+            this, com.vincentwetzel.androidscreensaver.dream.SourceType.ONEDRIVE
+        )
 
         val container = if (isTvLayout) bindingTv?.connectedSourcesContainer else binding?.connectedSourcesContainer
         container?.let { c ->
@@ -222,6 +245,20 @@ class MainActivity : AppCompatActivity() {
                 )
                 c.addView(card)
                 sourceCards.add(SourceCardData(card, info, SourceType.DROPBOX, account.accountId))
+            }
+            
+            // OneDrive account cards
+            onedriveAccounts.forEach { account ->
+                val iconRes = resources.getIdentifier("ic_source_onedrive", "drawable", packageName).takeIf { it != 0 } ?: android.R.drawable.ic_menu_gallery
+                val (card, info) = createSourceCard(
+                    "OneDrive",
+                    account.accountEmail,
+                    iconRes,
+                    padding, iconSize, switchScale, SourceType.ONEDRIVE,
+                    accountId = account.accountId
+                )
+                c.addView(card)
+                sourceCards.add(SourceCardData(card, info, SourceType.ONEDRIVE, account.accountId))
             }
         }
     }
@@ -389,6 +426,17 @@ class MainActivity : AppCompatActivity() {
                         if (account?.isAuthenticated == true) openFolderBrowser(SourceType.DROPBOX, accountId)
                         else startDropboxAuth(accountId)
                     }
+                    SourceType.ONEDRIVE -> {
+                        val account = accountId?.let { id ->
+                            com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(
+                                this@MainActivity,
+                                com.vincentwetzel.androidscreensaver.dream.SourceType.ONEDRIVE,
+                                id
+                            )
+                        }
+                        if (account?.isAuthenticated == true) openFolderBrowser(SourceType.ONEDRIVE, accountId)
+                        else startOneDriveAuth(accountId)
+                    }
                     else -> {}
                 }
             }
@@ -413,7 +461,7 @@ class MainActivity : AppCompatActivity() {
 
         val popup = PopupMenu(this, anchorView)
         
-        if (sourceType == SourceType.GOOGLE_DRIVE || sourceType == SourceType.DROPBOX) {
+        if (sourceType == SourceType.GOOGLE_DRIVE || sourceType == SourceType.DROPBOX || sourceType == SourceType.ONEDRIVE) {
             popup.menu.add(0, 1, 0, "Re-authenticate")
         }
         
@@ -424,6 +472,7 @@ class MainActivity : AppCompatActivity() {
                     when (sourceType) {
                         SourceType.GOOGLE_DRIVE -> startGoogleDriveAuth(accountId)
                         SourceType.DROPBOX -> startDropboxAuth(accountId)
+                        SourceType.ONEDRIVE -> startOneDriveAuth(accountId)
                         else -> {}
                     }
                 }
@@ -458,6 +507,10 @@ class MainActivity : AppCompatActivity() {
         // If it's a Dropbox account, sign it out from its manager
         if (sourceType == SourceType.DROPBOX) {
             dropboxAccountManager.signOutAccount(accountId)
+        }
+        // If it's a OneDrive account, sign it out from its auth manager
+        if (sourceType == SourceType.ONEDRIVE) {
+            onedriveAuthManager.clearTokens(accountId)
         }
 
         // Refresh UI
@@ -512,6 +565,7 @@ class MainActivity : AppCompatActivity() {
                             SourceType.GOOGLE_DRIVE -> googleDrivePhotoRepository.prefetchRootFolders(id, filter)
                             SourceType.GALLERY -> galleryPhotoRepository.prefetchRootFolders(filter)
                             SourceType.DROPBOX -> dropboxPhotoRepository.prefetchRootFolders(id, filter)
+                            SourceType.ONEDRIVE -> onedrivePhotoRepository.prefetchRootFolders(id, filter)
                             else -> {}
                         }
                     }
@@ -572,6 +626,9 @@ class MainActivity : AppCompatActivity() {
             
             // Dropbox supports multiple accounts, always show it
             sources.add("Dropbox" to SourceType.DROPBOX)
+            
+            // OneDrive supports multiple accounts, always show it
+            sources.add("OneDrive" to SourceType.ONEDRIVE)
 
             val sourceNames = sources.map { it.first }.toTypedArray()
             var selectedIndex = 0
@@ -616,6 +673,9 @@ class MainActivity : AppCompatActivity() {
             }
             SourceType.DROPBOX -> {
                 startDropboxAuth()
+            }
+            SourceType.ONEDRIVE -> {
+                startOneDriveAuth()
             }
             else -> {}
         }
@@ -668,6 +728,13 @@ class MainActivity : AppCompatActivity() {
             existingAccountId?.let { putExtra("account_id", it) }
         }
         dropboxAuthLauncher.launch(intent)
+    }
+
+    private fun startOneDriveAuth(existingAccountId: String? = null) {
+        val intent = android.content.Intent(this, com.vincentwetzel.androidscreensaver.ui.sources.OneDriveAuthActivity::class.java).apply {
+            existingAccountId?.let { putExtra("account_id", it) }
+        }
+        onedriveAuthLauncher.launch(intent)
     }
 
     private fun openFolderBrowser(sourceType: SourceType, accountId: String? = null) {

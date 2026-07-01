@@ -1,6 +1,6 @@
 package com.vincentwetzel.androidscreensaver.data.repository
 
-import android.location.Location
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -75,7 +75,8 @@ class WeatherRepository @Inject constructor() {
                     )
                 }
             } catch (e: Exception) {
-            android.util.Log.e("WeatherRepository", "Failed to fetch weather data: ${e.javaClass.simpleName}")
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("WeatherRepository", "Failed to fetch weather data: ${e.javaClass.simpleName}")
                 null
             }
         }
@@ -117,7 +118,8 @@ class WeatherRepository @Inject constructor() {
                     response.isSuccessful
                 }
             } catch (e: Exception) {
-            android.util.Log.e("WeatherRepository", "Weather API unavailable: ${e.javaClass.simpleName}")
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("WeatherRepository", "Weather API unavailable: ${e.javaClass.simpleName}")
                 false
             }
         }

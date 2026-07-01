@@ -10,6 +10,8 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.slider.Slider
 import kotlinx.coroutines.launch
 import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoBackground
+import com.vincentwetzel.androidscreensaver.data.model.ClockPosition
+import com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity
 import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoConfig
 import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoLayout
 import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoSeparator
@@ -24,13 +26,14 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class PhotoInfoSettingsActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityPhotoInfoSettingsBinding
+    private var _binding: ActivityPhotoInfoSettingsBinding? = null
+    private val binding get() = _binding!!
     private lateinit var currentConfig: PhotoInfoConfig
     private var isInitializing = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityPhotoInfoSettingsBinding.inflate(layoutInflater)
+        _binding = ActivityPhotoInfoSettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -42,6 +45,11 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
             setupListeners()
             binding.root.post { isInitializing = false }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        _binding = null
     }
 
     private fun setupSpinners() {
@@ -133,11 +141,11 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
 
         // Position
         val positionIndex = when (config.position) {
-            com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_LEFT -> 0
-            com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_RIGHT -> 1
-            com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_LEFT -> 2
-            com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_RIGHT -> 3
-            com.vincentwetzel.androidscreensaver.data.model.ClockPosition.CENTER -> 4
+            ClockPosition.BOTTOM_LEFT -> 0
+            ClockPosition.BOTTOM_RIGHT -> 1
+            ClockPosition.TOP_LEFT -> 2
+            ClockPosition.TOP_RIGHT -> 3
+            ClockPosition.CENTER -> 4
             else -> 0
         }
         binding.spinnerPosition.setSelection(positionIndex)
@@ -178,9 +186,9 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
 
         // Shadow intensity
         val shadowIndex = when (config.shadowIntensity) {
-            com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.LIGHT -> 0
-            com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.MEDIUM -> 1
-            com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.HEAVY -> 2
+            ShadowIntensity.LIGHT -> 0
+            ShadowIntensity.MEDIUM -> 1
+            ShadowIntensity.HEAVY -> 2
         }
         binding.spinnerShadowIntensity.setSelection(shadowIndex)
     }
@@ -326,84 +334,83 @@ class PhotoInfoSettingsActivity : AppCompatActivity() {
      * Read current UI values and persist to DataStore
      */
     private fun saveCurrentSettings() {
-        if (isInitializing) return
+        if (isInitializing || _binding == null) return
         
+        // Capture synchronous UI state before suspending to prevent data corruption
+        // if the user interacts with the UI during the DataStore read.
+        val currentEnabled = binding.switchEnabled.isChecked
+        val currentShowFileName = binding.switchFilename.isChecked
+        val currentShowFileNameExt = binding.switchFilenameExt.isChecked
+        val currentShowFolderName = binding.switchFolder.isChecked
+        val currentShowFolderFullPath = binding.switchFolderPath.isChecked
+        val currentShowDateTaken = binding.switchDate.isChecked
+        val currentShowSourceName = binding.switchSource.isChecked
+        val currentShowDescription = binding.switchDescription.isChecked
+        val currentShowDimensions = binding.switchDimensions.isChecked
+        val currentShowFileSize = binding.switchFilesize.isChecked
+
+        val currentFadeOutAfterSeconds = when (binding.spinnerFadeDuration.selectedItemPosition) {
+            0 -> 2
+            1 -> 3
+            2 -> 5
+            3 -> 8
+            4 -> 10
+            5 -> 15
+            else -> Int.MAX_VALUE // Never
+        }
+        val currentFadeOutEnabled = binding.spinnerFadeDuration.selectedItemPosition < 6
+        val currentFadeAnimationDurationMs = when (binding.spinnerFadeAnimation.selectedItemPosition) {
+            0 -> 500
+            1 -> 1000
+            2 -> 1500
+            3 -> 2000
+            else -> 1000
+        }
+
+        val currentPosition = when (binding.spinnerPosition.selectedItemPosition) {
+            0 -> ClockPosition.BOTTOM_LEFT
+            1 -> ClockPosition.BOTTOM_RIGHT
+            2 -> ClockPosition.TOP_LEFT
+            3 -> ClockPosition.TOP_RIGHT
+            4 -> ClockPosition.CENTER
+            else -> ClockPosition.BOTTOM_LEFT
+        }
+        val currentLayout = when (binding.spinnerLayout.selectedItemPosition) {
+            0 -> PhotoInfoLayout.HORIZONTAL
+            1 -> PhotoInfoLayout.VERTICAL
+            2 -> PhotoInfoLayout.COMPACT
+            else -> PhotoInfoLayout.HORIZONTAL
+        }
+        val currentSeparator = when (binding.spinnerSeparator.selectedItemPosition) {
+            0 -> PhotoInfoSeparator.BULLET
+            1 -> PhotoInfoSeparator.PIPE
+            2 -> PhotoInfoSeparator.DASH
+            3 -> PhotoInfoSeparator.SLASH
+            4 -> PhotoInfoSeparator.COMMA
+            else -> PhotoInfoSeparator.BULLET
+        }
+        val currentBackground = when (binding.spinnerBackground.selectedItemPosition) {
+            0 -> PhotoInfoBackground.NONE
+            1 -> PhotoInfoBackground.SEMI_TRANSPARENT
+            2 -> PhotoInfoBackground.SOLID
+            3 -> PhotoInfoBackground.GRADIENT_FADE
+            else -> PhotoInfoBackground.SEMI_TRANSPARENT
+        }
+
+        // Opacity sliders
+        val currentBgOpacity = binding.sliderBgOpacity.value.toInt()
+        val currentTextOpacity = binding.sliderTextOpacity.value.toInt()
+
+        // Text shadow
+        val currentTextShadow = binding.switchTextShadow.isChecked
+        val currentShadowIntensity = when (binding.spinnerShadowIntensity.selectedItemPosition) {
+            0 -> ShadowIntensity.LIGHT
+            1 -> ShadowIntensity.MEDIUM
+            2 -> ShadowIntensity.HEAVY
+            else -> ShadowIntensity.MEDIUM
+        }
+
         lifecycleScope.launch {
-            // Capture synchronous UI state before suspending to prevent data corruption
-            // if the user interacts with the UI during the DataStore read.
-            
-            val currentEnabled = binding.switchEnabled.isChecked
-            val currentShowFileName = binding.switchFilename.isChecked
-            val currentShowFileNameExt = binding.switchFilenameExt.isChecked
-            val currentShowFolderName = binding.switchFolder.isChecked
-            val currentShowFolderFullPath = binding.switchFolderPath.isChecked
-            val currentShowDateTaken = binding.switchDate.isChecked
-            val currentShowSourceName = binding.switchSource.isChecked
-            val currentShowDescription = binding.switchDescription.isChecked
-            val currentShowDimensions = binding.switchDimensions.isChecked
-            val currentShowFileSize = binding.switchFilesize.isChecked
-
-            val currentFadeOutAfterSeconds = when (binding.spinnerFadeDuration.selectedItemPosition) {
-                    0 -> 2
-                    1 -> 3
-                    2 -> 5
-                    3 -> 8
-                    4 -> 10
-                    5 -> 15
-                    else -> Int.MAX_VALUE // Never
-            }
-            val currentFadeOutEnabled = binding.spinnerFadeDuration.selectedItemPosition < 6
-            val currentFadeAnimationDurationMs = when (binding.spinnerFadeAnimation.selectedItemPosition) {
-                    0 -> 500
-                    1 -> 1000
-                    2 -> 1500
-                    3 -> 2000
-                    else -> 1000
-            }
-
-            val currentPosition = when (binding.spinnerPosition.selectedItemPosition) {
-                    0 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_LEFT
-                    1 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_RIGHT
-                    2 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_LEFT
-                    3 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.TOP_RIGHT
-                    4 -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.CENTER
-                    else -> com.vincentwetzel.androidscreensaver.data.model.ClockPosition.BOTTOM_LEFT
-            }
-            val currentLayout = when (binding.spinnerLayout.selectedItemPosition) {
-                    0 -> PhotoInfoLayout.HORIZONTAL
-                    1 -> PhotoInfoLayout.VERTICAL
-                    2 -> PhotoInfoLayout.COMPACT
-                    else -> PhotoInfoLayout.HORIZONTAL
-            }
-            val currentSeparator = when (binding.spinnerSeparator.selectedItemPosition) {
-                    0 -> PhotoInfoSeparator.BULLET
-                    1 -> PhotoInfoSeparator.PIPE
-                    2 -> PhotoInfoSeparator.DASH
-                    3 -> PhotoInfoSeparator.SLASH
-                    4 -> PhotoInfoSeparator.COMMA
-                    else -> PhotoInfoSeparator.BULLET
-            }
-            val currentBackground = when (binding.spinnerBackground.selectedItemPosition) {
-                    0 -> PhotoInfoBackground.NONE
-                    1 -> PhotoInfoBackground.SEMI_TRANSPARENT
-                    2 -> PhotoInfoBackground.SOLID
-                    3 -> PhotoInfoBackground.GRADIENT_FADE
-                    else -> PhotoInfoBackground.SEMI_TRANSPARENT
-            }
-
-            // Opacity sliders
-            val currentBgOpacity = binding.sliderBgOpacity.value.toInt()
-            val currentTextOpacity = binding.sliderTextOpacity.value.toInt()
-
-            // Text shadow
-            val currentTextShadow = binding.switchTextShadow.isChecked
-            val currentShadowIntensity = when (binding.spinnerShadowIntensity.selectedItemPosition) {
-                    0 -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.LIGHT
-                    1 -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.MEDIUM
-                    2 -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.HEAVY
-                    else -> com.vincentwetzel.androidscreensaver.data.model.ShadowIntensity.MEDIUM
-            }
-
             val config = SettingsManager.getSlideshowConfig(this@PhotoInfoSettingsActivity)
             
             val newConfig = config.photoInfoConfig.copy(

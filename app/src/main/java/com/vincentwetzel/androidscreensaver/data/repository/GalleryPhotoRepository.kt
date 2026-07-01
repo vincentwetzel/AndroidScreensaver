@@ -2,16 +2,16 @@ package com.vincentwetzel.androidscreensaver.data.repository
 
 import android.content.ContentUris
 import android.content.Context
-import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.util.Log
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
 import com.vincentwetzel.androidscreensaver.data.model.SourceType
+import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
+import com.vincentwetzel.androidscreensaver.utils.SettingsManager
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -28,18 +28,6 @@ class GalleryPhotoRepository @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) : AbstractPhotoRepository() {
 
-    // Supported image file extensions
-    private val imageMimeTypes = setOf(
-        "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp",
-        "image/heic", "image/heif", "image/svg+xml", "image/tiff", "image/x-ms-bmp"
-    )
-
-    // Supported video file extensions
-    private val videoMimeTypes = setOf(
-        "video/mp4", "video/avi", "video/quicktime", "video/x-matroska",
-        "video/webm", "video/x-ms-wmv", "video/x-flv", "video/mp4v-es"
-    )
-
     override fun isAuthenticated(): Boolean {
         // Gallery doesn't need authentication
         return true
@@ -50,14 +38,14 @@ class GalleryPhotoRepository @Inject constructor(
      * Results are cached so subsequent listFolders(null) calls return immediately.
      * Safe to call multiple times — respects the folder cache TTL.
      */
-    fun prefetchRootFolders(mediaFilter: String? = null) {
+    fun prefetchRootFolders(mediaFilter: MediaTypeFilter? = null) {
         prefetchScope.launch {
             try {
                 // Re-use existing listFolders logic which populates the cache
                 val folders = listFolders(null, forceRefresh = true)
-                android.util.Log.d("GalleryPhotoRepo", "Prefetched ${folders.size} Gallery folders")
+                Log.d("GalleryPhotoRepo", "Prefetched ${folders.size} Gallery folders")
 
-                val account = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccountsForSource(
+                val account = SettingsManager.getAccountsForSource(
                     context, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
                 ).firstOrNull()
 
@@ -74,7 +62,7 @@ class GalleryPhotoRepository @Inject constructor(
                         totalCount += count
                     }
                     if (account != null && totalCount != account.photoCount) {
-                        com.vincentwetzel.androidscreensaver.utils.SettingsManager.updateAccountPhotoCount(
+                        SettingsManager.updateAccountPhotoCount(
                             context, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY, account.accountId, totalCount
                         )
                     }
@@ -84,7 +72,8 @@ class GalleryPhotoRepository @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-            android.util.Log.w("GalleryPhotoRepo", "Prefetch failed: ${e.javaClass.simpleName}")
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.w("GalleryPhotoRepo", "Prefetch failed: ${e.javaClass.simpleName}")
             }
         }
     }
@@ -111,7 +100,8 @@ class GalleryPhotoRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.w("GalleryPhotoRepo", "Failed to get relative path for folder $folderId")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.w("GalleryPhotoRepo", "Failed to get relative path for folder $folderId")
         }
         return null
     }
@@ -168,7 +158,7 @@ class GalleryPhotoRepository @Inject constructor(
                     val seenBuckets = mutableSetOf<String>()
 
                     while (it.moveToNext()) {
-                        val bucketId = it.getString(bucketIdIndex)
+                        val bucketId = it.getString(bucketIdIndex) ?: continue
                         if (seenBuckets.contains(bucketId)) continue
                         seenBuckets.add(bucketId)
 
@@ -189,7 +179,8 @@ class GalleryPhotoRepository @Inject constructor(
                 // Sort folders by name (case-insensitive without extra string allocations)
                 folders.sortWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
             } catch (e: Exception) {
-            android.util.Log.e("GalleryPhotoRepo", "Failed to list folders: ${e.javaClass.simpleName}")
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("GalleryPhotoRepo", "Failed to list folders: ${e.javaClass.simpleName}")
                 throw e
             }
 
@@ -197,9 +188,10 @@ class GalleryPhotoRepository @Inject constructor(
         }
     }
 
-    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: String?, accountId: String?): List<Photo> = withContext(Dispatchers.IO) {
+    override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: MediaTypeFilter?, accountId: String?): List<Photo> = withContext(Dispatchers.IO) {
         val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
-        val cacheKey = "${folderId}_${normalizedFilter}_${excludedFolderIds.hashCode()}"
+        val exclusionsKey = if (excludedFolderIds.isEmpty()) "none" else excludedFolderIds.sorted().joinToString(",")
+        val cacheKey = "${folderId}_${normalizedFilter}_$exclusionsKey"
         val cached = photoListCache[cacheKey]
         if (cached != null && !cached.isStale) {
             return@withContext cached.data
@@ -335,7 +327,8 @@ class GalleryPhotoRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-        android.util.Log.e("GalleryPhotoRepo", "Failed to list photos: ${e.javaClass.simpleName}")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("GalleryPhotoRepo", "Failed to list photos: ${e.javaClass.simpleName}")
             throw e
         }
 
@@ -417,7 +410,8 @@ class GalleryPhotoRepository @Inject constructor(
             }
             null
         } catch (e: Exception) {
-        android.util.Log.e("GalleryPhotoRepo", "Error accessing MediaStore: ${e.javaClass.simpleName}")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("GalleryPhotoRepo", "Error accessing MediaStore: ${e.javaClass.simpleName}")
             null
         }
     }
@@ -440,7 +434,7 @@ class GalleryPhotoRepository @Inject constructor(
         return getFilteredFolderMediaCount(folderId, null, accountId)
     }
 
-    override suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: String?, accountId: String?): Int {
+    override suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: MediaTypeFilter?, accountId: String?): Int {
         val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
         val cacheKey = "${folderId}_${normalizedFilter}"
         val cached = photoCountCache[cacheKey]
@@ -487,7 +481,8 @@ class GalleryPhotoRepository @Inject constructor(
                 photoCountCache[cacheKey] = CountCacheEntry(count)
                 count
             } catch (e: Exception) {
-            android.util.Log.e("GalleryPhotoRepo", "Failed to count folder media: ${e.javaClass.simpleName}")
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("GalleryPhotoRepo", "Failed to count folder media: ${e.javaClass.simpleName}")
                 0
             }
         }
@@ -529,7 +524,8 @@ class GalleryPhotoRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.w("GalleryPhotoRepo", "Failed to get subfolders for folder $folderId")
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.w("GalleryPhotoRepo", "Failed to get subfolders for folder $folderId")
         }
         subfolders
     }

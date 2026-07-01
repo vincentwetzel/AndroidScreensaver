@@ -24,7 +24,8 @@ import java.util.Calendar
 @AndroidEntryPoint
 class ScheduleSettingsActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityScheduleSettingsBinding
+    private var _binding: ActivityScheduleSettingsBinding? = null
+    private val binding get() = _binding!!
     private var isAutostart = true
     private var selectedHour = 20
     private var selectedMinute = 0
@@ -33,7 +34,7 @@ class ScheduleSettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityScheduleSettingsBinding.inflate(layoutInflater)
+        _binding = ActivityScheduleSettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -44,6 +45,11 @@ class ScheduleSettingsActivity : AppCompatActivity() {
             loadCurrentSettings()
             setupListeners()
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        _binding = null
     }
 
     private fun setupTabs() {
@@ -188,6 +194,8 @@ class ScheduleSettingsActivity : AppCompatActivity() {
      * Read current UI values and persist to DataStore
      */
     private fun saveCurrentSettings() {
+        if (_binding == null) return
+        
         // Capture synchronous state to prevent corruption if the user switches tabs 
         // before the coroutine resumes from reading DataStore.
         val currentIsAutostart = isAutostart

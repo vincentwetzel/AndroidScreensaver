@@ -13,8 +13,7 @@ import javax.inject.Singleton
 /**
  * Google Drive Repository
  * Handles per-account Drive API access via GoogleAccountManager.
- * All methods now accept an accountId to support multiple accounts.
- * Legacy single-account behavior is preserved via accountId = null (uses the first available account).
+ * All methods require an explicit accountId to enforce explicit routing.
  */
 @Singleton
 class GoogleDriveRepository @Inject constructor(
@@ -40,23 +39,17 @@ class GoogleDriveRepository @Inject constructor(
     }
 
     /**
-     * Get the OAuth access token for a specific account (for use with OkHttp).
-     * If accountId is null, returns the token for the first available account (legacy compat).
+     * Get the OAuth access token for a specific account.
      */
-    fun getAccessToken(accountId: String? = null): String? {
-        val id = accountId ?: accountManager.getAuthenticatedAccountIds().firstOrNull()
-            ?: return null
-        return accountManager.getAccessToken(id)
+    fun getAccessToken(accountId: String): String? {
+        return accountManager.getAccessToken(accountId)
     }
 
     /**
      * Get the Drive API service for a specific account.
-     * If accountId is null, returns the service for the first available account (legacy compat).
      */
-    fun getDriveService(accountId: String? = null): Drive? {
-        val id = accountId ?: accountManager.getAuthenticatedAccountIds().firstOrNull()
-            ?: return null
-        return accountManager.getDriveService(id)
+    fun getDriveService(accountId: String): Drive? {
+        return accountManager.getDriveService(accountId)
     }
 
     /**
@@ -68,14 +61,9 @@ class GoogleDriveRepository @Inject constructor(
 
     /**
      * Check if a specific account is authenticated.
-     * If accountId is null, checks if any account is authenticated (legacy compat).
      */
-    fun isAccountAuthenticated(accountId: String? = null): Boolean {
-        return if (accountId != null) {
-            accountManager.isAccountAuthenticated(accountId)
-        } else {
-            accountManager.getAuthenticatedAccountIds().isNotEmpty()
-        }
+    fun isAccountAuthenticated(accountId: String): Boolean {
+        return accountManager.isAccountAuthenticated(accountId)
     }
 
     /**

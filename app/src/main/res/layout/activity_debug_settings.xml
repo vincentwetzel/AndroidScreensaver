@@ -48,8 +48,14 @@
             android:id="@+id/switch_debug_overlay"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Show Debug Overlay"
-            app:summary="Display FPS, memory usage, and cache stats"
+            android:text="Show Debug Overlay" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Display FPS, memory usage, and cache stats"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:textColor="?android:attr/textColorSecondary"
             android:layout_marginBottom="16dp" />
 
         <!-- Export Logs -->
@@ -65,6 +71,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Export Logs"
+            android:filterTouchesWhenObscured="true"
             android:layout_marginBottom="8dp"
             style="@style/Widget.Material3.Button.OutlinedButton" />
 
@@ -89,6 +96,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Reset All Settings"
+            android:filterTouchesWhenObscured="true"
             android:layout_marginBottom="8dp"
             style="@style/Widget.Material3.Button.OutlinedButton" />
 
@@ -113,6 +121,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Test Crash Reporting"
+            android:filterTouchesWhenObscured="true"
             android:layout_marginBottom="8dp"
             style="@style/Widget.Material3.Button.OutlinedButton" />
 

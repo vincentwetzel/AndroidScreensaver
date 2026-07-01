@@ -2,6 +2,7 @@ package com.vincentwetzel.androidscreensaver.data.repository
 
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
+import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -23,7 +24,7 @@ interface PhotoRepository {
     /**
      * List all photos in a folder, optionally excluding subfolders by ID
      */
-    suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String> = emptySet(), mediaTypeFilter: String? = null, accountId: String? = null): List<Photo>
+    suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String> = emptySet(), mediaTypeFilter: MediaTypeFilter? = null, accountId: String? = null): List<Photo>
     
     /**
      * Get photo metadata
@@ -52,9 +53,9 @@ interface PhotoRepository {
 
     /**
      * Get media count for a folder filtered by media type.
-     * @param mediaTypeFilter one of: "images", "videos", or null for both
+     * @param mediaTypeFilter a MediaTypeFilter enum value
      */
-    suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: String?, accountId: String? = null): Int
+    suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: MediaTypeFilter?, accountId: String? = null): Int
     
     /**
      * Get all subfolder IDs recursively for a given folder

@@ -386,6 +386,7 @@ class FolderBrowserActivity : AppCompatActivity() {
         })
 
         if (dreamSourceType == com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE ||
+            dreamSourceType == com.vincentwetzel.androidscreensaver.dream.SourceType.ONEDRIVE ||
             dreamSourceType == com.vincentwetzel.androidscreensaver.dream.SourceType.DROPBOX) {
             menu.add(Menu.NONE, 1001, Menu.NONE, "Re-authenticate").apply {
                 setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
@@ -406,10 +407,10 @@ class FolderBrowserActivity : AppCompatActivity() {
     }
 
     private fun startReauthFlow() {
-        val intent = if (dreamSourceType == com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE) {
-            android.content.Intent(this, GoogleDriveAuthActivity::class.java)
-        } else {
-            android.content.Intent(this, DropboxAuthActivity::class.java)
+        val intent = when (dreamSourceType) {
+            com.vincentwetzel.androidscreensaver.dream.SourceType.GOOGLE_DRIVE -> android.content.Intent(this, GoogleDriveAuthActivity::class.java)
+            com.vincentwetzel.androidscreensaver.dream.SourceType.ONEDRIVE -> android.content.Intent(this, OneDriveAuthActivity::class.java)
+            else -> android.content.Intent(this, DropboxAuthActivity::class.java)
         }.apply {
             putExtra(EXTRA_ACCOUNT_ID, accountId)
         }

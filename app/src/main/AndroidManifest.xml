@@ -89,6 +89,12 @@
             android:exported="false"
             android:label="Dropbox Authentication" />
         
+        <!-- OneDrive Authentication Activity -->
+        <activity
+            android:name=".ui.sources.OneDriveAuthActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Photo Browser Activity -->
         <activity
             android:name=".ui.sources.FolderBrowserActivity"
@@ -182,6 +188,21 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+            </intent-filter>
+        </activity>
+
+        <!-- MSAL Browser Tab Activity -->
+        <activity
+            android:name="com.microsoft.identity.client.BrowserTabActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="msauth"
+                    android:host="com.vincentwetzel.androidscreensaver.debug"
+                    android:path="/mFva8cfSlQYJ8+g3obMzz+A0xYU=" />
             </intent-filter>
         </activity>
         
