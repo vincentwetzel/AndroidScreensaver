@@ -31,7 +31,7 @@ class OneDrivePhotoRepository @Inject constructor(
     }
 
     override fun getAuthenticatedAccountIds(): List<String> {
-        return authManager.getAllAccountIds()
+        return authManager.getCachedAccountIds()
     }
 
     private fun parseIso8601(dateString: String?): Long {

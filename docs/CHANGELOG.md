@@ -11,6 +11,9 @@
 - Cleaned up duplicated documentation-agent rules and corrected corrupted punctuation/checklist glyphs in project markdown.
 - Added `CODING_STANDARDS.md` for Kotlin/Android engineering rules, review expectations, security/privacy guidance, dependency hygiene, and verification policy.
 - Moved detailed coding standards out of `ARCHITECTURE.md` so architecture documentation stays focused on system design.
+- Moved durable project documentation into `docs/` while keeping the root `README.md` and `AGENTS.md` as entry-point files.
+- Reviewed and tightened coding standards so required rules are actionable and security guidance is proportional to the app's threat model.
+- Corrected the documented Gradle version to match the Gradle 9.5.0 wrapper.
 - Updated documentation indexes and build requirements to include the coding standards file and the current `compileSdk` value.
 - Aligned app Gradle version metadata with the in-progress `1.11.0` changelog entry.
 
@@ -36,6 +39,10 @@
 - **Injected Dropbox app key from local.properties** - `DROPBOX_APP_KEY` is now read from `local.properties`, sanitized, and exposed through `BuildConfig.DROPBOX_APP_KEY` for the Dropbox PKCE OAuth flow.
 
 ### Added
+- **Fail-fast test harness** - Added `tools/run_tests.py` and host-side project-structure tests. The runner timestamps command output, stops after preflight/compile/unit-test failures, supports explicit ADB-required or host-only modes, optionally smoke-tests the installed launcher and DreamService, and writes text/JSON end-of-run reports.
+- **Explicit clean-install mode** - Added `--clean-install` to the test harness for device installations blocked by a signing mismatch. It removes only the exact debug package before installation and is never performed automatically.
+- **Console end-of-run report** - The test harness now prints the complete summary after the final stage as well as saving the text and JSON report files.
+- **Compact elapsed-time logging** - Simplified console and command-log prefixes to local clock time plus cumulative suite runtime, while retaining full ISO timestamps in JSON reports.
 - **Low-battery auto-exit** - Added a Display & Power setting to exit the screensaver when the device is not charging and battery level is at or below the configured threshold.
 - **Re-authenticate GUI options** - Added a clear way to re-authenticate cloud accounts directly from the app GUI. A "Re-authenticate" option is now available in the three-dot menu of source cards on the main screen, as well as in the top-right options menu while browsing folders. This resolves token expiration errors without requiring the user to remove and re-add their account.
 - **In-screen re-authenticate button** - Added a prominent "Re-authenticate" button directly to the center of the folder browser empty-state whenever an authentication error prevents folders from loading. The button automatically disappears upon successful sign-in.
@@ -195,6 +202,9 @@
 - **Video playback support** — Videos now play with ExoPlayer (Media3) in the slideshow, auto-advancing when finished. Content filter "Videos Only" now works correctly
 
 ### Fixed
+- **Stale JVM ViewModel tests** - Updated tests for the current repository-injected `MainViewModel` API and extracted pure source-selection state into `SourceSelectionState` so the behavior remains unit-testable without Android or cloud dependencies.
+- **Stale transition-effect test expectation** - Updated the data-model test to include the current `CIRCLE` transition effect.
+- **Initial debug build failures** - Fixed the OneDrive repository’s synchronous authentication check calling a suspend token-store method, and added the missing `back` string resource referenced by the cloud folder browser layout.
 - Google Sign-In `DEVELOPER_ERROR` (status 10) caused by incorrect `requestIdToken()` usage
 - **Content filter now correctly restricts media types** — Fixed 2 bugs:
   - `arrays.xml` content filter values were misaligned with entries (selecting "Images Only" actually set "Images AND Videos" and vice versa)

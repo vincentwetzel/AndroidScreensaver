@@ -129,7 +129,7 @@ class DataModelUnitTest {
     @Test
     fun `TransitionEffect enum has all values`() {
         val values = TransitionEffect.values()
-        assertEquals(15, values.size)
+        assertEquals(16, values.size)
         assertTrue(values.contains(TransitionEffect.FADE))
         assertTrue(values.contains(TransitionEffect.CROSS_FADE))
         assertTrue(values.contains(TransitionEffect.SLIDE))

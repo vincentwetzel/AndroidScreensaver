@@ -1,6 +1,6 @@
 # TODO
 
-This file is the active backlog and quality checklist. Completed release history belongs in `CHANGELOG.md`; durable architecture and behavior details belong in `ARCHITECTURE.md`, `README.md`, `BUILD.md`, or `USER_GUIDE.md`.
+This file is the active backlog and quality checklist. Completed release history belongs in `docs/CHANGELOG.md`; durable architecture and behavior details belong in `docs/ARCHITECTURE.md`, `README.md`, `docs/BUILD.md`, or `docs/USER_GUIDE.md`.
 
 ## Open Backlog
 
@@ -16,7 +16,8 @@ This file is the active backlog and quality checklist. Completed release history
 
 ### Quality
 
-- [ ] Revalidate `./gradlew assembleDebug` after the AGP 9.2.1 bump and confirm the app still runs.
+- [x] Add a repository-level fail-fast test harness with timestamped logs, end-of-run reports, and optional ADB smoke checks.
+- [x] Revalidate `./gradlew assembleDebug` after the AGP 9.2.1 bump and confirm the app still runs.
 - [ ] Add enforceable style/static-analysis tooling such as ktlint, detekt, or Spotless.
 - [ ] Unit tests for repositories.
 - [ ] Instrumentation tests for folder browser flows.
@@ -25,6 +26,6 @@ This file is the active backlog and quality checklist. Completed release history
 
 ### Documentation
 
-- [ ] Add `GOOGLE_CLOUD_SETUP.md` if OAuth setup grows beyond the summary in `BUILD.md`.
-- [ ] Add `SETTINGS.md` only if the settings reference becomes too large for `ARCHITECTURE.md`.
-- [ ] Add `RELEASE_NOTES.md` only when preparing a packaged release.
+- [ ] Add `docs/GOOGLE_CLOUD_SETUP.md` if OAuth setup grows beyond the summary in `docs/BUILD.md`.
+- [ ] Add `docs/SETTINGS.md` only if the settings reference becomes too large for `docs/ARCHITECTURE.md`.
+- [ ] Add `docs/RELEASE_NOTES.md` only when preparing a packaged release.

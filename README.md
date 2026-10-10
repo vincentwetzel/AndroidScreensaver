@@ -46,6 +46,25 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
 6. Tap **Open Screensaver Settings**, select **Android Screensaver**, then return to the app.
 7. Adjust slideshow, video, schedule, overlay, and cache settings from the app settings menu.
 
+## Testing
+
+Run the fail-fast host and optional device suite from the repository root:
+
+```text
+python tools/run_tests.py
+```
+
+The runner executes project-structure checks, `assembleDebug`, JVM tests, and
+then ADB smoke checks when an authorized device is available. Use
+`python tools/run_tests.py --device on` when a device is required; this fails
+during preflight if ADB is unavailable or no authorized device is connected.
+Use `--device off` for a host-only run. Timestamped command logs and both text
+and JSON end-of-run reports are written under `build/test-reports/`. Each
+console line uses the compact form `[HH:MM:SS + elapsed]`, where `elapsed` is
+the cumulative suite runtime, and the complete report is printed after the
+final stage. Use `--clean-install` only when a signing mismatch requires
+uninstalling the exact debug package; this deletes that package's device data.
+
 ## Tech Stack
 
 - **Language:** Kotlin
@@ -55,7 +74,7 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
 - **Storage:** DataStore Preferences
 - **Image Loading:** Coil
 - **Video:** Media3/ExoPlayer
-- **Build:** Android Gradle Plugin 9.2.1 with Gradle 9.4.1
+- **Build:** Android Gradle Plugin 9.2.1 with Gradle 9.5.0
 - **Compile SDK:** 36
 - **Min SDK:** 26 (Android 8.0)
 - **Target SDK:** 34 (Android 14)
@@ -82,15 +101,16 @@ app/src/main/java/com/vincentwetzel/androidscreensaver/
 
 | File | Purpose |
 |------|---------|
-| [BUILD.md](BUILD.md) | Build commands, OAuth setup notes, and troubleshooting |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Architecture, design patterns, key classes, and settings reference |
-| [CODING_STANDARDS.md](CODING_STANDARDS.md) | Kotlin/Android coding standards, review checklist, and verification expectations |
-| [CHANGELOG.md](CHANGELOG.md) | Release history and completed changes |
-| [TODO.md](TODO.md) | Active backlog and quality checklist |
-| [USER_GUIDE.md](USER_GUIDE.md) | User-facing setup and usage guide |
+| [BUILD.md](docs/BUILD.md) | Build commands, OAuth setup notes, and troubleshooting |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture, design patterns, key classes, and settings reference |
+| [CODING_STANDARDS.md](docs/CODING_STANDARDS.md) | Kotlin/Android coding standards, review checklist, and verification expectations |
+| [CHANGELOG.md](docs/CHANGELOG.md) | Release history and completed changes |
+| [TODO.md](docs/TODO.md) | Active backlog and quality checklist |
+| [USER_GUIDE.md](docs/USER_GUIDE.md) | User-facing setup and usage guide |
+| [tools/README.md](tools/README.md) | Test runner usage, device modes, and report output |
 | [AGENTS.md](AGENTS.md) | Developer roles, documentation rules, and git restrictions |
 
-`PROGRESS.md` was removed because it duplicated `TODO.md` and `CHANGELOG.md`. Use `TODO.md` for current/planned work and `CHANGELOG.md` for completed change history.
+`PROGRESS.md` was removed because it duplicated `docs/TODO.md` and `docs/CHANGELOG.md`. Use `docs/TODO.md` for current/planned work and `docs/CHANGELOG.md` for completed change history.
 
 ## License
 

@@ -1,84 +1,68 @@
 package com.vincentwetzel.androidscreensaver
 
-import com.vincentwetzel.androidscreensaver.data.model.Photo
-import com.vincentwetzel.androidscreensaver.data.model.PhotoOrder
-import com.vincentwetzel.androidscreensaver.data.model.SourceType
-import com.vincentwetzel.androidscreensaver.viewmodel.GoogleDriveViewModel
-import com.vincentwetzel.androidscreensaver.viewmodel.MainViewModel
-import com.vincentwetzel.androidscreensaver.ui.main.SourceType as UISourceType
-import org.junit.Assert.*
+import com.vincentwetzel.androidscreensaver.viewmodel.SourceCardType
+import com.vincentwetzel.androidscreensaver.viewmodel.SourceSelectionState
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
 /**
- * Unit tests for ViewModels
- * Tests core logic without Android dependencies
+ * Unit tests for pure ViewModel source-selection state.
  */
 class ViewModelUnitTest {
 
-    private lateinit var mainViewModel: MainViewModel
+    private lateinit var sourceState: SourceSelectionState
 
     @Before
     fun setup() {
-        mainViewModel = MainViewModel()
+        sourceState = SourceSelectionState()
     }
 
     @Test
-    fun `MainViewModel starts with no enabled sources`() {
-        val sources = mainViewModel.enabledSources.value
-        assertTrue(sources.isNullOrEmpty())
+    fun `source state starts with no enabled sources`() {
+        assertTrue(sourceState.enabledSources.isEmpty())
     }
 
     @Test
-    fun `MainViewModel starts with not authenticated`() {
-        val isAuthenticated = mainViewModel.isGoogleDriveAuthenticated.value
-        assertFalse(isAuthenticated == true)
+    fun `source state starts with Google Drive unauthenticated`() {
+        assertFalse(sourceState.isGoogleDriveAuthenticated)
     }
 
     @Test
-    fun `enableSource adds source to enabled list`() {
-        mainViewModel.enableSource(UISourceType.GOOGLE_DRIVE)
-        val sources = mainViewModel.enabledSources.value
-        assertNotNull(sources)
-        assertTrue(sources?.contains(UISourceType.GOOGLE_DRIVE) == true)
+    fun `enableSource adds source to enabled set`() {
+        sourceState.enableSource(SourceCardType.GOOGLE_DRIVE)
+        assertTrue(sourceState.enabledSources.contains(SourceCardType.GOOGLE_DRIVE))
     }
 
     @Test
-    fun `disableSource removes source from enabled list`() {
-        mainViewModel.enableSource(UISourceType.GOOGLE_DRIVE)
-        mainViewModel.disableSource(UISourceType.GOOGLE_DRIVE)
-        val sources = mainViewModel.enabledSources.value
-        assertNotNull(sources)
-        assertFalse(sources?.contains(UISourceType.GOOGLE_DRIVE) == true)
+    fun `disableSource removes source from enabled set`() {
+        sourceState.enableSource(SourceCardType.GOOGLE_DRIVE)
+        sourceState.disableSource(SourceCardType.GOOGLE_DRIVE)
+        assertFalse(sourceState.enabledSources.contains(SourceCardType.GOOGLE_DRIVE))
     }
 
     @Test
-    fun `onGoogleDriveAuthenticated sets authentication state`() {
-        mainViewModel.onGoogleDriveAuthenticated(true)
-        assertTrue(mainViewModel.isGoogleDriveAuthenticated.value == true)
+    fun `Google Drive authentication records email and enables source`() {
+        sourceState.setGoogleDriveAuthenticated(true, "user@example.com")
+
+        assertTrue(sourceState.isGoogleDriveAuthenticated)
+        assertEquals("user@example.com", sourceState.googleDriveAccountName)
+        assertTrue(sourceState.enabledSources.contains(SourceCardType.GOOGLE_DRIVE))
     }
 
     @Test
-    fun `onGoogleDriveAuthenticated enables Google Drive source`() {
-        mainViewModel.onGoogleDriveAuthenticated(true)
-        val sources = mainViewModel.enabledSources.value
-        assertNotNull(sources)
-        assertTrue(sources?.contains(UISourceType.GOOGLE_DRIVE) == true)
+    fun `enabling source twice does not duplicate it`() {
+        sourceState.enableSource(SourceCardType.GOOGLE_DRIVE)
+        sourceState.enableSource(SourceCardType.GOOGLE_DRIVE)
+
+        assertEquals(1, sourceState.enabledSources.size)
     }
 
     @Test
-    fun `enableSource twice does not duplicate`() {
-        mainViewModel.enableSource(UISourceType.GOOGLE_DRIVE)
-        mainViewModel.enableSource(UISourceType.GOOGLE_DRIVE)
-        val sources = mainViewModel.enabledSources.value
-        assertNotNull(sources)
-        assertEquals(1, sources?.size)
-    }
-
-    @Test
-    fun `disableSource when not enabled does nothing`() {
-        mainViewModel.disableSource(UISourceType.GOOGLE_DRIVE)
-        val sources = mainViewModel.enabledSources.value
-        assertTrue(sources.isNullOrEmpty())
+    fun `disabling a source that is not enabled is safe`() {
+        sourceState.disableSource(SourceCardType.GOOGLE_DRIVE)
+        assertTrue(sourceState.enabledSources.isEmpty())
     }
 }

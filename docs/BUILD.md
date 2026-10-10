@@ -5,7 +5,7 @@
 - Android Studio Hedgehog or newer
 - JDK 17
 - Android SDK 36 (`compileSdk`), minSdk 26, targetSdk 34
-- Android Gradle Plugin 9.2.1 with Gradle 9.4.1 wrapper
+- Android Gradle Plugin 9.2.1 with Gradle 9.5.0 wrapper
 
 ## Build Commands
 
@@ -35,6 +35,42 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ./gradlew test
 ./gradlew connectedAndroidTest
 ```
+
+### Run the Test Harness
+
+The repository-level runner adds fail-fast preflight, timestamped command logs,
+and an end-of-run report around the Gradle checks:
+
+```text
+python tools/run_tests.py
+```
+
+By default, ADB checks run when an authorized device is connected and are
+skipped when one is not. Require a device for a hardware smoke run or disable
+device checks explicitly:
+
+```text
+python tools/run_tests.py --device on
+python tools/run_tests.py --device off
+```
+
+If installation fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, rerun with
+`--clean-install`. This explicitly uninstalls only the debug package before
+installing and therefore deletes that package's device data; it is never done
+automatically.
+
+The order is project preflight, Python structure tests, `assembleDebug`, JVM
+unit tests, and optional device smoke checks. A failure stops later stages. In
+`--device on` mode, missing ADB, no connected device, or an unauthorized device
+fails before the build starts. The complete end-of-run summary is printed after
+the final stage, and reports plus per-command logs are written to
+`build/test-reports/<timestamp>/summary.txt` and `summary.json`.
+Console lines use a compact clock plus cumulative suite runtime, such as
+`[14:27:38 +   1.8s]`; JSON retains full ISO timestamps.
+
+Use `--skip-build` only for fast iteration on the host-side tooling; it skips
+both the compile gate and Gradle unit tests and must not replace a normal
+verification run.
 
 ### Signing Report
 
@@ -180,11 +216,11 @@ Before building or releasing a new version:
 
 ### Documentation
 
-- [ ] `CHANGELOG.md` updated with changes.
-- [ ] `TODO.md` updated with task status.
+- [ ] `docs/CHANGELOG.md` updated with changes.
+- [ ] `docs/TODO.md` updated with task status.
 - [ ] `README.md` reflects new features/removals.
-- [ ] `ARCHITECTURE.md` updated if structure changed.
-- [ ] `CODING_STANDARDS.md` updated if engineering rules changed.
+- [ ] `docs/ARCHITECTURE.md` updated if structure changed.
+- [ ] `docs/CODING_STANDARDS.md` updated if engineering rules changed.
 - [ ] `AGENTS.md` documentation rule followed.
 
 ### Testing

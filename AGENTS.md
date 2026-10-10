@@ -51,22 +51,22 @@ Do not rely on memory or assumptions about what the app does. The markdown files
 | File | Update When... |
 |------|---------------|
 | `README.md` | Adding/removing features, changing tech stack |
-| `ARCHITECTURE.md` | Adding new layers, changing patterns, new key classes |
-| `CODING_STANDARDS.md` | Changing engineering standards, review rules, or verification expectations |
-| `CHANGELOG.md` | Every feature addition, bug fix, or breaking change |
-| `TODO.md` | Adding new tasks, completing existing tasks, changing quality status |
-| `BUILD.md` | Changing build config, setup steps, or troubleshooting steps |
-| `GOOGLE_CLOUD_SETUP.md` | Changing OAuth config or setup steps, if this file exists |
-| `SETTINGS.md` | Adding/removing settings, if this file exists |
-| `USER_GUIDE.md` | Changing user-facing flows or features |
-| `RELEASE_NOTES.md` | Preparing a release, if this file exists |
+| `docs/ARCHITECTURE.md` | Adding new layers, changing patterns, new key classes |
+| `docs/CODING_STANDARDS.md` | Changing engineering standards, review rules, or verification expectations |
+| `docs/CHANGELOG.md` | Every feature addition, bug fix, or breaking change |
+| `docs/TODO.md` | Adding new tasks, completing existing tasks, changing quality status |
+| `docs/BUILD.md` | Changing build config, setup steps, or troubleshooting steps |
+| `docs/GOOGLE_CLOUD_SETUP.md` | Changing OAuth config or setup steps, if this file exists |
+| `docs/SETTINGS.md` | Adding/removing settings, if this file exists |
+| `docs/USER_GUIDE.md` | Changing user-facing flows or features |
+| `docs/RELEASE_NOTES.md` | Preparing a release, if this file exists |
 
 ### Documentation Ownership
 
-- `CHANGELOG.md` is the release/history log.
-- `TODO.md` is the active backlog and quality checklist.
-- `README.md`, `ARCHITECTURE.md`, `CODING_STANDARDS.md`, `BUILD.md`, and `USER_GUIDE.md` describe durable product, technical, standards, build, and user-facing behavior.
-- Do not recreate `PROGRESS.md`; it was removed because it duplicated `TODO.md` and `CHANGELOG.md`.
+- `docs/CHANGELOG.md` is the release/history log.
+- `docs/TODO.md` is the active backlog and quality checklist.
+- `README.md` and the documents in `docs/` describe durable product, technical, standards, build, and user-facing behavior.
+- Do not recreate `PROGRESS.md`; it was removed because it duplicated `docs/TODO.md` and `docs/CHANGELOG.md`.
 
 ### Before Finishing a Task
 
@@ -120,11 +120,11 @@ Only then may you proceed, and you MUST follow this checklist:
 ### Checklist Before `git commit && git push`
 
 ```text
-[ ] CHANGELOG.md updated with all changes
-[ ] TODO.md updated if tasks were added/completed
+[ ] docs/CHANGELOG.md updated with all changes
+[ ] docs/TODO.md updated if tasks were added/completed
 [ ] README.md updated if features changed
-[ ] ARCHITECTURE.md updated if structure changed
-[ ] CODING_STANDARDS.md updated if engineering standards changed
+[ ] docs/ARCHITECTURE.md updated if structure changed
+[ ] docs/CODING_STANDARDS.md updated if engineering standards changed
 [ ] Any other relevant MD files updated
 [ ] Build passes (./gradlew assembleDebug)
 [ ] git diff reviewed

@@ -31,6 +31,7 @@
     
     <!-- Folder Browser -->
     <string name="browse_folders">Browse Folders</string>
+    <string name="back">Back</string>
     <string name="search_folders">Search folders…</string>
     <string name="select_all">Select All</string>
     <string name="deselect_all">Deselect All</string>

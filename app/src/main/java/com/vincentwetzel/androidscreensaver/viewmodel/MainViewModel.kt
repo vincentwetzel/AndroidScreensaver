@@ -27,6 +27,8 @@ class MainViewModel @Inject constructor(
     private val dropboxRepository: DropboxRepository
 ) : ViewModel() {
 
+    private val sourceSelectionState = SourceSelectionState()
+
     private val _enabledSources = MutableLiveData<Set<SourceCardType>>()
     val enabledSources: LiveData<Set<SourceCardType>> = _enabledSources
 
@@ -44,9 +46,23 @@ class MainViewModel @Inject constructor(
 
     init {
         // Initialize with empty sources
-        _enabledSources.value = emptySet()
+        publishSourceState()
         checkGoogleDriveAuthState()
         checkDropboxAuthState()
+    }
+
+    private fun publishSourceState() {
+        _enabledSources.value = sourceSelectionState.enabledSources
+    }
+
+    private fun publishGoogleDriveState() {
+        _isGoogleDriveAuthenticated.value = sourceSelectionState.isGoogleDriveAuthenticated
+        _googleDriveAccountName.value = sourceSelectionState.googleDriveAccountName
+    }
+
+    private fun publishDropboxState() {
+        _isDropboxAuthenticated.value = sourceSelectionState.isDropboxAuthenticated
+        _dropboxAccountName.value = sourceSelectionState.dropboxAccountName
     }
 
     /**
@@ -57,12 +73,16 @@ class MainViewModel @Inject constructor(
         if (accountIds.isNotEmpty()) {
             // Use the first account's email for display
             val accountId = accountIds.first()
-            _googleDriveAccountName.value = driveRepository.getAccountEmail(accountId)
-            _isGoogleDriveAuthenticated.value = true
+            sourceSelectionState.setGoogleDriveAuthenticated(
+                true,
+                driveRepository.getAccountEmail(accountId),
+                updateEnabledSource = false
+            )
         } else {
-            _googleDriveAccountName.value = null
-            _isGoogleDriveAuthenticated.value = false
+            sourceSelectionState.setGoogleDriveAuthenticated(false)
         }
+        publishSourceState()
+        publishGoogleDriveState()
     }
 
     /**
@@ -72,12 +92,16 @@ class MainViewModel @Inject constructor(
         val accountIds = dropboxRepository.getAuthenticatedAccountIds()
         if (accountIds.isNotEmpty()) {
             val accountId = accountIds.first()
-            _dropboxAccountName.value = dropboxRepository.getAccountEmail(accountId)
-            _isDropboxAuthenticated.value = true
+            sourceSelectionState.setDropboxAuthenticated(
+                true,
+                dropboxRepository.getAccountEmail(accountId),
+                updateEnabledSource = false
+            )
         } else {
-            _dropboxAccountName.value = null
-            _isDropboxAuthenticated.value = false
+            sourceSelectionState.setDropboxAuthenticated(false)
         }
+        publishSourceState()
+        publishDropboxState()
     }
 
     /**
@@ -88,13 +112,16 @@ class MainViewModel @Inject constructor(
             val accountIds = driveRepository.getAuthenticatedAccountIds()
             if (accountIds.isNotEmpty()) {
                 val accountId = accountIds.first()
-                _googleDriveAccountName.value = driveRepository.getAccountEmail(accountId)
-                _isGoogleDriveAuthenticated.value = true
+                sourceSelectionState.setGoogleDriveAuthenticated(
+                    true,
+                    driveRepository.getAccountEmail(accountId),
+                    updateEnabledSource = false
+                )
             } else {
-                _googleDriveAccountName.value = null
-                _isGoogleDriveAuthenticated.value = false
-                disableSource(SourceCardType.GOOGLE_DRIVE)
+                sourceSelectionState.setGoogleDriveAuthenticated(false)
             }
+            publishSourceState()
+            publishGoogleDriveState()
         }
     }
 
@@ -106,47 +133,38 @@ class MainViewModel @Inject constructor(
             val accountIds = dropboxRepository.getAuthenticatedAccountIds()
             if (accountIds.isNotEmpty()) {
                 val accountId = accountIds.first()
-                _dropboxAccountName.value = dropboxRepository.getAccountEmail(accountId)
-                _isDropboxAuthenticated.value = true
+                sourceSelectionState.setDropboxAuthenticated(
+                    true,
+                    dropboxRepository.getAccountEmail(accountId),
+                    updateEnabledSource = false
+                )
             } else {
-                _dropboxAccountName.value = null
-                _isDropboxAuthenticated.value = false
-                disableSource(SourceCardType.DROPBOX)
+                sourceSelectionState.setDropboxAuthenticated(false)
             }
+            publishSourceState()
+            publishDropboxState()
         }
     }
 
     fun enableSource(source: SourceCardType) {
-        val current = _enabledSources.value?.toMutableSet() ?: mutableSetOf()
-        current.add(source)
-        _enabledSources.value = current
+        sourceSelectionState.enableSource(source)
+        publishSourceState()
     }
 
     fun disableSource(source: SourceCardType) {
-        val current = _enabledSources.value?.toMutableSet() ?: mutableSetOf()
-        current.remove(source)
-        _enabledSources.value = current
+        sourceSelectionState.disableSource(source)
+        publishSourceState()
     }
 
     fun onGoogleDriveAuthenticated(isAuthenticated: Boolean, accountName: String? = null) {
-        _isGoogleDriveAuthenticated.value = isAuthenticated
-        if (isAuthenticated) {
-            enableSource(SourceCardType.GOOGLE_DRIVE)
-            _googleDriveAccountName.value = accountName
-        } else {
-            disableSource(SourceCardType.GOOGLE_DRIVE)
-            _googleDriveAccountName.value = null
-        }
+        sourceSelectionState.setGoogleDriveAuthenticated(isAuthenticated, accountName)
+        publishSourceState()
+        publishGoogleDriveState()
     }
 
     fun onDropboxAuthenticated(isAuthenticated: Boolean, accountName: String? = null) {
-        _isDropboxAuthenticated.value = isAuthenticated
-        if (isAuthenticated) {
-            enableSource(SourceCardType.DROPBOX)
-            _dropboxAccountName.value = accountName
-        } else {
-            disableSource(SourceCardType.DROPBOX)
-            _dropboxAccountName.value = null
-        }
+        sourceSelectionState.setDropboxAuthenticated(isAuthenticated, accountName)
+        publishSourceState()
+        publishDropboxState()
     }
 }

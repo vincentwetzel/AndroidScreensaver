@@ -16,7 +16,7 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 
 ### ViewModel Layer (`viewmodel/`)
 
-- **MainViewModel** - Manages source-card enablement and authenticated account labels for Gallery, Google Drive, Dropbox, and OneDrive.
+- **MainViewModel** - Manages source-card enablement and authenticated account labels for Gallery, Google Drive, Dropbox, and OneDrive. It delegates pure source-card state transitions to `SourceSelectionState` so they can be verified without constructing Android or cloud-repository dependencies.
 - **CloudFolderViewModel** - Shared cloud folder browsing state for Google Drive, Dropbox, OneDrive, and future cloud sources, routed by explicit source type and account ID.
 - **GalleryViewModel** - Gallery folder browsing state.
 - ViewModels expose UI state as flows and should not hold long-lived Android `Context` references.
@@ -32,7 +32,7 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 - **OneDrivePhotoRepository** - OneDrive Graph API media access with account-scoped routing, recursive folder traversal, folder search, thumbnail metadata, and local cache downloads.
 - **GoogleDriveRepository** - Delegates account selection and Drive service creation to `GoogleAccountManager`, and verifies read-only Drive access before sign-in is finalized.
 - **DropboxRepository** - Delegates Dropbox auth, account metadata, and API clients to `DropboxAccountManager`.
-- **OneDriveAuthManager** - Manages OneDrive auth with MSAL on phones/tablets, device code flow on Android TV, and encrypted per-account token storage initialized lazily for keystore safety.
+- **OneDriveAuthManager** - Manages OneDrive auth with MSAL on phones/tablets, device code flow on Android TV, and encrypted per-account token storage initialized lazily for keystore safety. It asynchronously maintains an in-memory account-ID snapshot so synchronous repository authentication checks do not perform keystore I/O on the caller thread.
 - **SettingsManager** - DataStore-backed preferences for slideshow config, source state, selected folders, and account configs.
 
 ### Service Layer (`dream/`)
@@ -45,6 +45,13 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 - **RepositoryModule** - Hilt module providing repositories and `SlideshowManager`.
 - Photo repositories are concrete injected singletons. The repository map is assembled explicitly instead of using Hilt map multibindings.
 - OneDrive auth is split between `OneDriveAuthManager` for token handling and `OneDriveAuthActivity` for the UI launch surface.
+
+## Test Tooling (`tools/`)
+
+- `tools/run_tests.py` is the fail-fast host entry point. It runs project-structure checks, the `assembleDebug` compile gate, JVM unit tests, and optional ADB smoke checks in that order.
+- The runner uses `--device auto` by default: an authorized device enables device checks, while no device is recorded as a skip. `--device on` makes ADB availability and authorization a preflight requirement; `--device off` runs host checks only.
+- Each command receives a timestamped log under `build/test-reports/<run timestamp>/`. Console and command-log lines use local clock time plus cumulative suite runtime; the runner always writes `summary.txt` and `summary.json`, including full start/end timestamps, duration, result counts, failure details, and the fail-fast abort reason.
+- Device smoke checks install the debug APK by default and verify the package, launcher activity, DreamService resolution, and launcher startup. `--clean-install` explicitly removes only the debug package before installation when a signing mismatch requires it. OAuth, permissions, folder browsing, and screensaver lifecycle behavior still require instrumentation or manual device coverage.
 
 ## Data Flow
 
@@ -171,7 +178,7 @@ All settings are persisted through DataStore Preferences.
 
 ## Coding Standards
 
-Engineering standards live in `CODING_STANDARDS.md`. Keep this file focused on architecture, data flow, key classes, settings behavior, and system design decisions.
+Engineering standards live in [`CODING_STANDARDS.md`](CODING_STANDARDS.md). Keep this file focused on architecture, data flow, key classes, settings behavior, and system design decisions.
 
 ## Accessing Settings
 

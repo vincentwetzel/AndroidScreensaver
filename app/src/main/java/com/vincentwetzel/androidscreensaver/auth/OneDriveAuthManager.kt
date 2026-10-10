@@ -15,7 +15,10 @@ import com.microsoft.identity.client.exception.MsalException
 import com.vincentwetzel.androidscreensaver.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.Call
@@ -62,6 +65,21 @@ class OneDriveAuthManager @Inject constructor(
             } catch (retryException: Exception) {
                 throw IllegalStateException("Failed to initialize EncryptedSharedPreferences securely", retryException)
             }
+        }
+    }
+
+    // Repository authentication checks are synchronous, so keep the account IDs
+    // in memory after loading them from encrypted preferences off the caller thread.
+    @Volatile
+    private var cachedAccountIds: Set<String> = emptySet()
+
+    private val accountCacheLock = Any()
+
+    private val authScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        authScope.launch {
+            getAllAccountIds()
         }
     }
 
@@ -257,10 +275,16 @@ class OneDriveAuthManager @Inject constructor(
         val encodedId = URLEncoder.encode(accountId, StandardCharsets.UTF_8.name())
         // Tokens are never logged per the security guidelines
         try {
-            securePrefs.edit().apply {
+            val saved = securePrefs.edit().apply {
                 putString(KEY_ACCESS_TOKEN + encodedId, accessToken)
                 refreshToken?.let { putString(KEY_REFRESH_TOKEN + encodedId, it) }
             }.commit()
+            if (saved) {
+                synchronized(accountCacheLock) {
+                    cachedAccountIds = cachedAccountIds + accountId
+                }
+            }
+            saved
         } catch (e: Exception) {
             false
         }
@@ -278,10 +302,16 @@ class OneDriveAuthManager @Inject constructor(
     suspend fun clearTokens(accountId: String): Boolean = withContext(Dispatchers.IO) {
         val encodedId = URLEncoder.encode(accountId, StandardCharsets.UTF_8.name())
         try {
-            securePrefs.edit().apply {
+            val cleared = securePrefs.edit().apply {
                 remove(KEY_ACCESS_TOKEN + encodedId)
                 remove(KEY_REFRESH_TOKEN + encodedId)
             }.commit()
+            if (cleared) {
+                synchronized(accountCacheLock) {
+                    cachedAccountIds = cachedAccountIds - accountId
+                }
+            }
+            cleared
         } catch (e: Exception) {
             false
         }
@@ -289,14 +319,24 @@ class OneDriveAuthManager @Inject constructor(
 
     suspend fun getAllAccountIds(): List<String> = withContext(Dispatchers.IO) {
         try {
-            securePrefs.all.keys
+            val accountIds = securePrefs.all.keys
                 .filter { it.startsWith(KEY_ACCESS_TOKEN) }
                 .map { it.removePrefix(KEY_ACCESS_TOKEN) }
                 .map { URLDecoder.decode(it, StandardCharsets.UTF_8.name()) }
+            synchronized(accountCacheLock) {
+                cachedAccountIds = accountIds.toSet()
+            }
+            accountIds
         } catch (e: Exception) {
             emptyList()
         }
     }
+
+    /**
+     * Returns the last account-ID snapshot loaded from encrypted preferences.
+     * This is intentionally non-suspending for repository authentication checks.
+     */
+    fun getCachedAccountIds(): List<String> = cachedAccountIds.toList()
 }
 
 /**

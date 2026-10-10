@@ -82,6 +82,10 @@ obj/
 # Kotlin
 *.kotlin_metadata
 
+# Python test tooling
+__pycache__/
+*.py[cod]
+
 # Misc
 *.orig
 *.bak
