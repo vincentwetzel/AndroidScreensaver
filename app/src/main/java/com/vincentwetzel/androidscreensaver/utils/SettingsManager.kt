@@ -518,88 +518,13 @@ object SettingsManager {
      * Multiple accounts separated by ;;
      */
     private fun parseAccountsJson(json: String): List<AccountConfig> {
-        if (json.isEmpty()) return emptyList()
-        
-        return json.split(";;").filter { it.isNotEmpty() }.mapNotNull { accountStr ->
-            try {
-                val parts = accountStr.split("|")
-                if (parts.size < 4) return@mapNotNull null
-                
-                val accountId = java.net.URLDecoder.decode(parts[0], "UTF-8")
-                val sourceType = try {
-                    com.vincentwetzel.androidscreensaver.data.model.SourceType.valueOf(parts[1])
-                } catch (e: IllegalArgumentException) {
-                    return@mapNotNull null
-                }
-                val email = java.net.URLDecoder.decode(parts[2], "UTF-8")
-                val enabled = parts[3].toBoolean()
-                
-                val selectedFolderIds = if (parts.size > 4 && parts[4].isNotEmpty()) {
-                    parts[4].split(",").mapNotNull { folderStr ->
-                        val folderParts = folderStr.split("^")
-                        if (folderParts.size == 3) {
-                            SelectedFolder(
-                                folderId = java.net.URLDecoder.decode(folderParts[0], "UTF-8"),
-                                folderName = java.net.URLDecoder.decode(folderParts[1], "UTF-8"),
-                                path = java.net.URLDecoder.decode(folderParts[2], "UTF-8"),
-                                isSelected = true
-                            )
-                        } else if (folderParts.isNotEmpty()) {
-                            val decodedId = java.net.URLDecoder.decode(folderParts[0], "UTF-8")
-                            SelectedFolder(folderId = decodedId, folderName = decodedId, path = decodedId, isSelected = true)
-                        } else null
-                    }
-                } else emptyList()
-                
-                val deselectedIds = if (parts.size > 5 && parts[5].isNotEmpty()) {
-                    parts[5].split(",").map { java.net.URLDecoder.decode(it, "UTF-8") }.toSet()
-                } else emptySet()
-                
-                // Local sources do not have auth flows; guarantee they are always authenticated
-                val isAuth = if (sourceType == com.vincentwetzel.androidscreensaver.data.model.SourceType.GALLERY || 
-                                 sourceType == com.vincentwetzel.androidscreensaver.data.model.SourceType.LOCAL_NETWORK) {
-                    true
-                } else if (parts.size > 6) parts[6].toBoolean() else false
-
-                val authTime = if (parts.size > 7 && parts[7].isNotEmpty()) parts[7].toLongOrNull() else null
-                val syncTime = if (parts.size > 8 && parts[8].isNotEmpty()) parts[8].toLongOrNull() else null
-                val photoCount = if (parts.size > 9) parts[9].toIntOrNull() ?: 0 else 0
-                
-                AccountConfig(
-                    accountId = accountId,
-                    sourceType = sourceType,
-                    accountEmail = email,
-                    enabled = enabled,
-                    selectedFolders = selectedFolderIds,
-                    deselectedFolders = deselectedIds,
-                    isAuthenticated = isAuth,
-                    lastAuthTime = authTime,
-                    lastSyncTime = syncTime,
-                    photoCount = photoCount
-                )
-            } catch (e: Exception) {
-                android.util.Log.e("SettingsManager", "Failed to parse individual account JSON")
-                null
-            }
-        }
+        return AccountConfigCodec.decode(json)
     }
 
     /**
      * Serialize accounts to JSON string
      */
     private fun serializeAccountsJson(accounts: List<AccountConfig>): String {
-        return accounts.joinToString(";;") { account ->
-            val folderIds = account.selectedFolders.joinToString(",") { 
-                val eId = java.net.URLEncoder.encode(it.folderId, "UTF-8")
-                val eName = java.net.URLEncoder.encode(it.folderName, "UTF-8")
-                val ePath = java.net.URLEncoder.encode(it.path, "UTF-8")
-                "$eId^$eName^$ePath"
-            }
-            val deselectedIds = account.deselectedFolders.joinToString(",") { java.net.URLEncoder.encode(it, "UTF-8") }
-            val email = java.net.URLEncoder.encode(account.accountEmail, "UTF-8")
-            val encodedAccountId = java.net.URLEncoder.encode(account.accountId, "UTF-8")
-            
-            "$encodedAccountId|${account.sourceType.name}|$email|${account.enabled}|$folderIds|$deselectedIds|${account.isAuthenticated}|${account.lastAuthTime ?: ""}|${account.lastSyncTime ?: ""}|${account.photoCount}"
-        }
+        return AccountConfigCodec.encode(accounts)
     }
 }

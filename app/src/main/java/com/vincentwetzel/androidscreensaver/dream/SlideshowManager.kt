@@ -47,10 +47,6 @@ class SlideshowManager @Inject constructor(
     // Preloaded photo cache
     private val preloadCache = ConcurrentHashMap<String, Boolean>()
 
-    private class ReverseString(val str: String) : Comparable<ReverseString> {
-        override fun compareTo(other: ReverseString) = other.str.compareTo(this.str)
-    }
-
     /**
      * Load configuration from settings
      */
@@ -204,41 +200,21 @@ class SlideshowManager @Inject constructor(
      * Check if a photo represents an image file
      */
     private fun isImage(photo: Photo): Boolean {
-        val nameToCheck = photo.title ?: photo.uri
-        val hasImageExtension = IMAGE_EXTENSIONS.any { nameToCheck.endsWith(it, ignoreCase = true) }
-        val isImageContentUri = photo.uri.contains("/images/media/", ignoreCase = true) || photo.uri.contains("media_type_image", ignoreCase = true)
-        return hasImageExtension || isImageContentUri
+        return PhotoMediaClassifier.isImage(photo)
     }
 
     /**
      * Check if a photo represents a video file
      */
     private fun isVideo(photo: Photo): Boolean {
-        val nameToCheck = photo.title ?: photo.uri
-        val hasVideoExtension = VIDEO_EXTENSIONS.any { nameToCheck.endsWith(it, ignoreCase = true) }
-        val isVideoContentUri = photo.uri.contains("/video/media/", ignoreCase = true) || photo.uri.contains("media_type_video", ignoreCase = true)
-        return hasVideoExtension || isVideoContentUri
+        return PhotoMediaClassifier.isVideo(photo)
     }
 
     /**
      * Get sort key for a photo based on configured order
      */
     fun getSortKey(photo: Photo): Comparable<*> {
-        return when (config.photoOrder) {
-            com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.DATE_NEWEST_FIRST ->
-                -(photo.dateTaken ?: 0L)
-            com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.DATE_OLDEST_FIRST ->
-                (photo.dateTaken ?: 0L)
-            com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.NAME_A_Z ->
-                photo.title ?: ""
-            com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.NAME_Z_A ->
-                ReverseString(photo.title ?: "")
-            com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.SIZE_LARGEST_FIRST ->
-                -(photo.fileSize ?: 0L)
-            com.vincentwetzel.androidscreensaver.data.model.PhotoOrder.SIZE_SMALLEST_FIRST ->
-                (photo.fileSize ?: 0L)
-            else -> 0
-        }
+        return PhotoMediaClassifier.sortKey(photo, config.photoOrder)
     }
 
     /**
@@ -313,7 +289,5 @@ class SlideshowManager @Inject constructor(
 
     companion object {
         private const val TAG = "SlideshowManager"
-        private val IMAGE_EXTENSIONS = listOf(".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif", ".svg", ".tiff", ".tif")
-        private val VIDEO_EXTENSIONS = listOf(".mp4", ".avi", ".mov", ".mkv", ".webm", ".wmv", ".flv", ".m4v")
     }
 }

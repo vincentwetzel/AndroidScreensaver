@@ -81,6 +81,7 @@ The words **must**, **should**, and **may** indicate required, recommended, and 
 - Run `./gradlew assembleDebug` for substantial changes and every build/configuration change.
 - Run `python tools/run_tests.py` for the repository-level fail-fast suite. Use `--device on` when ADB coverage is required and `--device off` for a host-only run; do not treat `--skip-build` as full verification.
 - Add or update unit tests for pure Kotlin logic, settings serialization, account routing, media filtering, and shared repository behavior.
+- Use `--suspects` when tracking recurring runner failures across runs. It is opt-in, stores runner check names in JSON, removes checks after they pass, and leaves skipped checks unchanged; it does not replace reviewing the full report.
 - Use instrumentation or manual device tests for permissions, folder browsing, OAuth, MediaStore, DreamService lifecycle, media playback, and Android TV UI.
 - Test both success and failure paths for authentication, network calls, empty results, permission denial, cancellation, and lifecycle teardown.
 - Record verification that could not be run and why. Do not claim a build, test, or device check passed without running it.

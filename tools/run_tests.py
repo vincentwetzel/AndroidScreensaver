@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TOOLS_DIR = ROOT / "tools"
 APK_PATH = ROOT / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
 PACKAGE_NAME = "com.vincentwetzel.androidscreensaver.debug"
+DEFAULT_SUSPECTS_PATH = ROOT / "build" / "test-reports" / "suspects.json"
 
 
 @dataclass
@@ -38,6 +39,44 @@ class TestResult:
     duration_seconds: float
     details: str = ""
     log_file: str = ""
+
+
+class SuspectsCache:
+    """Persist failed runner checks so later passing checks can clear them."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.entries: set[str] = set()
+        self.load_warning = ""
+        if not path.exists():
+            return
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                payload = payload.get("suspects", [])
+            if not isinstance(payload, list) or not all(isinstance(item, str) for item in payload):
+                raise ValueError("expected a JSON list of test names")
+            self.entries = set(payload)
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            self.load_warning = f"Could not read suspects cache {path}: {error}; starting empty"
+
+    def update(self, name: str, status: str) -> bool:
+        """Update the cache and return whether the persisted set changed."""
+        before = set(self.entries)
+        if status == "FAIL":
+            self.entries.add(name)
+        elif status == "PASS":
+            self.entries.discard(name)
+        if self.entries == before:
+            return False
+        self.save()
+        return True
+
+    def save(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = self.path.with_name(f".{self.path.name}.tmp")
+        temporary_path.write_text(json.dumps(sorted(self.entries), indent=2) + "\n", encoding="utf-8")
+        temporary_path.replace(self.path)
 
 
 class TestRunner:
@@ -53,6 +92,10 @@ class TestRunner:
         self.aborted = False
         self.abort_reason = ""
         self.adb_serial: str | None = None
+        suspects_path = getattr(args, "suspects", None)
+        self.suspects_cache = SuspectsCache(Path(suspects_path).resolve()) if suspects_path else None
+        if self.suspects_cache and self.suspects_cache.load_warning:
+            self.log(f"[WARN] {self.suspects_cache.load_warning}")
 
     def timestamp(self) -> str:
         return datetime.now().strftime("%H:%M:%S")
@@ -80,6 +123,13 @@ class TestRunner:
             log_file=str(log_file) if log_file else "",
         )
         self.results.append(result)
+        if self.suspects_cache:
+            try:
+                changed = self.suspects_cache.update(name, status)
+                if changed:
+                    self.log(f"[SUSPECTS] {status.lower()} {name} -> {self.suspects_cache.path}")
+            except OSError as error:
+                self.log(f"[WARN] Could not update suspects cache {self.suspects_cache.path}: {error}")
         detail_suffix = f" - {result.details}" if result.details else ""
         self.log(f"[{status}] {name} ({result.duration_seconds:.3f}s){detail_suffix}")
         return result
@@ -368,6 +418,9 @@ class TestRunner:
             "counts": counts,
             "results": [asdict(result) for result in self.results],
         }
+        if self.suspects_cache:
+            report["suspects_cache"] = str(self.suspects_cache.path)
+            report["suspects"] = sorted(self.suspects_cache.entries)
         json_path = self.report_dir / "summary.json"
         json_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         text_path = self.report_dir / "summary.txt"
@@ -387,6 +440,10 @@ class TestRunner:
             lines.append("Failed tests: " + ", ".join(failed))
         if self.abort_reason:
             lines.append("Abort reason: " + self.abort_reason)
+        if self.suspects_cache:
+            suspects = ", ".join(sorted(self.suspects_cache.entries)) or "none"
+            lines.append(f"Suspects cache: {self.suspects_cache.path}")
+            lines.append(f"Suspects     : {suspects}")
         lines.extend(("", "Results:"))
         for result in self.results:
             detail = f" - {result.details}" if result.details else ""
@@ -467,6 +524,13 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         help="timeout for each Gradle, Python, or ADB command (default: 1200)",
     )
     parser.add_argument("--report-dir", type=Path, help="write reports to this directory instead of build/test-reports/<timestamp>")
+    parser.add_argument(
+        "--suspects",
+        nargs="?",
+        const=DEFAULT_SUSPECTS_PATH,
+        type=Path,
+        help="track failed/passing runner checks in this JSON cache (default: build/test-reports/suspects.json)",
+    )
     args = parser.parse_args(argv)
     if args.skip_install and args.clean_install:
         parser.error("--skip-install and --clean-install cannot be used together")

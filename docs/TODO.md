@@ -17,9 +17,12 @@ This file is the active backlog and quality checklist. Completed release history
 ### Quality
 
 - [x] Add a repository-level fail-fast test harness with timestamped logs, end-of-run reports, and optional ADB smoke checks.
+- [x] Add opt-in suspects-cache tracking to the test runner so failed checks persist until they pass.
 - [x] Revalidate `./gradlew assembleDebug` after the AGP 9.2.1 bump and confirm the app still runs.
+- [x] Add JVM coverage for model/account helpers, source authentication state, shared repository routing/cache behavior, cloud folder navigation, and slideshow media rules.
+- [x] Add JVM coverage for delimiter-safe account settings serialization and shared account-manager state transitions.
 - [ ] Add enforceable style/static-analysis tooling such as ktlint, detekt, or Spotless.
-- [ ] Unit tests for repositories.
+- [ ] Add provider-specific repository tests backed by fake API/MediaStore clients.
 - [ ] Instrumentation tests for folder browser flows.
 - [ ] Lint checks passing.
 - [ ] Memory leak detection with LeakCanary or equivalent tooling.

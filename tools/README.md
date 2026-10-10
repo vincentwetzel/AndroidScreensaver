@@ -28,6 +28,20 @@ python tools/run_tests.py --device on --serial emulator-5554
 python tools/run_tests.py --device on --clean-install
 ```
 
+Track runner checks that fail across runs with the suspects cache:
+
+```text
+python tools/run_tests.py --device off --suspects
+python tools/run_tests.py --device off --suspects build/test-reports/my-suspects.json
+```
+
+`--suspects` without a path uses `build/test-reports/suspects.json`. A failed
+runner check is added to the JSON cache, a passing check is removed, and a
+skipped check is left unchanged. The cache keys are the runner check names
+shown in the report, such as `python_structure_tests`, `assemble_debug`, and
+`gradle_unit_tests`. Suspects tracking is opt-in and does not create or modify
+a cache when the flag is absent.
+
 `--device on` fails during preflight when ADB is missing, no device is
 connected, or the selected device is unauthorized. A device run builds and
 installs the debug APK, then verifies the installed package, launcher activity,

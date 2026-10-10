@@ -65,4 +65,37 @@ class ViewModelUnitTest {
         sourceState.disableSource(SourceCardType.GOOGLE_DRIVE)
         assertTrue(sourceState.enabledSources.isEmpty())
     }
+
+    @Test
+    fun `signing out clears account email and disables the source`() {
+        sourceState.setGoogleDriveAuthenticated(true, "user@example.com")
+
+        sourceState.setGoogleDriveAuthenticated(false, "stale@example.com")
+
+        assertFalse(sourceState.isGoogleDriveAuthenticated)
+        assertEquals(null, sourceState.googleDriveAccountName)
+        assertFalse(sourceState.enabledSources.contains(SourceCardType.GOOGLE_DRIVE))
+    }
+
+    @Test
+    fun `authentication can update status without changing existing source enablement`() {
+        sourceState.enableSource(SourceCardType.GOOGLE_DRIVE)
+
+        sourceState.setGoogleDriveAuthenticated(true, "user@example.com", updateEnabledSource = false)
+        sourceState.setDropboxAuthenticated(true, "dropbox@example.com", updateEnabledSource = false)
+
+        assertTrue(sourceState.enabledSources.contains(SourceCardType.GOOGLE_DRIVE))
+        assertFalse(sourceState.enabledSources.contains(SourceCardType.DROPBOX))
+        assertEquals("dropbox@example.com", sourceState.dropboxAccountName)
+    }
+
+    @Test
+    fun `signed out Dropbox cannot retain a stale account name`() {
+        sourceState.setDropboxAuthenticated(true, "dropbox@example.com")
+
+        sourceState.setDropboxAuthenticated(false)
+
+        assertFalse(sourceState.isDropboxAuthenticated)
+        assertEquals(null, sourceState.dropboxAccountName)
+    }
 }

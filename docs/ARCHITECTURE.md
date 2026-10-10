@@ -34,11 +34,13 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 - **DropboxRepository** - Delegates Dropbox auth, account metadata, and API clients to `DropboxAccountManager`.
 - **OneDriveAuthManager** - Manages OneDrive auth with MSAL on phones/tablets, device code flow on Android TV, and encrypted per-account token storage initialized lazily for keystore safety. It asynchronously maintains an in-memory account-ID snapshot so synchronous repository authentication checks do not perform keystore I/O on the caller thread.
 - **SettingsManager** - DataStore-backed preferences for slideshow config, source state, selected folders, and account configs.
+- **AccountConfigCodec** - Pure delimiter-safe encoding and decoding for the per-account settings value used by `SettingsManager`.
 
 ### Service Layer (`dream/`)
 
 - **PhotoScreensaverService** - Android DreamService that hosts the slideshow.
 - **SlideshowManager** - Loads media from enabled sources, applies settings, filters content, deduplicates entries, sorts/shuffles media, and routes cacheable cloud downloads through the correct repository.
+- **PhotoMediaClassifier** - Pure media-extension/content-URI classification and configured photo sort-key rules used by `SlideshowManager`.
 
 ### Dependency Injection (`di/`)
 
@@ -49,6 +51,8 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 ## Test Tooling (`tools/`)
 
 - `tools/run_tests.py` is the fail-fast host entry point. It runs project-structure checks, the `assembleDebug` compile gate, JVM unit tests, and optional ADB smoke checks in that order.
+- JVM tests cover model/account helpers, source authentication state, shared repository routing and cache invalidation, cloud folder navigation/error handling, settings account serialization, base account-manager transitions, and media classification/sorting. Separate Python tests cover host-runner arguments, reports, device parsing, and suspects-cache behavior. Coroutine ViewModel tests use `kotlinx-coroutines-test` with a controlled main dispatcher.
+- The optional `--suspects` runner mode persists failed runner check names in a JSON cache, removes names when those checks pass, and leaves skipped checks unchanged. The cache is updated atomically and is not touched unless the flag is supplied.
 - The runner uses `--device auto` by default: an authorized device enables device checks, while no device is recorded as a skip. `--device on` makes ADB availability and authorization a preflight requirement; `--device off` runs host checks only.
 - Each command receives a timestamped log under `build/test-reports/<run timestamp>/`. Console and command-log lines use local clock time plus cumulative suite runtime; the runner always writes `summary.txt` and `summary.json`, including full start/end timestamps, duration, result counts, failure details, and the fail-fast abort reason.
 - Device smoke checks install the debug APK by default and verify the package, launcher activity, DreamService resolution, and launcher startup. `--clean-install` explicitly removes only the debug package before installation when a signing mismatch requires it. OAuth, permissions, folder browsing, and screensaver lifecycle behavior still require instrumentation or manual device coverage.
@@ -88,11 +92,13 @@ Preview or DreamService starts
 | `DropboxAccountManager` | Per-account Dropbox PKCE credentials, emails, and clients |
 | `CloudFolderViewModel` | Shared folder browsing, search, back stack, and recursive subfolder lookup for account-scoped cloud sources |
 | `SlideshowManager` | Combines sources and applies slideshow config |
+| `PhotoMediaClassifier` | Pure media classification and slideshow sort-key rules |
 | `SlideshowView` | Displays photos/videos, transitions, overlays, and playback |
 | `NoSourcesView` | Shows setup guidance when no source is configured |
 | `ScreensaverPreviewActivity` | Activity preview of screensaver behavior |
 | `PhotoScreensaverService` | DreamService fullscreen slideshow host |
 | `SettingsManager` | DataStore persistence for app settings |
+| `AccountConfigCodec` | Pure delimiter-safe account settings serialization |
 
 ## Threading
 

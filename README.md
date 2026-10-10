@@ -64,6 +64,18 @@ console line uses the compact form `[HH:MM:SS + elapsed]`, where `elapsed` is
 the cumulative suite runtime, and the complete report is printed after the
 final stage. Use `--clean-install` only when a signing mismatch requires
 uninstalling the exact debug package; this deletes that package's device data.
+Use `--suspects` to maintain the default failed-check cache at
+`build/test-reports/suspects.json`, or provide a JSON path after the flag. A
+failed check is added, a passing check is removed, and skipped checks remain
+unchanged.
+
+The JVM suite covers model/account aggregation, source authentication state,
+folder-navigation ViewModel behavior, shared repository account routing and
+cache invalidation, settings account serialization, base account-manager state,
+media classification, and slideshow sort keys. Separate host-side Python tests
+cover runner argument parsing, report generation, device parsing, and suspects
+cache updates. Provider OAuth, MediaStore permissions, DreamService lifecycle,
+and TV UI behavior still require instrumentation or device verification.
 
 ## Tech Stack
 

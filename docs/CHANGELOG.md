@@ -39,6 +39,9 @@
 - **Injected Dropbox app key from local.properties** - `DROPBOX_APP_KEY` is now read from `local.properties`, sanitized, and exposed through `BuildConfig.DROPBOX_APP_KEY` for the Dropbox PKCE OAuth flow.
 
 ### Added
+- **Expanded settings and account-manager tests** - Added deterministic coverage for delimiter-safe account persistence, malformed account records, local-source authentication defaults, and shared account sign-in/sign-out state transitions through the new pure `AccountConfigCodec` seam.
+- **Suspects cache for the test runner** - Added an opt-in `--suspects [PATH]` mode that records failed runner checks in a JSON cache, removes checks after they pass, preserves skipped checks, and includes the active cache in end-of-run reports.
+- **Expanded JVM and host-runner test coverage** - Added deterministic JVM tests for account/model helpers, authentication state transitions, shared repository account routing and cache invalidation, cloud folder navigation and failure handling, and slideshow media classification/sorting. Added Python tests for host test-runner argument/report behavior, `kotlinx-coroutines-test` for controlled ViewModel tests, and the `PhotoMediaClassifier` seam for pure slideshow rules.
 - **Fail-fast test harness** - Added `tools/run_tests.py` and host-side project-structure tests. The runner timestamps command output, stops after preflight/compile/unit-test failures, supports explicit ADB-required or host-only modes, optionally smoke-tests the installed launcher and DreamService, and writes text/JSON end-of-run reports.
 - **Explicit clean-install mode** - Added `--clean-install` to the test harness for device installations blocked by a signing mismatch. It removes only the exact debug package before installation and is never performed automatically.
 - **Console end-of-run report** - The test harness now prints the complete summary after the final stage as well as saving the text and JSON report files.

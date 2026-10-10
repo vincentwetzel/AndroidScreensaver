@@ -36,6 +36,15 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ./gradlew connectedAndroidTest
 ```
 
+JVM tests use JUnit plus `kotlinx-coroutines-test` for deterministic ViewModel
+coverage. The current suite exercises models, source authentication state,
+folder navigation and error handling, shared repository routing/cache behavior,
+settings account serialization, account-manager state transitions, media
+classification, and ordering. Separate Python tests cover host test-runner
+argument parsing, report behavior, device parsing, and suspects-cache updates.
+Provider OAuth, MediaStore permissions, DreamService lifecycle, and Android TV
+UI remain device or instrumentation concerns.
+
 ### Run the Test Harness
 
 The repository-level runner adds fail-fast preflight, timestamped command logs,
@@ -71,6 +80,18 @@ Console lines use a compact clock plus cumulative suite runtime, such as
 Use `--skip-build` only for fast iteration on the host-side tooling; it skips
 both the compile gate and Gradle unit tests and must not replace a normal
 verification run.
+
+To maintain a cross-run cache of failed runner checks, use `--suspects` by
+itself for `build/test-reports/suspects.json`, or provide a custom JSON path:
+
+```text
+python tools/run_tests.py --device off --suspects
+python tools/run_tests.py --device off --suspects build/test-reports/my-suspects.json
+```
+
+Failures are added to the cache, passing checks are removed, and skipped checks
+are unchanged. The cache is opt-in and stores runner check names rather than
+individual provider/device test cases.
 
 ### Signing Report
 
