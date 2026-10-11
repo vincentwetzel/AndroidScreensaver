@@ -7,17 +7,21 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.util.Log
+import androidx.core.net.toUri
 import androidx.core.content.ContextCompat
 import com.vincentwetzel.androidscreensaver.data.model.AccountConfig
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig
 import com.vincentwetzel.androidscreensaver.data.model.SourceType
 import com.vincentwetzel.androidscreensaver.data.repository.DropboxPhotoRepository
+import com.vincentwetzel.androidscreensaver.data.repository.GalleryPhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDrivePhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.OneDrivePhotoRepository
 import com.vincentwetzel.androidscreensaver.data.repository.GoogleDriveRepository
 import com.vincentwetzel.androidscreensaver.data.repository.PhotoRepository
+import com.vincentwetzel.androidscreensaver.data.repository.MediaCacheManager
 import com.vincentwetzel.androidscreensaver.utils.SettingsManager
+import com.vincentwetzel.androidscreensaver.utils.GalleryPermissionPolicy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,7 +29,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import javax.inject.Inject
 import javax.inject.Singleton
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manages slideshow configuration and photo loading.
@@ -40,12 +43,6 @@ class SlideshowManager @Inject constructor(
     // Current slideshow configuration
     lateinit var config: SlideshowConfig
         private set
-
-    // Loaded photos
-    private var loadedPhotos: List<Photo> = emptyList()
-
-    // Preloaded photo cache
-    private val preloadCache = ConcurrentHashMap<String, Boolean>()
 
     /**
      * Load configuration from settings
@@ -65,12 +62,31 @@ class SlideshowManager @Inject constructor(
 
     suspend fun downloadPhotoToLocalCache(photo: Photo): String? {
         val accountId = photo.accountId ?: return null
-        return when (val repository = photoRepositories[photo.sourceType]) {
+        val cachedUri = when (val repository = photoRepositories[photo.sourceType]) {
             is GoogleDrivePhotoRepository -> repository.downloadPhotoToLocalCache(photo.id, accountId, photo.title)
             is DropboxPhotoRepository -> repository.downloadPhotoToLocalCache(photo.id, accountId)
-            is OneDrivePhotoRepository -> repository.downloadPhotoToLocalCache(photo.id, accountId, photo.uri)
+            is OneDrivePhotoRepository -> repository.downloadPhotoToLocalCache(photo.id, accountId, photo.uri, photo.title)
             else -> null
         }
+        if (cachedUri != null) trimCache(cachedUri)
+        return cachedUri
+    }
+
+    suspend fun trimCache(protectedMediaUri: String? = null) {
+        if (!config.cacheConfig.enabled) return
+        val limitMb = if (config.cacheConfig.usePresetLimit) {
+            when (config.cacheConfig.presetLimit) {
+                com.vincentwetzel.androidscreensaver.data.model.CacheSizeLimit.MB_100 -> 100
+                com.vincentwetzel.androidscreensaver.data.model.CacheSizeLimit.MB_500 -> 500
+                com.vincentwetzel.androidscreensaver.data.model.CacheSizeLimit.GB_1 -> 1024
+                com.vincentwetzel.androidscreensaver.data.model.CacheSizeLimit.GB_2 -> 2048
+                com.vincentwetzel.androidscreensaver.data.model.CacheSizeLimit.GB_5 -> 5120
+                com.vincentwetzel.androidscreensaver.data.model.CacheSizeLimit.UNLIMITED -> Int.MAX_VALUE
+            }
+        } else config.cacheConfig.cacheSizeLimitMB
+        val limitBytes = if (limitMb == Int.MAX_VALUE) Long.MAX_VALUE else limitMb.toLong() * 1024L * 1024L
+        val protectedFile = protectedMediaUri?.toUri()?.path?.let { java.io.File(it) }
+        MediaCacheManager.trimIfNeeded(context, limitBytes, protectedFile)
     }
 
     /**
@@ -80,10 +96,24 @@ class SlideshowManager @Inject constructor(
      */
     suspend fun loadPhotos(): List<Photo> {
         return withContext(Dispatchers.IO) {
-            val allPhotos = mutableListOf<Photo>()
-            
-            // Clear previous preloads to prevent memory leaks over time
-            preloadCache.clear()
+            val filteredUniquePhotos = mutableListOf<Photo>()
+            val seenPhotoKeys = mutableSetOf<Triple<SourceType, String?, String>>()
+            var loadedPhotoCount = 0
+
+            fun addPhotos(photos: List<Photo>) {
+                loadedPhotoCount += photos.size
+                photos.forEach { photo ->
+                    val matchesFilter = PhotoMediaClassifier.matchesFilter(photo, config.mediaTypeFilter)
+                    val key = PhotoMediaClassifier.mediaKey(photo)
+                    if (matchesFilter && seenPhotoKeys.add(key)) filteredUniquePhotos.add(photo)
+                }
+            }
+
+            val galleryRepository = photoRepositories[SourceType.GALLERY] as? GalleryPhotoRepository
+            if (galleryRepository?.hasSelectedMediaAccess() == true) {
+                // The selected item set can change while permission bits stay the same.
+                galleryRepository.syncPhotos()
+            }
 
             // Iterate over all available source types
             SourceType.entries.forEach { sourceType ->
@@ -134,32 +164,29 @@ class SlideshowManager @Inject constructor(
                             val excludedFolderIds = account.deselectedFolders
 
                             val foldersToLoad = if (selectedFolders.isEmpty()) {
-                                photoRepository.listFolders(account.accountId, forceRefresh = false)
+                                photoRepository.listFolders(parentFolderId = null, forceRefresh = false, accountId = account.accountId)
                             } else {
                                 selectedFolders
                             }
 
                             // Chunk execution to prevent OOM spikes and Rate Limiting on dozens of folders
-                            val folderPhotosList = mutableListOf<List<Photo>>()
                             foldersToLoad.chunked(5).forEach { chunk ->
                                 val results = chunk.map { folder ->
                                     async { 
                                         try {
-                                            photoRepository.listPhotos(folder.id, excludedFolderIds, config.mediaTypeFilter) 
+                                            photoRepository.listPhotos(folder.id, excludedFolderIds, config.mediaTypeFilter, accountId = account.accountId)
                                         } catch (e: Exception) {
                                             if (e is kotlinx.coroutines.CancellationException) throw e
                                             // Isolate the failure so it doesn't cancel the entire parent IO coroutine scope
-                                            android.util.Log.e(TAG, "Failed to load folder ${folder.id}: ${e.message}")
+                                            android.util.Log.e(TAG, "Failed to load a $sourceType folder: ${e.javaClass.simpleName}")
                                             emptyList<Photo>()
                                         }
                                     }
                                 }.awaitAll()
-                                folderPhotosList.addAll(results)
+                                results.forEach(::addPhotos)
                             }
 
-                            folderPhotosList.forEach { allPhotos.addAll(it) }
-
-                            android.util.Log.d(TAG, "Loaded ${allPhotos.size} photos so far from $sourceType account: $safeAccountId")
+                            android.util.Log.d(TAG, "Loaded ${filteredUniquePhotos.size} unique photos so far from $sourceType account: $safeAccountId")
                         } catch (e: Exception) {
                             if (e is kotlinx.coroutines.CancellationException) throw e
                             val safeAccountId = account.accountId.hashCode().toString()
@@ -169,45 +196,13 @@ class SlideshowManager @Inject constructor(
                 }
             }
 
-            // Deduplicate photos by ID (can happen when a parent folder is cascade-selected
-            // along with its subfolders — listPhotos recurses into subfolders, so the same
-            // photo can be loaded from both the parent and child folder entries)
-            val uniquePhotos = allPhotos.distinctBy { "${it.sourceType}_${it.accountId}_${it.id}" }
-            android.util.Log.d(TAG, "Total photos loaded: ${allPhotos.size}, unique: ${uniquePhotos.size}")
-
-            loadedPhotos = uniquePhotos
-
-            // Apply media type filter
-            val filteredPhotos = when (config.mediaTypeFilter) {
-                com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.IMAGES_ONLY ->
-                    uniquePhotos.filter { isImage(it) }
-                com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter.VIDEOS_ONLY ->
-                    uniquePhotos.filter { isVideo(it) }
-                else -> uniquePhotos
+            android.util.Log.d(TAG, "Loaded $loadedPhotoCount photos, kept ${filteredUniquePhotos.size} unique matches for ${config.mediaTypeFilter}")
+            if (filteredUniquePhotos.isEmpty() && loadedPhotoCount > 0) {
+                android.util.Log.w(TAG, "Warning: Had $loadedPhotoCount photos but filtered to 0")
             }
 
-            android.util.Log.d(TAG, "After media type filter (${config.mediaTypeFilter}): ${filteredPhotos.size} photos")
-            if (filteredPhotos.isEmpty() && uniquePhotos.isNotEmpty()) {
-                android.util.Log.w(TAG, "Warning: Had ${uniquePhotos.size} photos but filtered to 0. Sample IDs: ${uniquePhotos.take(3).map { it.id }}")
-            }
-
-            loadedPhotos = filteredPhotos
-            filteredPhotos
+            filteredUniquePhotos
         }
-    }
-
-    /**
-     * Check if a photo represents an image file
-     */
-    private fun isImage(photo: Photo): Boolean {
-        return PhotoMediaClassifier.isImage(photo)
-    }
-
-    /**
-     * Check if a photo represents a video file
-     */
-    private fun isVideo(photo: Photo): Boolean {
-        return PhotoMediaClassifier.isVideo(photo)
     }
 
     /**
@@ -215,47 +210,6 @@ class SlideshowManager @Inject constructor(
      */
     fun getSortKey(photo: Photo): Comparable<*> {
         return PhotoMediaClassifier.sortKey(photo, config.photoOrder)
-    }
-
-    /**
-     * Preload a photo into cache
-     */
-    suspend fun preloadPhoto(photo: Photo) {
-        val cacheKey = "${photo.sourceType}_${photo.accountId}_${photo.id}"
-        if (preloadCache[cacheKey] == true) return
-
-        withContext(Dispatchers.IO) {
-            try {
-                // Route to correct source based on photo's sourceType
-                val photoRepository = photoRepositories[photo.sourceType]
-                if (photoRepository == null) {
-                    android.util.Log.e(TAG, "No PhotoRepository found for Photo.sourceType: ${photo.sourceType}")
-                    return@withContext
-                }
-
-                if (photo.uri.startsWith("content://")) {
-                    // Gallery photos: content:// URIs - already local, Coil can load directly
-                    preloadCache[cacheKey] = true
-                    android.util.Log.d(TAG, "Preloaded Gallery photo: ${photo.id}")
-                } else if (photo.uri.startsWith("file://")) {
-                    // Google Drive cached photos: file:// URIs - already downloaded
-                    preloadCache[cacheKey] = true
-                    android.util.Log.d(TAG, "Preloaded cached Drive photo: ${photo.id}")
-                } else {
-                    // Remote URLs or Cloud IDs (Google Drive, Dropbox, etc.)
-                    val localPath = downloadPhotoToLocalCache(photo)
-                    if (localPath != null) {
-                        preloadCache[cacheKey] = true
-                        android.util.Log.d(TAG, "Preloaded remote photo from ${photo.sourceType}: $localPath")
-                    } else {
-                        android.util.Log.w(TAG, "Failed to download/preload ${photo.sourceType} photo: ${photo.id}")
-                    }
-                }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                android.util.Log.e(TAG, "Error preloading photo: ${e.javaClass.simpleName}")
-            }
-        }
     }
 
     /**
@@ -276,7 +230,9 @@ class SlideshowManager @Inject constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val hasImage = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
             val hasVideo = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
-            val hasPermission = hasImage || hasVideo
+            val hasSelectedMedia = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                ContextCompat.checkSelfPermission(context, GalleryPermissionPolicy.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED
+            val hasPermission = GalleryPermissionPolicy.hasAccess(config.mediaTypeFilter, hasImage, hasVideo, hasSelectedMedia)
             if (!hasPermission) Log.w(TAG, "Gallery permission not granted (needs READ_MEDIA_IMAGES or READ_MEDIA_VIDEO)")
             return hasPermission
         } else {

@@ -74,7 +74,10 @@ Settings are accessed through **Menu > Settings**.
 ### Schedule & Timer
 
 - Autostart schedule.
+- Android may restrict apps from activating their DreamService directly. If scheduled autostart is rejected, configure the screensaver through the device's system idle settings.
 - Autostop schedule.
+- Schedules persist after leaving settings. Autostart can be limited to times when the device is charging. Turn off Repeat to disable that schedule after its next action runs; an autostart skipped because the device is unplugged remains scheduled for its next selected day.
+- On Android 12 and newer, scheduled start/stop times use exact alarms when the device allows them; otherwise the app schedules a best-effort alarm and displays a note that delivery may be delayed.
 - Auto-exit timeout.
 
 ### Display & Power
@@ -95,7 +98,7 @@ Settings are accessed through **Menu > Settings**.
 
 ### Gallery
 
-Shows photo folders from your device, such as Camera, Screenshots, and Downloads. Android 13+ uses scoped media access and can browse when either image or video permission is granted; older Android versions may require photo read permission.
+Shows photo folders from your device, such as Camera, Screenshots, and Downloads. On Android 13+, Images Only requests image access and Videos Only requests video access. All media mode can show whichever media types have been permitted. On Android 14+, you can grant access to selected media and use Change selected media in the Gallery browser menu to update that selection. Older Android versions may require photo read permission.
 
 ### Google Drive
 

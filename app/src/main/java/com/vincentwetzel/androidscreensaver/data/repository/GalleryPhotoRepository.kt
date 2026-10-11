@@ -2,14 +2,18 @@ package com.vincentwetzel.androidscreensaver.data.repository
 
 import android.content.ContentUris
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.PhotoFolder
 import com.vincentwetzel.androidscreensaver.data.model.SourceType
 import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import com.vincentwetzel.androidscreensaver.utils.SettingsManager
+import com.vincentwetzel.androidscreensaver.utils.GalleryMediaDatePolicy
+import com.vincentwetzel.androidscreensaver.utils.GalleryPermissionPolicy
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -18,6 +22,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Gallery implementation of PhotoRepository
@@ -27,6 +32,8 @@ import javax.inject.Singleton
 class GalleryPhotoRepository @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) : AbstractPhotoRepository() {
+
+    private val rootPrefetchInProgress = AtomicBoolean(false)
 
     override fun isAuthenticated(): Boolean {
         // Gallery doesn't need authentication
@@ -39,14 +46,16 @@ class GalleryPhotoRepository @Inject constructor(
      * Safe to call multiple times — respects the folder cache TTL.
      */
     fun prefetchRootFolders(mediaFilter: MediaTypeFilter? = null) {
+        if (!rootPrefetchInProgress.compareAndSet(false, true)) return
         prefetchScope.launch {
             try {
+                if (!hasGalleryPermission(mediaFilter ?: MediaTypeFilter.IMAGES_AND_VIDEOS)) return@launch
                 // Re-use existing listFolders logic which populates the cache
-                val folders = listFolders(null, forceRefresh = true)
+                val folders = listFolders(null, forceRefresh = false)
                 Log.d("GalleryPhotoRepo", "Prefetched ${folders.size} Gallery folders")
 
                 val account = SettingsManager.getAccountsForSource(
-                    context, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY
+                    context, SourceType.GALLERY
                 ).firstOrNull()
 
                 val selectedIds = account?.selectedFolders?.map { it.folderId }?.toSet() ?: emptySet()
@@ -57,13 +66,13 @@ class GalleryPhotoRepository @Inject constructor(
                     selectedIds.forEach { folderId ->
                         val photos = listPhotos(folderId, account?.deselectedFolders ?: emptySet(), mediaFilter)
                         val count = photos.size
-                        val cacheKey = "${folderId}_${normalizedFilter}"
+                        val cacheKey = RepositoryCacheKey.of(folderId, normalizedFilter)
                         photoCountCache[cacheKey] = CountCacheEntry(count)
                         totalCount += count
                     }
                     if (account != null && totalCount != account.photoCount) {
                         SettingsManager.updateAccountPhotoCount(
-                            context, com.vincentwetzel.androidscreensaver.dream.SourceType.GALLERY, account.accountId, totalCount
+                            context, SourceType.GALLERY, account.accountId, totalCount
                         )
                     }
                 } else {
@@ -74,8 +83,39 @@ class GalleryPhotoRepository @Inject constructor(
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.w("GalleryPhotoRepo", "Prefetch failed: ${e.javaClass.simpleName}")
+            } finally {
+                rootPrefetchInProgress.set(false)
             }
         }
+    }
+
+    private fun hasGalleryPermission(mediaFilter: MediaTypeFilter): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val hasImages = ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+            val hasVideos = ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
+            val hasSelectedMedia = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                ContextCompat.checkSelfPermission(context, GalleryPermissionPolicy.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED
+            return GalleryPermissionPolicy.hasAccess(mediaFilter, hasImages, hasVideos, hasSelectedMedia)
+        }
+        return ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+    }
+
+    /** Selected-media membership can change without changing the permission bits. */
+    fun hasSelectedMediaAccess(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return false
+        val hasSelectedMedia = ContextCompat.checkSelfPermission(
+            context,
+            GalleryPermissionPolicy.READ_MEDIA_VISUAL_USER_SELECTED
+        ) == PackageManager.PERMISSION_GRANTED
+        val hasFullImageAccess = ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.READ_MEDIA_IMAGES
+        ) == PackageManager.PERMISSION_GRANTED
+        val hasFullVideoAccess = ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.READ_MEDIA_VIDEO
+        ) == PackageManager.PERMISSION_GRANTED
+        return hasSelectedMedia && !(hasFullImageAccess && hasFullVideoAccess)
     }
 
     /**
@@ -101,7 +141,7 @@ class GalleryPhotoRepository @Inject constructor(
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            Log.w("GalleryPhotoRepo", "Failed to get relative path for folder $folderId")
+            Log.w("GalleryPhotoRepo", "Failed to get folder relative path: ${e.javaClass.simpleName}")
         }
         return null
     }
@@ -190,8 +230,7 @@ class GalleryPhotoRepository @Inject constructor(
 
     override suspend fun listPhotos(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: MediaTypeFilter?, accountId: String?): List<Photo> = withContext(Dispatchers.IO) {
         val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
-        val exclusionsKey = if (excludedFolderIds.isEmpty()) "none" else excludedFolderIds.sorted().joinToString(",")
-        val cacheKey = "${folderId}_${normalizedFilter}_$exclusionsKey"
+        val cacheKey = RepositoryCacheKey.of(folderId, normalizedFilter, RepositoryCacheKey.set(excludedFolderIds))
         val cached = photoListCache[cacheKey]
         if (cached != null && !cached.isStale) {
             return@withContext cached.data
@@ -215,6 +254,7 @@ class GalleryPhotoRepository @Inject constructor(
                 MediaStore.Files.FileColumns.DISPLAY_NAME,
                 MediaStore.Files.FileColumns.TITLE,
                 MediaStore.Files.FileColumns.DATE_ADDED,
+                MediaStore.MediaColumns.DATE_TAKEN,
                 MediaStore.Files.FileColumns.DATE_MODIFIED,
                 MediaStore.Files.FileColumns.MEDIA_TYPE,
                 MediaStore.Files.FileColumns.WIDTH,
@@ -287,6 +327,7 @@ class GalleryPhotoRepository @Inject constructor(
                 val nameIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
                 val titleIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.TITLE)
                 val dateAddedIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_ADDED)
+                val dateTakenIndex = it.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_TAKEN)
                 val mediaTypeIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE)
                 val widthIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.WIDTH)
                 val heightIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.HEIGHT)
@@ -317,7 +358,7 @@ class GalleryPhotoRepository @Inject constructor(
                             uri = uri.toString(),
                             thumbnailUri = uri.toString(),
                             title = it.getString(titleIndex) ?: it.getString(nameIndex),
-                            dateTaken = it.getLong(dateAddedIndex) * 1000, // Convert to milliseconds
+                            dateTaken = GalleryMediaDatePolicy.dateTakenMillis(it.getLong(dateTakenIndex), it.getLong(dateAddedIndex)),
                             width = width,
                             height = height,
                             fileSize = it.getLong(sizeIndex),
@@ -350,6 +391,7 @@ class GalleryPhotoRepository @Inject constructor(
                 MediaStore.Files.FileColumns.DISPLAY_NAME,
                 MediaStore.Files.FileColumns.TITLE,
                 MediaStore.Files.FileColumns.DATE_ADDED,
+                MediaStore.MediaColumns.DATE_TAKEN,
                 MediaStore.Files.FileColumns.MEDIA_TYPE,
                 MediaStore.Files.FileColumns.WIDTH,
                 MediaStore.Files.FileColumns.HEIGHT,
@@ -375,6 +417,7 @@ class GalleryPhotoRepository @Inject constructor(
                     val nameIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
                     val titleIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.TITLE)
                     val dateAddedIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_ADDED)
+                    val dateTakenIndex = it.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_TAKEN)
                     val mediaTypeIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE)
                     val widthIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.WIDTH)
                     val heightIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.HEIGHT)
@@ -400,7 +443,7 @@ class GalleryPhotoRepository @Inject constructor(
                         uri = uri.toString(),
                         thumbnailUri = uri.toString(),
                         title = it.getString(titleIndex) ?: it.getString(nameIndex),
-                        dateTaken = it.getLong(dateAddedIndex) * 1000,
+                        dateTaken = GalleryMediaDatePolicy.dateTakenMillis(it.getLong(dateTakenIndex), it.getLong(dateAddedIndex)),
                         width = it.getLong(widthIndex).toInt(),
                         height = it.getLong(heightIndex).toInt(),
                         fileSize = it.getLong(sizeIndex),
@@ -436,7 +479,7 @@ class GalleryPhotoRepository @Inject constructor(
 
     override suspend fun getFilteredFolderMediaCount(folderId: String, mediaTypeFilter: MediaTypeFilter?, accountId: String?): Int {
         val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
-        val cacheKey = "${folderId}_${normalizedFilter}"
+        val cacheKey = RepositoryCacheKey.of(folderId, normalizedFilter)
         val cached = photoCountCache[cacheKey]
         if (cached != null && !cached.isStale) {
             return cached.count

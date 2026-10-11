@@ -32,6 +32,7 @@ class ScreensaverPreviewActivity : AppCompatActivity() {
     private var slideshowView: SlideshowView? = null
     private var timeoutHandler: Handler? = null
     private var timeoutRunnable: Runnable? = null
+    private var isActivityResumed = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,6 +79,9 @@ class ScreensaverPreviewActivity : AppCompatActivity() {
                 }
                 
                 setContentView(slideshowView)
+
+                // onPause can run while the initial source check is suspended, before the view exists.
+                if (!isActivityResumed) slideshowView?.pause()
                 
                 // Setup timeout if enabled
                 setupTimeout()
@@ -133,10 +137,12 @@ class ScreensaverPreviewActivity : AppCompatActivity() {
     
     override fun onResume() {
         super.onResume()
+        isActivityResumed = true
         slideshowView?.resume()
     }
     
     override fun onPause() {
+        isActivityResumed = false
         super.onPause()
         slideshowView?.pause()
     }

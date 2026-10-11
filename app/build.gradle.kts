@@ -13,6 +13,27 @@ val localProperties = Properties().apply {
     }
 }
 
+abstract class GenerateDebugMsalConfigTask : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val sourceFile: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val rawDirectory = outputDirectory.get().dir("raw").asFile
+        rawDirectory.mkdirs()
+        sourceFile.get().asFile.copyTo(File(rawDirectory, "msal_auth_config.json"), overwrite = true)
+    }
+}
+
+val prepareDebugMsalConfig = tasks.register<GenerateDebugMsalConfigTask>("prepareDebugMsalConfig") {
+    sourceFile.set(rootProject.layout.projectDirectory.file("msal_auth_config.json"))
+    outputDirectory.set(layout.buildDirectory.dir("generated/res/msalDebug"))
+}
+
 android {
     namespace = "com.vincentwetzel.androidscreensaver"
     compileSdk = 36
@@ -89,6 +110,12 @@ android {
     }
 }
 
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        variant.sources.res?.addGeneratedSourceDirectory(prepareDebugMsalConfig) { it.outputDirectory }
+    }
+}
+
 dependencies {
     // AndroidX Core
     implementation("androidx.core:core-ktx:1.18.0")
@@ -123,6 +150,7 @@ dependencies {
     
     // Image Loading - Coil
     implementation("io.coil-kt:coil:2.7.0")
+    implementation("io.coil-kt:coil-svg:2.7.0")
     implementation("io.coil-kt:coil-video:2.7.0")  // Video thumbnail support
     
     // Coroutines

@@ -94,6 +94,11 @@ class CloudFolderViewModelUnitTest {
     }
 
     @Test
+    fun `missing cloud credentials map to an authentication error`() {
+        val error = FolderError.fromException(IllegalStateException("Not authenticated for account"))
+        assertTrue(error is FolderError.AuthError)
+    }
+    @Test
     fun `search results use the configured account and blank search reloads current folder`() = runTest(dispatcher) {
         viewModel.setSourceContext(SourceType.GOOGLE_DRIVE, "account")
         viewModel.loadFolders()

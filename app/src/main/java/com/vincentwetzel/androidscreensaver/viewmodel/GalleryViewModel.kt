@@ -114,6 +114,11 @@ class GalleryViewModel @Inject constructor(
         _navigationBackStack.clear()
     }
 
+    /** Clear MediaStore-derived caches when Android changes full or selected-media access. */
+    suspend fun invalidateGalleryCaches() {
+        photoRepository.syncPhotos()
+    }
+
     /**
      * Search folders by name
      */

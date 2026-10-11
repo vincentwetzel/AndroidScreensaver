@@ -1,9 +1,13 @@
 package com.vincentwetzel.androidscreensaver.ui.settings
 
+import android.app.AlarmManager
 import android.app.TimePickerDialog
 import android.content.Intent
 import android.os.Bundle
+import android.os.Build
+import android.content.Context
 import android.view.MenuItem
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.tabs.TabLayout
 import androidx.lifecycle.lifecycleScope
@@ -41,6 +45,8 @@ class ScheduleSettingsActivity : AppCompatActivity() {
         supportActionBar?.setTitle("Schedule Settings")
 
         setupTabs()
+        updateDescription()
+
         lifecycleScope.launch {
             loadCurrentSettings()
             setupListeners()
@@ -67,10 +73,18 @@ class ScheduleSettingsActivity : AppCompatActivity() {
     }
 
     private fun updateDescription() {
-        binding.tvScheduleDescription.text = if (isAutostart) {
+        binding.switchCharging.visibility = if (isAutostart) View.VISIBLE else View.GONE
+        val scheduleDescription = if (isAutostart) {
             "Automatically start screensaver at scheduled time"
         } else {
             "Automatically stop screensaver at scheduled time"
+        }
+        val exactAlarmUnavailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !(getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
+        binding.tvScheduleDescription.text = if (exactAlarmUnavailable) {
+            "$scheduleDescription\n${getString(com.vincentwetzel.androidscreensaver.R.string.schedule_exact_alarm_fallback_notice)}"
+        } else {
+            scheduleDescription
         }
     }
 
@@ -88,7 +102,7 @@ class ScheduleSettingsActivity : AppCompatActivity() {
             selectedDays.clear()
             selectedDays.addAll(first.daysOfWeek)
             binding.switchRepeat.isChecked = first.repeat
-            binding.switchCharging.isChecked = first.onlyWhenCharging
+            binding.switchCharging.isChecked = isAutostart && first.onlyWhenCharging
         } else {
             binding.switchEnabled.isChecked = false
             selectedHour = 20
@@ -207,8 +221,6 @@ class ScheduleSettingsActivity : AppCompatActivity() {
         val currentCharging = binding.switchCharging.isChecked
 
         lifecycleScope.launch {
-            val config = SettingsManager.getSlideshowConfig(this@ScheduleSettingsActivity)
-
             val newSchedule = ScheduleConfig(
                 enabled = currentEnabled,
                 timeHour = currentHour,
@@ -227,13 +239,7 @@ class ScheduleSettingsActivity : AppCompatActivity() {
                 onlyWhenCharging = currentCharging
             )
 
-            val newConfig = if (currentIsAutostart) {
-                config.copy(autostartSchedules = listOf(newSchedule))
-            } else {
-                config.copy(autostopSchedules = listOf(newSchedule))
-            }
-
-            SettingsManager.saveSlideshowConfig(this@ScheduleSettingsActivity, newConfig)
+            SettingsManager.saveScheduleConfig(this@ScheduleSettingsActivity, currentIsAutostart, newSchedule)
             
             val scheduleIntent = Intent(this@ScheduleSettingsActivity, ScheduleService::class.java)
             startService(scheduleIntent)

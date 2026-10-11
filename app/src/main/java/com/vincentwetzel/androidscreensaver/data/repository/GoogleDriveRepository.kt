@@ -5,6 +5,7 @@ import android.content.Intent
 import com.google.api.services.drive.Drive
 import com.vincentwetzel.androidscreensaver.utils.GoogleAccountManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -102,6 +103,8 @@ class GoogleDriveRepository @Inject constructor(
             ?: throw IllegalStateException("Drive service not found for account")
 
         // Lightweight API call forces the credential to fetch an OAuth token
-        service.about().get().setFields("user").execute()
+        runInterruptible {
+            service.about().get().setFields("user").execute()
+        }
     }
 }

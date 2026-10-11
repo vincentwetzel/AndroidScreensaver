@@ -86,7 +86,7 @@ The words **must**, **should**, and **may** indicate required, recommended, and 
 - Test both success and failure paths for authentication, network calls, empty results, permission denial, cancellation, and lifecycle teardown.
 - Record verification that could not be run and why. Do not claim a build, test, or device check passed without running it.
 
-The current quality gaps are tracked in [`TODO.md`](TODO.md): style/static-analysis enforcement, broader repository and folder-browser tests, lint verification, and memory-leak detection remain backlog items until tooling and tests are actually present.
+The current quality gaps are tracked in [`TODO.md`](TODO.md): style/static-analysis enforcement, broader repository and folder-browser tests, lint warning cleanup, and memory-leak detection remain open. The app currently passes `lintDebug` with warnings; do not describe lint as clean until those warnings are resolved.
 
 ## Definition Of Done
 

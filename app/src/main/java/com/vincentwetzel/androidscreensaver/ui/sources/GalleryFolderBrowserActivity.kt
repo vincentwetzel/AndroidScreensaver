@@ -22,6 +22,7 @@ import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.databinding.ActivityFolderBrowserBinding
 import com.vincentwetzel.androidscreensaver.viewmodel.GalleryViewModel
+import com.vincentwetzel.androidscreensaver.utils.GalleryPermissionPolicy
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -37,30 +38,58 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
     private val viewModel: GalleryViewModel by viewModels()
     private lateinit var adapter: FolderAdapter
     private var accountId: String? = null
+    private var lastPermissionSnapshot: List<Boolean>? = null
 
     companion object {
         const val EXTRA_ACCOUNT_ID = "account_id"
+        private const val MENU_CHANGE_SELECTED_MEDIA = 1001
     }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val anyGranted = permissions.values.any { it }
-        if (anyGranted) {
-            viewModel.clearNavigationBackStack()
-            lifecycleScope.launch {
-                val mediaFilter = getContentFilter()
+    ) { _ ->
+        invalidateOptionsMenu()
+        lifecycleScope.launch {
+            viewModel.invalidateGalleryCaches()
+            lastPermissionSnapshot = readPermissionSnapshot()
+            val mediaFilter = getContentFilter()
+            if (hasGalleryPermissions(mediaFilter)) {
+                viewModel.clearNavigationBackStack()
                 viewModel.loadFolders(parentFolderId = null, forceRefresh = true, addToBackStack = false, mediaFilter = mediaFilter)
+            } else {
+                binding.progressBar.visibility = View.GONE
+                com.google.android.material.snackbar.Snackbar.make(
+                    binding.root,
+                    com.vincentwetzel.androidscreensaver.data.model.FolderError.PermissionError().userMessage(),
+                    com.google.android.material.snackbar.Snackbar.LENGTH_LONG
+                ).show()
             }
-        } else {
-            binding.progressBar.visibility = View.GONE
-            com.google.android.material.snackbar.Snackbar.make(
-                binding.root,
-                com.vincentwetzel.androidscreensaver.data.model.FolderError.PermissionError().userMessage(),
-                com.google.android.material.snackbar.Snackbar.LENGTH_LONG
-            ).show()
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        invalidateOptionsMenu()
+        lifecycleScope.launch {
+            val currentSnapshot = readPermissionSnapshot()
+            val selectedMediaAccess = currentSnapshot[2]
+            if (selectedMediaAccess || (lastPermissionSnapshot != null && lastPermissionSnapshot != currentSnapshot)) {
+                viewModel.invalidateGalleryCaches()
+            }
+            lastPermissionSnapshot = currentSnapshot
+        }
+    }
+
+    private fun readPermissionSnapshot(): List<Boolean> = listOf(
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED,
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED,
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            ContextCompat.checkSelfPermission(this, GalleryPermissionPolicy.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED,
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -98,11 +127,11 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
             observeViewModel()
 
             // Check and request permissions before loading folders
-            if (hasGalleryPermissions()) {
+            if (hasGalleryPermissions(mediaFilter)) {
                 viewModel.clearNavigationBackStack()
                 viewModel.loadFolders(parentFolderId = null, forceRefresh = false, addToBackStack = false, mediaFilter = mediaFilter)
             } else {
-                requestGalleryPermissions()
+                requestGalleryPermissions(mediaFilter)
             }
         }
     }
@@ -116,19 +145,24 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
         return config.mediaTypeFilter
     }
 
-    private fun hasGalleryPermissions(): Boolean {
+    private fun hasGalleryPermissions(mediaFilter: MediaTypeFilter): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val hasImages = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
             val hasVideo = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
-            hasImages || hasVideo
+            val hasSelectedMedia = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                ContextCompat.checkSelfPermission(this, GalleryPermissionPolicy.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED
+            GalleryPermissionPolicy.hasAccess(mediaFilter, hasImages, hasVideo, hasSelectedMedia)
         } else {
             ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
         }
     }
 
-    private fun requestGalleryPermissions() {
+    private fun requestGalleryPermissions(mediaFilter: MediaTypeFilter) {
         val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+            GalleryPermissionPolicy.requiredPermissions(
+                mediaFilter,
+                includeSelectedMedia = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+            ).toTypedArray()
         } else {
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
@@ -306,6 +340,16 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_folder_browser, menu)
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            ContextCompat.checkSelfPermission(this, GalleryPermissionPolicy.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED
+        ) {
+            menu.add(Menu.NONE, MENU_CHANGE_SELECTED_MEDIA, Menu.NONE, getString(R.string.change_selected_media))
+                .setOnMenuItemClickListener {
+                    lifecycleScope.launch { requestGalleryPermissions(getContentFilter()) }
+                    true
+                }
+        }
+
         val searchItem = menu.findItem(R.id.action_search)
         val searchView = searchItem.actionView as SearchView
 
@@ -328,4 +372,5 @@ class GalleryFolderBrowserActivity : AppCompatActivity() {
 
         return true
     }
+
 }

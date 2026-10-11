@@ -1,8 +1,10 @@
 package com.vincentwetzel.androidscreensaver.service
 
+import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.app.Service
+import android.os.Build
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
@@ -10,61 +12,104 @@ import com.vincentwetzel.androidscreensaver.data.model.DayOfWeek
 import com.vincentwetzel.androidscreensaver.receiver.AlarmReceiver
 import com.vincentwetzel.androidscreensaver.utils.SettingsManager
 import java.util.Calendar
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class ScheduleService : Service() {
 
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var scheduleJob: Job? = null
+
+    companion object {
+        private const val TAG = "ScheduleService"
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        CoroutineScope(Dispatchers.IO).launch {
-            val config = SettingsManager.getSlideshowConfig(this@ScheduleService)
-            
-            config.autostartSchedules.forEachIndexed { index, schedule ->
-                val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-                val alarmIntent = Intent(this@ScheduleService, AlarmReceiver::class.java).let { intent ->
-                    intent.action = "START_SCREENSAVER"
-                    PendingIntent.getBroadcast(this@ScheduleService, index, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                }
-                
-                if (schedule.enabled) {
-                    val nextAlarmTime = getNextAlarmTime(schedule.timeHour, schedule.timeMinute, schedule.daysOfWeek)
-                    if (nextAlarmTime != null) {
-                        alarmManager.setExact(
-                            AlarmManager.RTC_WAKEUP,
-                            nextAlarmTime.timeInMillis,
-                            alarmIntent
+        scheduleJob?.cancel()
+        scheduleJob = serviceScope.launch {
+            try {
+                val config = SettingsManager.getSlideshowConfig(this@ScheduleService)
+
+                config.autostartSchedules.forEachIndexed { index, schedule ->
+                    val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                    val alarmIntent = Intent(this@ScheduleService, AlarmReceiver::class.java).let { alarm ->
+                        alarm.action = "START_SCREENSAVER"
+                        alarm.putExtra(AlarmReceiver.EXTRA_SCHEDULE_INDEX, index)
+                        alarm.putExtra(AlarmReceiver.EXTRA_IS_AUTOSTART, true)
+                        alarm.putExtra(AlarmReceiver.EXTRA_REPEAT, schedule.repeat)
+                        alarm.putExtra(AlarmReceiver.EXTRA_ONLY_WHEN_CHARGING, schedule.onlyWhenCharging)
+                        PendingIntent.getBroadcast(
+                            this@ScheduleService,
+                            index,
+                            alarm,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                         )
                     }
-                } else {
-                    alarmManager.cancel(alarmIntent)
+                    if (schedule.enabled) {
+                        getNextAlarmTime(schedule.timeHour, schedule.timeMinute, schedule.daysOfWeek)
+                            ?.let { scheduleAlarm(alarmManager, it.timeInMillis, alarmIntent) }
+                    } else {
+                        alarmManager.cancel(alarmIntent)
+                    }
                 }
-            }
-            
-            config.autostopSchedules.forEachIndexed { index, schedule ->
-                val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-                val alarmIntent = Intent(this@ScheduleService, AlarmReceiver::class.java).let { intent ->
-                    intent.action = "STOP_SCREENSAVER"
-                    PendingIntent.getBroadcast(this@ScheduleService, 100 + index, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                }
-                if (schedule.enabled) {
-                    val nextAlarmTime = getNextAlarmTime(schedule.timeHour, schedule.timeMinute, schedule.daysOfWeek)
-                    if (nextAlarmTime != null) {
-                        alarmManager.setExact(
-                            AlarmManager.RTC_WAKEUP,
-                            nextAlarmTime.timeInMillis,
-                            alarmIntent
+
+                config.autostopSchedules.forEachIndexed { index, schedule ->
+                    val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                    val alarmIntent = Intent(this@ScheduleService, AlarmReceiver::class.java).let { alarm ->
+                        alarm.action = "STOP_SCREENSAVER"
+                        alarm.putExtra(AlarmReceiver.EXTRA_SCHEDULE_INDEX, index)
+                        alarm.putExtra(AlarmReceiver.EXTRA_IS_AUTOSTART, false)
+                        alarm.putExtra(AlarmReceiver.EXTRA_REPEAT, schedule.repeat)
+                        PendingIntent.getBroadcast(
+                            this@ScheduleService,
+                            100 + index,
+                            alarm,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                         )
                     }
-                } else {
-                    alarmManager.cancel(alarmIntent)
+                    if (schedule.enabled) {
+                        getNextAlarmTime(schedule.timeHour, schedule.timeMinute, schedule.daysOfWeek)
+                            ?.let { scheduleAlarm(alarmManager, it.timeInMillis, alarmIntent) }
+                    } else {
+                        alarmManager.cancel(alarmIntent)
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "Failed to configure schedules: ${e.javaClass.simpleName}")
+            } finally {
+                stopSelfResult(startId)
             }
         }
-
         return START_NOT_STICKY
     }
 
+    override fun onDestroy() {
+        scheduleJob?.cancel()
+        serviceScope.cancel()
+        super.onDestroy()
+    }
+    @SuppressLint("MissingPermission") // Exact access is checked before setExact; denied devices use the inexact fallback.
+    private fun scheduleAlarm(alarmManager: AlarmManager, triggerAtMillis: Long, intent: PendingIntent) {
+        val exactAlarmAccessGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            alarmManager.canScheduleExactAlarms()
+        } else {
+            true
+        }
+        if (shouldUseExactScheduleAlarm(Build.VERSION.SDK_INT, exactAlarmAccessGranted)) {
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, intent)
+        } else {
+            // Keep schedules functional when Android has not granted exact-alarm access.
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, intent)
+            android.util.Log.w(TAG, "Exact alarm access unavailable; scheduled an inexact fallback")
+        }
+    }
     private fun getNextAlarmTime(hour: Int, minute: Int, days: Set<DayOfWeek>): Calendar? {
         if (days.isEmpty()) return null
 
@@ -113,3 +158,6 @@ class ScheduleService : Service() {
         return null
     }
 }
+
+internal fun shouldUseExactScheduleAlarm(sdkInt: Int, exactAlarmAccessGranted: Boolean): Boolean =
+    sdkInt < Build.VERSION_CODES.S || exactAlarmAccessGranted

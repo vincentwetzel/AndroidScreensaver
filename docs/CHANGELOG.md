@@ -3,8 +3,45 @@
 ## 1.11.0 (In Progress)
 
 ### Changed
+- Slideshow photo aggregation now filters and deduplicates each completed folder batch, avoiding retention of duplicate media entries and extra full-library list copies.
+- The preview activity now preserves pause events that arrive during source loading, avoiding background playback if the activity is paused before the slideshow view is created.
+- Video playback errors now release the slideshow advance guard before skipping, including when an error arrives while paused; playback advances after resume.
+- Remote account cards now show email status only when that account is authenticated; stale saved email labels are hidden for signed-out accounts.
+- Cloud repository list and count caches now encode account, folder, filter, and exclusion components separately so provider IDs containing separators cannot share cached results.
+- Gallery date sorting now uses MediaStore capture timestamps when available, falling back to the item added time only when capture metadata is missing.
+- Pausing the slideshow now suspends display and transition animations along with video playback, reducing background work during battery-saver pauses.
+- A pause requested while slideshow sources are still loading now remains in effect after the first media item finishes loading.
+- Editing the first autostart or autostop schedule now preserves any later schedules already stored.
+- Slideshow image requests now keep Coil hardware bitmap decoding enabled for screen-only drawing, avoiding unnecessary software bitmap allocation.
+- Slideshow transition animators are tracked and canceled when a new item is shown or the slideshow stops, preventing overlapping effects and callbacks on detached views.
+- Slideshow media deduplication compares structured source, account, and provider ID fields so delimiter characters cannot cause distinct cloud items to be dropped.
+- Fixed OneDrive authentication routing by persisting tokens and account settings under the same stable Microsoft Graph account ID; source cards and the sign-in toast now use the returned account email.
 - Switched the folder browser and slideshow content-filter plumbing to pass `MediaTypeFilter` directly instead of lowercased string aliases. This keeps repository queries, folder labels, and ViewModel state aligned with the persisted enum values.
 - Hardened OneDrive auth storage by lazily initializing encrypted shared preferences, recovering from keystore corruption, and storing account tokens under a stable per-account key. OneDrive device flow now records the Graph `mail` or `userPrincipalName` when available so the app can keep showing the signed-in account email.
+- Wired the checked-in debug MSAL config into Android resources and aligned the client to its multiple-account mode. OneDrive now refreshes expired device-flow and MSAL access tokens silently.
+- OneDrive photo listings now fail instead of caching a partial folder when any Graph page fails or omits its response body/media array.
+- OneDrive Graph page and metadata requests now use cancellable OkHttp calls so detaching the slideshow can stop in-flight listing work.
+- Google Drive list, search, metadata, and sign-in verification requests now run interruptibly so coroutine cancellation can stop blocking API work.
+- Dropbox SDK list, search, metadata, thumbnail, link, and download calls now run interruptibly. Dropbox folder search propagates paging failures and missing account clients instead of presenting partial or empty results as complete.
+- Dropbox account restoration now runs once from the account manager background initializer; repository construction no longer repeats encrypted preference reads on the UI thread.
+- Dropbox repository operations now await that one-time background restore before resolving clients, avoiding a transient signed-out state on cold start.
+- Google Drive and Dropbox cache filenames now validate provider controlled extensions before using them as disk path suffixes.
+- Gallery and slideshow diagnostics now report filter counts and exception classes without including media or bucket IDs.
+- Fixed Gallery prefetch account lookups and photo-count updates to use the settings model's source type, resolving a compile-time package mismatch.
+- OneDrive folder search and recursive subfolder listing now fail on incomplete Graph pages or missing credentials instead of returning partial or empty results; repository error logs omit exception details that can contain request URLs.
+- Declared GPS hardware optional so Android TV devices without a GPS receiver remain eligible for app distribution.
+- MainActivity now applies the existing dark TV theme before inflating the TV layout, using the matching dark window background without repainting the same full-screen background in the layout.
+- Slideshow clock decoration now maintains one cancellable update job instead of accumulating a new repeating callback on every slide.
+- Slideshow settings are refreshed once per displayed item, avoiding repeated DataStore reads and decoration updates during 500 ms video-state polling.
+- Slideshow display timers now wait for media readiness, preventing slow cloud downloads from shortening or skipping image display time.
+- Long-lived pan, zoom, and focus animators are canceled when media changes or slideshow playback stops. Photo metadata overlays now update when that media becomes ready.
+- Cloud media caches now enforce the configured size limit with periodic oldest-first eviction while protecting the active download and incomplete temporary files.
+- Slideshow and Dropbox filters now recognize common 3GPP, MPEG program-stream, and MPEG transport-stream video extensions.
+- SVG media now uses Coil's explicit SVG decoder instead of failing through the default raster decoder. Cleanup also runs while browsing already-cached slideshow items. Cloud cache keys hash account-scoped provider IDs to avoid collisions between distinct remote paths.
+- Slideshow photo changes cancel the previous download job and Coil request. OneDrive calls are cancelled directly, while Google Drive and Dropbox blocking transfers run interruptibly; stopping or detaching cancels the view scope and clears image drawables.
+- Root-folder prefetch now respects the folder cache TTL and deduplicates concurrent per-account work instead of forcing repeat MediaStore/cloud listings on every main-screen refresh.
+- Removed unreferenced slideshow preload bookkeeping and its unused media download path; displayed photos continue to load through the active cancellable renderer.
+- Slideshow folder-load logs now record only source and exception type, avoiding remote folder IDs or provider error details that may contain private resource data.
 
 ### Documentation
 - Removed `PROGRESS.md` and consolidated active planning into `TODO.md`; release history remains in this changelog.
@@ -65,6 +102,24 @@
 - **Remove account option** — Source cards on the main screen now have a "more" menu with a "Remove account" option. This allows users to remove individual accounts (e.g., a second Google Drive account) after a confirmation dialog.
 
 ### Fixed
+- **Gallery permission selection** - Gallery now requests and checks image or video access according to the active media filter, while all-media mode continues with either permission.
+- Android 14 Gallery access now handles selected-media permission and exposes a Change selected media menu action for reselection.
+- Gallery MediaStore caches are invalidated when full or selected-media permissions change. Slideshow loads also re-query during selected-media access because selection membership can change while permission bits stay the same.
+- **Schedule persistence and alarm options** - Schedule settings now round-trip through DataStore; charging-only autostart is enforced, and a non-repeating schedule disables itself after its action executes.
+- **Cloud photo list account routing** - The slideshow now passes each remote source account ID when listing folders and photos, preventing empty results from repositories that require account-scoped calls.
+- **OneDrive paging failures** - Failed or incomplete Graph pages now abort the listing rather than caching a partial collection.
+- **Manifest and alarm broadcast lint errors** - Removed the unimplemented OAuth callback activity/filter, added the Android TV launcher banner, and package-scoped the scheduled STOP_DREAM broadcast. `lintDebug` now completes with no errors.
+- **Exact alarm permission fallback** - Scheduled start/stop now checks Android's exact-alarm access and falls back to an idle-aware inexact alarm when access is unavailable; Schedule Settings explains the possible delay.
+- **Schedule service lifecycle** - Scheduling requests now replace stale in-flight work and stop the service after updating alarms instead of leaving a detached IO scope and started service behind.
+- **Cloud video playback classification** - The slideshow renderer now uses the shared media classifier, which recognizes cloud videos from their filename even when Google Drive and OneDrive use opaque download URLs. These videos are now routed to Media3 instead of the image loader, and Google Drive video bytes are fetched through the authenticated repository cache before playback.
+- **Dropbox slideshow URI handling** - Dropbox file paths are downloaded through the account-scoped repository cache before Coil receives them, instead of being treated as loadable image URIs.
+- **OneDrive expiring download URLs** - OneDrive photos and videos are cached locally before playback; failed temporary links trigger a fresh Graph metadata lookup, and cached filenames preserve the media extension.
+- **Video minimum-duration enforcement and consecutive playback** - Minimum duration is now checked after Media3 prepares the video, and the advance guard is released when a video is ready so consecutive videos can finish and advance.
+- **Media URL log privacy** - Slideshow diagnostics no longer write media URLs, filenames, local cache paths, or exception messages that could contain provider download credentials to logcat.
+- **Cloud slideshow account routing** - Root-folder listing now passes `null` as the parent and routes both folder and photo queries with the active account ID, so cloud repositories no longer receive a missing or mispositioned account.
+- **Remote account card status** - Initial and refreshed Google Drive, Dropbox, and OneDrive cards now show `Signed in as [account email]`, including after re-authentication.
+- **Slideshow stop lifecycle cleanup** - Stopping or replacing a displayed photo now cancels pending repository downloads and Coil requests; detaching the view cancels its coroutine scope and clears image drawables before returning.
+- **Slideshow startup responsiveness** - Sorting and shuffling the loaded library now runs on the default worker dispatcher, and coroutine cancellation is rethrown instead of reported as a photo-loading error.
 - **Photo info settings persistence** - Added DataStore keys for all photo-info overlay options so field visibility, date format, layout, position, font, opacity, background, shadow, separator, and fade behavior survive app restarts.
 - **Google Drive account-picker authorization flow** - Replaced the failing Google Sign-In scope path with Android's Google AccountPicker plus `GoogleAccountCredential` Drive verification. Drive API clients now request read-only Drive access through the selected account before saving the account configuration.
 - **Google Drive auth diagnostic logging** - Added detailed Google Drive sign-in diagnostics for `InvalidScope` failures, including installed package name, signing certificate SHA-1/SHA-256, Google Play Services status/version, account-picker result extras, credential state, and safe token-probe results without logging OAuth token values. Token probes now use full Google userinfo scope URIs and test both Account-object and account-name token APIs.
@@ -182,7 +237,7 @@
 - **Date, Clock, and Weather decoration overlays rendered** — Decorations now display as overlay TextViews on top of the slideshow. Clock updates every second. Date, clock, and weather respect configured position, font size, opacity, and background style.
 - **DecorationSettingsActivity save fix** — Removed `if (config.enabled)` checks that caused decorations to always save as `null` since `enabled` defaulted to `false`. All three decorations now always save with `enabled = true`.
 
-## 1.8.0 (Current)
+## 1.8.0
 
 ### Changed
 - **Just-in-Time Photo Loading** — Eliminated the severe bottleneck where the app would synchronously download all photos from a Google Drive folder before starting the slideshow. The app now fetches lightweight metadata instantly and lets Coil download the photos just-in-time via remote URLs.

@@ -108,6 +108,10 @@ object SettingsManager {
         // Format: accountId|sourceType|email|enabled|folderId1,folderId2|deselectedId1,id2|authTime|syncTime|photoCount
         // Multiple accounts separated by ;;
         val SOURCE_ACCOUNTS = stringPreferencesKey("source_accounts")
+
+        // Schedules
+        val AUTOSTART_SCHEDULES = stringPreferencesKey("autostart_schedules")
+        val AUTOSTOP_SCHEDULES = stringPreferencesKey("autostop_schedules")
     }
 
     /**
@@ -251,6 +255,10 @@ object SettingsManager {
                     preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_UNIT] ?: TimeoutUnit.MINUTES.name
                 ) ?: TimeoutUnit.MINUTES,
             ),
+
+            // Schedules
+            autostartSchedules = ScheduleConfigCodec.decode(preferences[PreferencesKeys.AUTOSTART_SCHEDULES] ?: ""),
+            autostopSchedules = ScheduleConfigCodec.decode(preferences[PreferencesKeys.AUTOSTOP_SCHEDULES] ?: ""),
         )
     }
 
@@ -334,6 +342,29 @@ object SettingsManager {
             preferences[PreferencesKeys.TIMER_TIMEOUT_MINUTES] = config.timerConfig.timeoutMinutes.name
             preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_MINUTES] = config.timerConfig.customTimeoutValue
             preferences[PreferencesKeys.TIMER_TIMEOUT_CUSTOM_UNIT] = config.timerConfig.customTimeoutUnit.name
+
+            // Schedules
+            preferences[PreferencesKeys.AUTOSTART_SCHEDULES] = ScheduleConfigCodec.encode(config.autostartSchedules)
+            preferences[PreferencesKeys.AUTOSTOP_SCHEDULES] = ScheduleConfigCodec.encode(config.autostopSchedules)
+        }
+    }
+
+    /** Update one schedule atomically without loading and rewriting unrelated preferences. */
+    suspend fun saveScheduleConfig(context: Context, isAutostart: Boolean, schedule: ScheduleConfig) {
+        val key = if (isAutostart) PreferencesKeys.AUTOSTART_SCHEDULES else PreferencesKeys.AUTOSTOP_SCHEDULES
+        context.dataStore.edit { preferences ->
+            val schedules = ScheduleConfigCodec.decode(preferences[key] ?: "")
+            preferences[key] = ScheduleConfigCodec.encode(ScheduleConfigCodec.replaceFirst(schedules, schedule))
+        }
+    }
+
+    /** Disable one non-repeating schedule without rewriting unrelated settings. */
+    suspend fun disableOneShotSchedule(context: Context, isAutostart: Boolean, index: Int) {
+        val key = if (isAutostart) PreferencesKeys.AUTOSTART_SCHEDULES else PreferencesKeys.AUTOSTOP_SCHEDULES
+        context.dataStore.edit { preferences ->
+            val schedules = ScheduleConfigCodec.decode(preferences[key] ?: "").toMutableList()
+            schedules.getOrNull(index)?.let { schedules[index] = it.copy(enabled = false) }
+            preferences[key] = ScheduleConfigCodec.encode(schedules)
         }
     }
 

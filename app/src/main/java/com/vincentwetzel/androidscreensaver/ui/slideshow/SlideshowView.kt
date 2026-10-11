@@ -8,8 +8,6 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.net.Uri
-import android.os.Handler
-import android.os.Looper
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
@@ -31,14 +29,17 @@ import coil.load
 import coil.request.ImageRequest
 import coil.request.ErrorResult
 import coil.request.SuccessResult
+import coil.decode.SvgDecoder
 import com.vincentwetzel.androidscreensaver.R
 import com.vincentwetzel.androidscreensaver.data.model.ClockPosition
 import com.vincentwetzel.androidscreensaver.data.model.Photo
 import com.vincentwetzel.androidscreensaver.data.model.PhotoInfoConfig
+import com.vincentwetzel.androidscreensaver.dream.PhotoMediaClassifier
 import com.vincentwetzel.androidscreensaver.dream.SlideshowManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -58,6 +59,8 @@ class SlideshowView @JvmOverloads constructor(
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
     private val slideshowScope = CoroutineScope(Dispatchers.Main + Job())
+    private var photoLoadJob: Job? = null
+    private var activeImageRequest: coil.request.Disposable? = null
 
     private lateinit var slideshowManager: SlideshowManager
 
@@ -83,15 +86,19 @@ class SlideshowView @JvmOverloads constructor(
     private var photoInfoTextView: TextView? = null
 
     // Decoration timers
-    private val decorationHandler = Handler(Looper.getMainLooper())
     private var clockUpdateJob: Job? = null
+    private val displayEffectAnimators = mutableSetOf<Animator>()
+    private val transitionAnimators = mutableSetOf<Animator>()
 
     // State
     private var photos: List<Photo> = emptyList()
     private var currentIndex = 0
     private var isPlaying = false
+    private var isPaused = false
+    private var currentPhotoReady = false
     private var slideJob: Job? = null
     private var isAdvancing = false // Prevent double-advance (video end + auto-advance racing)
+    private var pendingVideoFailure = false
     private var videoDurationJob: Job? = null // Cancelable job for video duration timers
     private var burnInProtectionJob: Job? = null // Cancelable job for pixel shifting
 
@@ -154,8 +161,21 @@ class SlideshowView @JvmOverloads constructor(
             addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY) {
-                        // Check duration and apply loop dynamically for short videos
                         val durationMs = duration
+                        // Release the previous advance guard before this video can be skipped or finished.
+                        isAdvancing = false
+                        if (PhotoMediaClassifier.isBelowMinimumVideoDuration(
+                                durationMs,
+                                slideshowManager.config.videoMinDurationSeconds
+                            )
+                        ) {
+                            android.util.Log.d(TAG, "Skipping video shorter than configured minimum")
+                            advanceToNext()
+                            return
+                        }
+                        currentPhotoReady = true
+                        photos.getOrNull(currentIndex)?.let(::updatePhotoInfoOverlay)
+                        // Check duration and apply loop dynamically for short videos
                         val isShort = durationMs in 1..15000L // 15 seconds threshold
                         val shouldLoop = slideshowManager.config.videoLoopShort && isShort
                         
@@ -182,8 +202,14 @@ class SlideshowView @JvmOverloads constructor(
                 }
 
                 override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                    android.util.Log.e(TAG, "Video playback error: ${error.message}")
-                    advanceToNext()
+                    android.util.Log.e(TAG, "Video playback error: ${error.errorCodeName}")
+                    // A failed player may never reach STATE_READY, which normally releases this guard.
+                    isAdvancing = false
+                    if (isPlaying) {
+                        advanceToNext()
+                    } else {
+                        pendingVideoFailure = true
+                    }
                 }
             })
         }
@@ -323,13 +349,14 @@ class SlideshowView @JvmOverloads constructor(
 
                 android.util.Log.d(TAG, "Loaded ${loadedPhotos.size} photos from sources")
 
-                // Apply shuffle if enabled
-                val finalPhotos = if (slideshowManager.config.shuffle) {
-                    loadedPhotos.shuffled()
-                } else {
-                    // Sort by configured order
-                    @Suppress("UNCHECKED_CAST")
-                    loadedPhotos.sortedBy { slideshowManager.getSortKey(it) as Comparable<Any> }
+                // Keep sorting/shuffling large cloud libraries off the UI thread.
+                val finalPhotos = withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    if (slideshowManager.config.shuffle) {
+                        loadedPhotos.shuffled()
+                    } else {
+                        @Suppress("UNCHECKED_CAST")
+                        loadedPhotos.sortedBy { slideshowManager.getSortKey(it) as Comparable<Any> }
+                    }
                 }
 
                 photos = finalPhotos
@@ -353,35 +380,24 @@ class SlideshowView @JvmOverloads constructor(
 
                 // Hide loading, show first photo
                 currentIndex = 0
+                isPlaying = !isPaused
                 showPhoto(photos[0], animate = false)
                 loadingLayout.visibility = GONE
 
                 // Start auto-advance
                 startAutoAdvance()
-                isPlaying = true
 
                 android.util.Log.d(TAG, "Started slideshow with ${photos.size} items")
 
             } catch (e: Exception) {
-                android.util.Log.e(TAG, "Error loading photos", e)
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                android.util.Log.e(TAG, "Error loading photos (${e.javaClass.simpleName})")
                 loadingLayout.visibility = GONE
                 withContext(Dispatchers.Main) {
-                    onError?.invoke("Error loading photos: ${e.message}")
+                    onError?.invoke("Error loading photos")
                 }
             }
         }
-    }
-
-    /**
-     * Check if the URI points to a video file
-     */
-    private fun isVideo(uri: String): Boolean {
-        val lower = uri.lowercase()
-        // Check for video content URIs
-        if (lower.contains("/video/media/")) return true
-        // Check for video file extensions
-        val videoExtensions = listOf(".mp4", ".avi", ".mov", ".mkv", ".webm", ".wmv", ".flv", ".m4v")
-        return videoExtensions.any { lower.endsWith(it) }
     }
 
     /**
@@ -393,12 +409,21 @@ class SlideshowView @JvmOverloads constructor(
         val uri = Uri.parse(photo.uri)
         val config = slideshowManager.config
 
+        currentPhotoReady = false
+        cancelDisplayEffectAnimations()
+        cancelTransitionAnimations()
+
+        photoLoadJob?.cancel()
+        photoLoadJob = null
+        activeImageRequest?.dispose()
+        activeImageRequest = null
+
         // Stop any playing video first
         stopVideoPlayer()
 
-        if (isVideo(photo.uri)) {
+        if (PhotoMediaClassifier.isVideo(photo)) {
             // Handle video playback
-            android.util.Log.d(TAG, "Playing video: uri=$uri, title=${photo.title}")
+            android.util.Log.d(TAG, "Playing video from ${photo.sourceType}")
             isPlayingVideo = true
 
             // Apply display mode
@@ -423,47 +448,23 @@ class SlideshowView @JvmOverloads constructor(
             targetView.visibility = GONE
             playerView.visibility = VISIBLE
 
-            // Set media source
-            val mediaItem = MediaItem.fromUri(uri)
-            videoPlayer?.setMediaItem(mediaItem)
-            videoPlayer?.prepare()
-
-            // Check minimum duration — skip video if it's too short
-            if (config.videoMinDurationSeconds > 0) {
-                val videoDurationMs = videoPlayer?.duration ?: 0L
-                val minDurationMs = config.videoMinDurationSeconds * 1000L
-                if (videoDurationMs < minDurationMs && videoDurationMs > 0) {
-                    android.util.Log.d(TAG, "Skipping short video: duration=${videoDurationMs}ms < min=${minDurationMs}ms")
-                    advanceToNext()
-                    return
-                }
-            }
-
-            // Apply audio mode and volume
-            applyAudioMode(config)
-
-            // Loop setting is deferred until video is prepared (STATE_READY) 
-            // so we can dynamically check its duration
-            videoPlayer?.repeatMode = Player.REPEAT_MODE_OFF
-
-            // Apply auto play setting
-            videoPlayer?.playWhenReady = config.videoAutoPlay
-
-            // Handle videoMaxDurationSeconds: set a hard cap
-            if (config.videoMaxDurationSeconds > 0) {
-                val maxMs = config.videoMaxDurationSeconds * 1000L
-                videoDurationJob?.cancel()
-                videoDurationJob = slideshowScope.launch {
-                    delay(maxMs)
-                    if (isPlayingVideo) {
-                        android.util.Log.d(TAG, "Max duration reached ($maxMs ms), advancing")
+            if (PhotoMediaClassifier.requiresLocalDownload(photo)) {
+                photoLoadJob = slideshowScope.launch {
+                    val localUri = slideshowManager.downloadPhotoToLocalCache(photo)
+                    if (localUri != null && isPlayingVideo) {
+                        prepareVideo(Uri.parse(localUri), config)
+                    } else if (isPlayingVideo) {
+                        // A failed download never reaches STATE_READY, so release the guard before skipping.
+                        isAdvancing = false
                         advanceToNext()
                     }
                 }
+            } else {
+                prepareVideo(uri, config)
             }
         } else {
             // Handle image display
-            android.util.Log.d(TAG, "Loading image: uri=$uri, title=${photo.title}")
+            android.util.Log.d(TAG, "Loading image from ${photo.sourceType}")
             isPlayingVideo = false
 
             // Hide video player, show image views
@@ -479,8 +480,8 @@ class SlideshowView @JvmOverloads constructor(
             // Apply display effect
             applyDisplayEffect(targetView, config)
 
-            if (photo.uri.startsWith("http") && photo.sourceType == com.vincentwetzel.androidscreensaver.data.model.SourceType.GOOGLE_DRIVE) {
-                slideshowScope.launch {
+            if (PhotoMediaClassifier.requiresLocalDownload(photo)) {
+                photoLoadJob = slideshowScope.launch {
                     val localUri = slideshowManager.downloadPhotoToLocalCache(photo)
                     if (localUri != null) {
                         val newPhoto = photo.copy(uri = localUri)
@@ -501,19 +502,20 @@ class SlideshowView @JvmOverloads constructor(
         val config = slideshowManager.config
         
         // Use explicit ImageRequest for better error handling
-        val request = ImageRequest.Builder(context)
+        val requestBuilder = ImageRequest.Builder(context)
             .data(uri)
             .crossfade(false)
             .placeholder(android.R.color.black)
             .error(android.R.color.black)
-            .allowHardware(false)
+
             .target(
                 onStart = {
-                    android.util.Log.d(TAG, "Started loading: $uri")
+                    android.util.Log.d(TAG, "Started loading image")
                 },
                 onSuccess = { drawable ->
+                    currentPhotoReady = true
                     targetView.setImageDrawable(drawable)
-                    android.util.Log.d(TAG, "Successfully loaded: $uri, size=${drawable.intrinsicWidth}x${drawable.intrinsicHeight}")
+                    android.util.Log.d(TAG, "Successfully loaded image, size=${drawable.intrinsicWidth}x${drawable.intrinsicHeight}")
                     // Now that image is loaded, either transition or show immediately
                     if (animate) {
                         applyTransition(currentView, targetView)
@@ -528,24 +530,46 @@ class SlideshowView @JvmOverloads constructor(
                     updatePhotoInfoOverlay(photo)
                 },
                 onError = { errorDrawable ->
-                    android.util.Log.e(TAG, "Failed to load: $uri, drawable=$errorDrawable")
+                    android.util.Log.e(TAG, "Failed to load image")
                     // Skip this photo and advance to next
-                    slideshowScope.launch {
+                    photoLoadJob = slideshowScope.launch {
                         delay(1000) // Wait 1s before advancing
                         advanceToNext()
                     }
                 }
             )
-            .build()
+        if (photo.title?.endsWith(".svg", ignoreCase = true) == true || uri.toString().endsWith(".svg", ignoreCase = true)) {
+            requestBuilder.decoderFactory(SvgDecoder.Factory())
+        }
+        val request = requestBuilder.build()
 
         // Execute the request using the singleton ImageLoader
         // This is CRITICAL for connection pooling and memory/disk caching to work
-        context.imageLoader.enqueue(request)
+        activeImageRequest?.dispose()
+        activeImageRequest = context.imageLoader.enqueue(request)
     }
 
-    /**
-     * Advance to the next item in the slideshow
-     */
+    /** Prepare a video after any required account-scoped download completes. */
+    private fun prepareVideo(uri: Uri, config: com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig) {
+        videoPlayer?.setMediaItem(MediaItem.fromUri(uri))
+        videoPlayer?.prepare()
+        applyAudioMode(config)
+        videoPlayer?.repeatMode = Player.REPEAT_MODE_OFF
+        videoPlayer?.playWhenReady = config.videoAutoPlay && isPlaying
+
+        if (config.videoMaxDurationSeconds > 0) {
+            val maxMs = config.videoMaxDurationSeconds * 1000L
+            videoDurationJob?.cancel()
+            videoDurationJob = slideshowScope.launch {
+                delay(maxMs)
+                if (isPlayingVideo) {
+                    android.util.Log.d(TAG, "Max duration reached ($maxMs ms), advancing")
+                    advanceToNext()
+                }
+            }
+        }
+    }
+    /** Advance to the next item in the slideshow. */
     private fun advanceToNext() {
         if (!isPlaying || photos.isEmpty() || isAdvancing) return
         isAdvancing = true
@@ -654,9 +678,6 @@ class SlideshowView @JvmOverloads constructor(
             weatherTextView?.visibility = GONE
         }
         
-        if (photos.isNotEmpty()) {
-            updatePhotoInfoOverlay(photos[currentIndex])
-        }
     }
 
     private fun updateDateDecoration(config: com.vincentwetzel.androidscreensaver.data.model.SlideshowConfig) {
@@ -765,7 +786,7 @@ class SlideshowView @JvmOverloads constructor(
         if (config.showFileSize) {
             photo.fileSize?.let {
                 val sizeInMb = it / 1024.0 / 1024.0
-                info.add(String.format("%.2f MB", sizeInMb))
+                info.add(String.format(java.util.Locale.getDefault(), "%.2f MB", sizeInMb))
             }
         }
 
@@ -838,12 +859,12 @@ class SlideshowView @JvmOverloads constructor(
                 ObjectAnimator.ofFloat(targetView, View.SCALE_X, 1.0f, 1.5f).apply {
                     duration = config.slideDurationSeconds * 1000L
                     interpolator = DecelerateInterpolator()
-                    start()
+                    startDisplayEffectAnimator(this)
                 }
                 ObjectAnimator.ofFloat(targetView, View.SCALE_Y, 1.0f, 1.5f).apply {
                     duration = config.slideDurationSeconds * 1000L
                     interpolator = DecelerateInterpolator()
-                    start()
+                    startDisplayEffectAnimator(this)
                 }
             }
             com.vincentwetzel.androidscreensaver.data.model.DisplayEffect.PAN -> {
@@ -858,7 +879,7 @@ class SlideshowView @JvmOverloads constructor(
                 ObjectAnimator.ofFloat(targetView, View.ALPHA, 0f, 1f).apply {
                     duration = (config.slideDurationSeconds * 1000L / 3).coerceAtMost(2000L)
                     interpolator = AccelerateDecelerateInterpolator()
-                    start()
+                    startDisplayEffectAnimator(this)
                 }
             }
             else -> {
@@ -896,19 +917,77 @@ class SlideshowView @JvmOverloads constructor(
         ObjectAnimator.ofFloat(targetView, View.TRANSLATION_X, startX, endX).apply {
             this.duration = duration
             interpolator = AccelerateDecelerateInterpolator()
-            start()
+            startDisplayEffectAnimator(this)
         }
         ObjectAnimator.ofFloat(targetView, View.TRANSLATION_Y, startY, endY).apply {
             this.duration = duration
             interpolator = AccelerateDecelerateInterpolator()
-            start()
+            startDisplayEffectAnimator(this)
         }
     }
 
+    private fun startDisplayEffectAnimator(animator: Animator) {
+        displayEffectAnimators.add(animator)
+        animator.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: Animator) {
+                displayEffectAnimators.remove(animation)
+            }
+
+            override fun onAnimationCancel(animation: Animator) {
+                displayEffectAnimators.remove(animation)
+            }
+        })
+        animator.start()
+    }
+
+    private fun cancelDisplayEffectAnimations() {
+        displayEffectAnimators.toList().forEach(Animator::cancel)
+        displayEffectAnimators.clear()
+    }
+
+    /** Starts and tracks one media transition animator. */
+    private fun startTransitionAnimator(animator: Animator) {
+        transitionAnimators.add(animator)
+        animator.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: Animator) {
+                transitionAnimators.remove(animation)
+            }
+
+            override fun onAnimationCancel(animation: Animator) {
+                transitionAnimators.remove(animation)
+            }
+        })
+        animator.start()
+    }
+
+    private fun cancelTransitionAnimations() {
+        transitionAnimators.toList().forEach { animator ->
+            animator.removeAllListeners()
+            animator.cancel()
+        }
+        transitionAnimators.clear()
+    }
+    private fun pauseDisplayAnimations() {
+        displayEffectAnimators.forEach(Animator::pause)
+        transitionAnimators.forEach(Animator::pause)
+        cancelBurnInOverlayAnimations()
+    }
+
+    private fun resumeDisplayAnimations() {
+        displayEffectAnimators.forEach(Animator::resume)
+        transitionAnimators.forEach(Animator::resume)
+    }
+
+    private fun cancelBurnInOverlayAnimations() {
+        listOf(dateTextView, clockTextView, weatherTextView, photoInfoTextView)
+            .forEach { it?.animate()?.cancel() }
+    }
     /**
      * Stop any running display effect animations
      */
     private fun stopDisplayEffects() {
+        cancelDisplayEffectAnimations()
+        cancelTransitionAnimations()
         imageViewA.clearAnimation()
         imageViewB.clearAnimation()
         imageViewA.translationX = 0f
@@ -991,8 +1070,8 @@ class SlideshowView @JvmOverloads constructor(
                         }
                     })
                 }
-                fadeIn.start()
-                fadeOut.start()
+                startTransitionAnimator(fadeIn)
+                startTransitionAnimator(fadeOut)
             }
             com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.SLIDE -> {
                 currentView.visibility = VISIBLE
@@ -1017,8 +1096,8 @@ class SlideshowView @JvmOverloads constructor(
                         }
                     })
                 }
-                slideIn.start()
-                slideOut.start()
+                startTransitionAnimator(slideIn)
+                startTransitionAnimator(slideOut)
             }
             com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.WIPE -> {
                 currentView.visibility = VISIBLE
@@ -1038,7 +1117,7 @@ class SlideshowView @JvmOverloads constructor(
                         }
                     })
                 }
-                wipeIn.start()
+                startTransitionAnimator(wipeIn)
             }
             com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.SWAP -> {
                 currentView.visibility = VISIBLE
@@ -1063,8 +1142,8 @@ class SlideshowView @JvmOverloads constructor(
                         }
                     })
                 }
-                slideIn.start()
-                slideOut.start()
+                startTransitionAnimator(slideIn)
+                startTransitionAnimator(slideOut)
             }
             com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.ZOOM -> {
                 currentView.visibility = VISIBLE
@@ -1095,9 +1174,9 @@ class SlideshowView @JvmOverloads constructor(
                         }
                     })
                 }
-                scaleX.start()
-                scaleY.start()
-                fadeIn.start()
+                startTransitionAnimator(scaleX)
+                startTransitionAnimator(scaleY)
+                startTransitionAnimator(fadeIn)
             }
             com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.FLASH -> {
                 currentView.visibility = VISIBLE
@@ -1129,10 +1208,10 @@ class SlideshowView @JvmOverloads constructor(
                     override fun onAnimationEnd(animation: Animator) {
                         targetView.visibility = VISIBLE
                         targetView.alpha = 1f
-                        fadeOut.start()
+                        startTransitionAnimator(fadeOut)
                     }
                 })
-                fadeIn.start()
+                startTransitionAnimator(fadeIn)
             }
             com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.RIPPLE -> {
                 currentView.visibility = VISIBLE
@@ -1164,9 +1243,9 @@ class SlideshowView @JvmOverloads constructor(
                         }
                     })
                 }
-                scaleX.start()
-                scaleY.start()
-                fadeIn.start()
+                startTransitionAnimator(scaleX)
+                startTransitionAnimator(scaleY)
+                startTransitionAnimator(fadeIn)
             }
             com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.DOORWAY -> {
                 currentView.visibility = VISIBLE
@@ -1194,9 +1273,9 @@ class SlideshowView @JvmOverloads constructor(
                         }
                     })
                 }
-                slideOut.start()
-                fadeOutCurrent.start()
-                fadeIn.start()
+                startTransitionAnimator(slideOut)
+                startTransitionAnimator(fadeOutCurrent)
+                startTransitionAnimator(fadeIn)
             }
             com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.RADIAL -> {
                 currentView.visibility = VISIBLE
@@ -1234,7 +1313,7 @@ class SlideshowView @JvmOverloads constructor(
                     })
                 }
                 
-                revealAnimator.start()
+                startTransitionAnimator(revealAnimator)
             }
             com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.STAR -> {
                 currentView.visibility = VISIBLE
@@ -1271,10 +1350,10 @@ class SlideshowView @JvmOverloads constructor(
                         }
                     })
                 }
-                scaleX.start()
-                scaleY.start()
-                rotate.start()
-                fadeIn.start()
+                startTransitionAnimator(scaleX)
+                startTransitionAnimator(scaleY)
+                startTransitionAnimator(rotate)
+                startTransitionAnimator(fadeIn)
             }
             com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.WIND -> {
                 currentView.visibility = VISIBLE
@@ -1305,9 +1384,9 @@ class SlideshowView @JvmOverloads constructor(
                         }
                     })
                 }
-                slideIn.start()
-                rotate.start()
-                fadeIn.start()
+                startTransitionAnimator(slideIn)
+                startTransitionAnimator(rotate)
+                startTransitionAnimator(fadeIn)
             }
             com.vincentwetzel.androidscreensaver.data.model.TransitionEffect.CIRCLE -> {
                 currentView.visibility = VISIBLE
@@ -1334,8 +1413,8 @@ class SlideshowView @JvmOverloads constructor(
                         }
                     })
                 }
-                scaleX.start()
-                scaleY.start()
+                startTransitionAnimator(scaleX)
+                startTransitionAnimator(scaleY)
             }
             // CUBE, MEMORY, ILLUSION fall back to crossfade
             else -> {
@@ -1359,8 +1438,8 @@ class SlideshowView @JvmOverloads constructor(
                         }
                     })
                 }
-                fadeIn.start()
-                fadeOut.start()
+                startTransitionAnimator(fadeIn)
+                startTransitionAnimator(fadeOut)
             }
         }
     }
@@ -1430,23 +1509,27 @@ class SlideshowView @JvmOverloads constructor(
      * Start periodic clock updates (every second)
      */
     private fun startClockUpdates() {
-        val runnable = object : Runnable {
-            override fun run() {
+        if (clockUpdateJob?.isActive == true) return
+        clockUpdateJob = slideshowScope.launch {
+            while (true) {
+                delay(1000)
                 val config = slideshowManager.config
                 if (config.clockDecoration != null) {
                     updateClockDecoration(config)
+                } else {
+                    stopClockUpdates()
+                    return@launch
                 }
-                decorationHandler.postDelayed(this, 1000)
             }
         }
-        decorationHandler.postDelayed(runnable, 1000)
     }
 
     /**
      * Stop clock updates
      */
     private fun stopClockUpdates() {
-        decorationHandler.removeCallbacksAndMessages(null)
+        clockUpdateJob?.cancel()
+        clockUpdateJob = null
     }
 
     /**
@@ -1471,10 +1554,21 @@ class SlideshowView @JvmOverloads constructor(
     private fun startAutoAdvance() {
         slideJob?.cancel()
         slideJob = slideshowScope.launch {
+            var configuredPhotoIndex = -1
             while (isPlaying && photos.isNotEmpty()) {
-                // Reload config each cycle so settings changes take effect immediately
-                slideshowManager.loadConfig()
-                updateDecorations()
+                // Refresh once per displayed item; video polling must not reread DataStore every 500ms.
+                if (configuredPhotoIndex != currentIndex) {
+                    slideshowManager.loadConfig()
+                    slideshowManager.trimCache(photos.getOrNull(currentIndex)?.uri)
+                    updateDecorations()
+                    configuredPhotoIndex = currentIndex
+                }
+
+                // Start the configured display duration only once the current media is visible/ready.
+                if (!currentPhotoReady) {
+                    delay(500)
+                    continue
+                }
 
                 // For videos, wait for them to finish (handled by ExoPlayer listener)
                 // The isPlayingVideo flag is set in showPhoto() when a video starts
@@ -1531,9 +1625,11 @@ class SlideshowView @JvmOverloads constructor(
      * Pause the slideshow
      */
     fun pause() {
+        isPaused = true
         isPlaying = false
         slideJob?.cancel()
         slideJob = null
+        pauseDisplayAnimations()
         if (isPlayingVideo) {
             videoPlayer?.pause()
         }
@@ -1543,9 +1639,14 @@ class SlideshowView @JvmOverloads constructor(
      * Resume the slideshow
      */
     fun resume() {
+        isPaused = false
         if (photos.isNotEmpty() && !isPlaying) {
             isPlaying = true
-            if (isPlayingVideo) {
+            resumeDisplayAnimations()
+            if (pendingVideoFailure) {
+                pendingVideoFailure = false
+                advanceToNext()
+            } else if (isPlayingVideo) {
                 videoPlayer?.play()
             }
             startAutoAdvance()
@@ -1557,16 +1658,19 @@ class SlideshowView @JvmOverloads constructor(
      */
     fun stop() {
         pause()
+        photoLoadJob?.cancel()
+        photoLoadJob = null
+        activeImageRequest?.dispose()
+        activeImageRequest = null
         stopVideoPlayer()
+        stopDisplayEffects()
+        cancelBurnInOverlayAnimations()
         stopClockUpdates()
         burnInProtectionJob?.cancel()
         burnInProtectionJob = null
-        slideshowScope.launch {
-            withContext(Dispatchers.Main) {
-                imageViewA.setImageDrawable(null)
-                imageViewB.setImageDrawable(null)
-            }
-        }
+        imageViewA.setImageDrawable(null)
+        imageViewB.setImageDrawable(null)
+        slideshowScope.cancel()
     }
 
     /**

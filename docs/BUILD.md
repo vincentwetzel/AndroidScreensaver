@@ -130,11 +130,12 @@ If `DROPBOX_APP_KEY` is missing, Dropbox authentication shows an error instead o
 ## OneDrive OAuth Setup
 
 1. Use the Microsoft Entra app registration tied to the app's OneDrive client ID.
-2. Keep the OneDrive client ID available to Gradle as `ONEDRIVE_CLIENT_ID` if you need to override the built-in placeholder for local builds.
-3. Ensure the app registration allows delegated read access for Microsoft Graph `Files.Read` and `User.Read`, plus `offline_access` if you want refresh support.
-4. Android TV uses Microsoft device code flow, so verify the account you sign in with can complete browser-based verification on a second device.
+2. Keep the root MSAL config JSON at the repository root for debug builds. Gradle packages it as an Android raw resource; its redirect URI must match the debug application ID and signing certificate. Release builds need a separate MSAL config and redirect URI matching the release application ID and signing certificate before distribution.
+3. Keep the OneDrive client ID available to Gradle as `ONEDRIVE_CLIENT_ID` if you need to override the built-in placeholder for local builds.
+4. Ensure the app registration allows delegated read access for Microsoft Graph `Files.Read` and `User.Read`, plus `offline_access` for refresh support.
+5. Android TV uses Microsoft device code flow, so verify the account you sign in with can complete browser-based verification on a second device.
 
-The app stores OneDrive tokens in encrypted shared preferences, initializes that storage lazily to avoid keystore work during dependency setup, and keeps downloaded OneDrive media in the app cache directory. The signed-in account label comes from the Graph `mail` or `userPrincipalName` field when available.
+The app stores OneDrive tokens in encrypted shared preferences, initializes that storage lazily to avoid keystore work during dependency setup, refreshes device-flow tokens with the OAuth refresh token and mobile tokens through MSAL silent acquisition, and keeps downloaded OneDrive media in the app cache directory. The signed-in account label comes from the Graph `mail` or `userPrincipalName` field when available.
 
 ## Troubleshooting
 

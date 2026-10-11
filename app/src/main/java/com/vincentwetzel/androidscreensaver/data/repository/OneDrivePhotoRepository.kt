@@ -10,14 +10,21 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.Request
+import okhttp3.Response
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import javax.inject.Inject
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import javax.inject.Singleton
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 @Singleton
 class OneDrivePhotoRepository @Inject constructor(
@@ -50,7 +57,7 @@ class OneDrivePhotoRepository @Inject constructor(
         forceRefresh: Boolean,
         accountId: String
     ): List<PhotoFolder> = withContext(Dispatchers.IO) {
-        val cacheKey = "${accountId}_${parentFolderId ?: "ROOT"}"
+        val cacheKey = RepositoryCacheKey.of(accountId, parentFolderId)
         
         val cached = folderCache[cacheKey]
         if (!forceRefresh && cached != null && !cached.isStale) {
@@ -72,7 +79,7 @@ class OneDrivePhotoRepository @Inject constructor(
                     .header("Authorization", "Bearer $token")
                     .build()
 
-                httpClient.newCall(request).execute().use { response ->
+                httpClient.newCall(request).await().use { response ->
                     if (!response.isSuccessful) throw RuntimeException("Graph API error: ${response.code}")
                     val body = response.body?.string() ?: break
                     val json = JSONObject(body)
@@ -95,7 +102,7 @@ class OneDrivePhotoRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.e("OneDrivePhotoRepo", "Failed to list folders", e)
+            android.util.Log.e("OneDrivePhotoRepo", "Failed to list folders: ${e.javaClass.simpleName}")
             throw e
         }
 
@@ -109,8 +116,7 @@ class OneDrivePhotoRepository @Inject constructor(
         accountId: String
     ): List<Photo> = withContext(Dispatchers.IO) {
         val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
-        val exclusionsKey = if (excludedFolderIds.isEmpty()) "none" else excludedFolderIds.sorted().joinToString(",")
-        val cacheKey = "${accountId}_${folderId}_${normalizedFilter}_$exclusionsKey"
+        val cacheKey = RepositoryCacheKey.of(accountId, folderId, normalizedFilter, RepositoryCacheKey.set(excludedFolderIds))
         
         val cached = photoListCache[cacheKey]
         if (cached != null && !cached.isStale) {
@@ -123,7 +129,7 @@ class OneDrivePhotoRepository @Inject constructor(
         val photos = mutableListOf<Photo>()
         val visited = mutableSetOf<String>()
 
-        fun collectPhotos(currentFolderId: String) {
+        suspend fun collectPhotos(currentFolderId: String) {
             if (!visited.add(currentFolderId)) return
             if (currentFolderId in excludedFolderIds && currentFolderId != folderId) return
             
@@ -137,11 +143,11 @@ class OneDrivePhotoRepository @Inject constructor(
                     .build()
 
                 try {
-                    httpClient.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) return
-                        val body = response.body?.string() ?: return
+                    httpClient.newCall(request).await().use { response ->
+                        val body = requireOneDrivePageBody(response.code, response.body?.string())
                         val json = JSONObject(body)
-                        val value = json.optJSONArray("value") ?: return
+                        val value = json.optJSONArray("value")
+                            ?: throw IOException("Graph API page did not contain a value array")
 
                         for (i in 0 until value.length()) {
                             val item = value.getJSONObject(i)
@@ -194,8 +200,8 @@ class OneDrivePhotoRepository @Inject constructor(
                     }
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
-                    android.util.Log.e("OneDrivePhotoRepo", "Failed to collect photos", e)
-                    break
+                    android.util.Log.e("OneDrivePhotoRepo", "Failed to collect photos: ${e.javaClass.simpleName}")
+                    throw e
                 }
             }
 
@@ -212,11 +218,11 @@ class OneDrivePhotoRepository @Inject constructor(
 
     override suspend fun getFilteredFolderMediaCountForAccount(
         folderId: String,
-        mediaFilter: MediaTypeFilter?,
+        mediaTypeFilter: MediaTypeFilter?,
         accountId: String
     ): Int {
-        val normalizedFilter = normalizeMediaFilter(mediaFilter)
-        val cacheKey = "${accountId}_${folderId}_${normalizedFilter}"
+        val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
+        val cacheKey = RepositoryCacheKey.of(accountId, folderId, normalizedFilter)
         val cached = photoCountCache[cacheKey]
         if (cached != null && !cached.isStale) {
             return cached.count
@@ -230,7 +236,8 @@ class OneDrivePhotoRepository @Inject constructor(
         accountId: String
     ): List<PhotoFolder> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
-        val token = authManager.getAccessToken(accountId) ?: return@withContext emptyList()
+        val token = authManager.getAccessToken(accountId)
+            ?: throw IllegalStateException("Not authenticated for account: $accountId")
 
         val folders = mutableListOf<PhotoFolder>()
         val safeQuery = query.replace("'", "''")
@@ -243,11 +250,11 @@ class OneDrivePhotoRepository @Inject constructor(
                     .header("Authorization", "Bearer $token")
                     .build()
 
-                httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) break
-                    val body = response.body?.string() ?: break
+                httpClient.newCall(request).await().use { response ->
+                    val body = requireOneDrivePageBody(response.code, response.body?.string())
                     val json = JSONObject(body)
-                    val value = json.optJSONArray("value") ?: break
+                    val value = json.optJSONArray("value")
+                        ?: throw IOException("Graph API page did not contain a value array")
 
                     for (i in 0 until value.length()) {
                         val item = value.getJSONObject(i)
@@ -267,7 +274,8 @@ class OneDrivePhotoRepository @Inject constructor(
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            android.util.Log.e("OneDrivePhotoRepo", "Failed to search folders", e)
+            android.util.Log.e("OneDrivePhotoRepo", "Failed to search folders: ${e.javaClass.simpleName}")
+            throw e
         }
         
         return@withContext folders
@@ -277,11 +285,12 @@ class OneDrivePhotoRepository @Inject constructor(
         folderId: String,
         accountId: String
     ): List<String> = withContext(Dispatchers.IO) {
-        val token = authManager.getAccessToken(accountId) ?: return@withContext emptyList()
+        val token = authManager.getAccessToken(accountId)
+            ?: throw IllegalStateException("Not authenticated for account: $accountId")
         val result = mutableListOf<String>()
         val visited = mutableSetOf<String>()
 
-        fun collectSubfolders(currentId: String) {
+        suspend fun collectSubfolders(currentId: String) {
             if (!visited.add(currentId)) return
             var url = "https://graph.microsoft.com/v1.0/me/drive/items/$currentId/children?\$filter=folder ne null&\$select=id"
 
@@ -291,11 +300,11 @@ class OneDrivePhotoRepository @Inject constructor(
                         .url(url)
                         .header("Authorization", "Bearer $token")
                         .build()
-                    httpClient.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) return
-                        val body = response.body?.string() ?: return
+                    httpClient.newCall(request).await().use { response ->
+                        val body = requireOneDrivePageBody(response.code, response.body?.string())
                         val json = JSONObject(body)
-                        val value = json.optJSONArray("value") ?: return
+                        val value = json.optJSONArray("value")
+                            ?: throw IOException("Graph API page did not contain a value array")
                         for (i in 0 until value.length()) {
                             val id = value.getJSONObject(i).getString("id")
                             result.add(id)
@@ -306,7 +315,8 @@ class OneDrivePhotoRepository @Inject constructor(
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                android.util.Log.e("OneDrivePhotoRepo", "Failed to get subfolders", e)
+                android.util.Log.e("OneDrivePhotoRepo", "Failed to get subfolders: ${e.javaClass.simpleName}")
+                throw e
             }
         }
         
@@ -314,39 +324,75 @@ class OneDrivePhotoRepository @Inject constructor(
         return@withContext result
     }
     
-    suspend fun downloadPhotoToLocalCache(photoId: String, accountId: String, downloadUrl: String?): String? = withContext(Dispatchers.IO) {
-        if (downloadUrl.isNullOrEmpty()) return@withContext null
+    suspend fun downloadPhotoToLocalCache(
+        photoId: String,
+        accountId: String,
+        downloadUrl: String?,
+        fileName: String?
+    ): String? = withContext(Dispatchers.IO) {
         try {
             val cacheDir = File(context.cacheDir, "onedrive_photos")
             if (!cacheDir.exists()) cacheDir.mkdirs()
 
-            val safeAccountId = java.net.URLEncoder.encode(accountId, "UTF-8")
-            val safePhotoId = photoId.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
-            val cacheFile = File(cacheDir, "${safeAccountId}_${safePhotoId}.jpg")
-            
+            val cacheKey = MediaCacheFilePolicy.cacheKey(accountId, photoId)
+
+            val extension = oneDriveCacheExtension(fileName)
+
+            val cacheFile = File(cacheDir, "${cacheKey}.$extension")
             if (cacheFile.exists()) return@withContext "file://${cacheFile.absolutePath}"
 
-            val request = Request.Builder().url(downloadUrl).build()
-            val tempFile = File(cacheDir, "${safeAccountId}_${safePhotoId}.tmp.${java.util.UUID.randomUUID()}")
-
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext null
-                response.body?.byteStream()?.use { input ->
-                    tempFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
+            val tempFile = File(cacheDir, "${cacheKey}.tmp.${java.util.UUID.randomUUID()}")
+            try {
+                val downloaded = downloadOneDrivePhotoWithRefresh(
+                    downloadUrl,
+                    refreshUrl = { getPhotoMetadataForAccount(photoId, accountId)?.uri },
+                    download = { url -> downloadToTempFile(url, tempFile) }
+                )
+                if (!downloaded) return@withContext null
+                if (!tempFile.renameTo(cacheFile) && !cacheFile.exists()) return@withContext null
+                "file://${cacheFile.absolutePath}"
+            } finally {
+                tempFile.delete()
             }
-            if (!tempFile.renameTo(cacheFile) && !cacheFile.exists()) {
-                return@withContext null
-            }
-            "file://${cacheFile.absolutePath}"
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            android.util.Log.e("OneDrivePhotoRepo", "Error downloading OneDrive photo", e)
+            android.util.Log.e("OneDrivePhotoRepo", "Error downloading OneDrive photo: ${e.javaClass.simpleName}")
             null
         }
     }
+
+    private suspend fun downloadToTempFile(downloadUrl: String, tempFile: File): Boolean =
+        kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+            tempFile.delete()
+            val request = Request.Builder().url(downloadUrl).build()
+            val call = httpClient.newCall(request)
+            continuation.invokeOnCancellation {
+                call.cancel()
+                tempFile.delete()
+            }
+            call.enqueue(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: IOException) {
+                    if (continuation.isActive) continuation.resume(false)
+                }
+
+                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    try {
+                        val downloaded = response.use {
+                            if (!it.isSuccessful) return@use false
+                            val body = it.body ?: return@use false
+                            body.byteStream().use { input ->
+                                tempFile.outputStream().use { output -> input.copyTo(output) }
+                            }
+                            tempFile.length() > 0L
+                        }
+                        if (continuation.isActive) continuation.resume(downloaded)
+                    } catch (e: Exception) {
+                        tempFile.delete()
+                        if (continuation.isActive) continuation.resumeWith(Result.failure(e))
+                    }
+                }
+            })
+        }
 
     override suspend fun getPhotoMetadataForAccount(photoId: String, accountId: String): Photo? = withContext(Dispatchers.IO) {
         val token = authManager.getAccessToken(accountId) ?: return@withContext null
@@ -358,7 +404,7 @@ class OneDrivePhotoRepository @Inject constructor(
             .build()
             
         try {
-            httpClient.newCall(request).execute().use { response ->
+            httpClient.newCall(request).await().use { response ->
                 if (!response.isSuccessful) return@withContext null
                 val body = response.body?.string() ?: return@withContext null
                 val item = JSONObject(body)
@@ -391,7 +437,7 @@ class OneDrivePhotoRepository @Inject constructor(
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            android.util.Log.e("OneDrivePhotoRepo", "Failed to get metadata", e)
+            android.util.Log.e("OneDrivePhotoRepo", "Failed to get metadata: ${e.javaClass.simpleName}")
             return@withContext null
         }
     }
@@ -416,4 +462,45 @@ class OneDrivePhotoRepository @Inject constructor(
         }
         return success
     }
+}
+
+internal fun requireOneDrivePageBody(responseCode: Int, body: String?): String {
+    if (responseCode !in 200..299) {
+        throw IOException("Graph API request failed with HTTP $responseCode")
+    }
+    return body ?: throw IOException("Graph API page had no response body")
+}
+
+internal fun oneDriveCacheExtension(fileName: String?): String =
+    fileName?.substringAfterLast('.', "")
+        ?.lowercase(Locale.US)
+        ?.takeIf { it.matches(Regex("[a-z0-9]{1,10}")) }
+        ?: "bin"
+
+internal suspend fun downloadOneDrivePhotoWithRefresh(
+    initialUrl: String?,
+    refreshUrl: suspend () -> String?,
+    download: suspend (String) -> Boolean
+): Boolean {
+    if (!initialUrl.isNullOrBlank() && download(initialUrl)) return true
+    val refreshedUrl = refreshUrl()
+    return !refreshedUrl.isNullOrBlank() && refreshedUrl != initialUrl && download(refreshedUrl)
+}
+
+/** Suspend an OkHttp call and cancel its socket request when the caller is cancelled. */
+private suspend fun Call.await(): Response = suspendCancellableCoroutine { continuation ->
+    enqueue(object : Callback {
+        override fun onResponse(call: Call, response: Response) {
+            if (continuation.isActive) {
+                continuation.resume(response)
+            } else {
+                response.close()
+            }
+        }
+
+        override fun onFailure(call: Call, e: IOException) {
+            if (continuation.isActive) continuation.resumeWithException(e)
+        }
+    })
+    continuation.invokeOnCancellation { cancel() }
 }

@@ -2,6 +2,8 @@
 <resources>
     <string name="app_name">Android Screensaver</string>
     <string name="screensaver_settings">Screensaver Settings</string>
+    <string name="schedule_exact_alarm_fallback_notice">Alarm times may be delayed when exact alarm access is unavailable.</string>
+    <string name="change_selected_media">Change selected media</string>
     <string name="source_auth">Authenticate Source</string>
     <string name="browse_photos">Browse Photos</string>
     

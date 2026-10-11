@@ -150,6 +150,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         isTvLayout = isTelevision()
+        if (isTvLayout) {
+            setTheme(R.style.Theme_AndroidScreensaver_TV)
+        }
 
         if (isTvLayout) {
             bindingTv = ActivityMainTvBinding.inflate(layoutInflater)
@@ -224,7 +227,7 @@ class MainActivity : AppCompatActivity() {
             gdriveAccounts.forEach { account ->
                 val (card, info) = createSourceCard(
                     "Google Drive",
-                    account.accountEmail,
+                    AccountStatusText.status(account.isAuthenticated, account.accountEmail, getString(R.string.not_authenticated)),
                     R.drawable.ic_source_google_drive,
                     padding, iconSize, switchScale, SourceType.GOOGLE_DRIVE,
                     accountId = account.accountId
@@ -239,7 +242,7 @@ class MainActivity : AppCompatActivity() {
                 val iconRes = resources.getIdentifier("ic_source_dropbox", "drawable", packageName).takeIf { it != 0 } ?: android.R.drawable.ic_menu_gallery
                 val (card, info) = createSourceCard(
                     "Dropbox",
-                    account.accountEmail,
+                    AccountStatusText.status(account.isAuthenticated, account.accountEmail, getString(R.string.not_authenticated)),
                     iconRes,
                     padding, iconSize, switchScale, SourceType.DROPBOX,
                     accountId = account.accountId
@@ -253,7 +256,7 @@ class MainActivity : AppCompatActivity() {
                 val iconRes = resources.getIdentifier("ic_source_onedrive", "drawable", packageName).takeIf { it != 0 } ?: android.R.drawable.ic_menu_gallery
                 val (card, info) = createSourceCard(
                     "OneDrive",
-                    account.accountEmail,
+                    AccountStatusText.status(account.isAuthenticated, account.accountEmail, getString(R.string.not_authenticated)),
                     iconRes,
                     padding, iconSize, switchScale, SourceType.ONEDRIVE,
                     accountId = account.accountId
@@ -550,7 +553,7 @@ class MainActivity : AppCompatActivity() {
             if (account?.isAuthenticated == true) {
                 cardData.info.statusIndicator.visibility = View.VISIBLE
                 setStatusIndicatorColor(cardData.info.statusIndicator, SourceStatus.CONNECTED)
-                cardData.info.statusText.text = account.accountEmail
+                cardData.info.statusText.text = AccountStatusText.signedInAs(account.accountEmail)
 
                 val label = getContentFilterLabel()
                 val photoCount = account.photoCount
@@ -574,7 +577,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 cardData.info.statusIndicator.visibility = View.VISIBLE
                 setStatusIndicatorColor(cardData.info.statusIndicator, SourceStatus.ERROR)
-                cardData.info.statusText.text = account?.accountEmail ?: getString(R.string.not_authenticated)
+                cardData.info.statusText.text = getString(R.string.not_authenticated)
                 cardData.info.photoCountText.visibility = View.GONE
             }
         }
@@ -698,9 +701,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateSourceStatus(sourceType: SourceType, isAuthenticated: Boolean, accountName: String? = null, accountId: String? = null) {
         val displayText = if (isAuthenticated) {
-            accountName?.let { "Signed in as $it" } ?: "Signed in as Unknown"
+            AccountStatusText.status(true, accountName.orEmpty(), getString(R.string.not_authenticated))
         } else {
-            getString(R.string.not_authenticated)
+            AccountStatusText.status(false, "", getString(R.string.not_authenticated))
         }
         
         // Update the specific card if accountId is provided, otherwise update all Drive cards

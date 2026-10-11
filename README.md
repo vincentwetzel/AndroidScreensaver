@@ -19,6 +19,8 @@ A photo slideshow screensaver app for Android phones, tablets, and TV devices. D
   - Background color, screen rotation, keep-screen-on, low-battery auto-exit, match-orientation, and touch-exit settings.
   - Network-only cloud loading works on Wi-Fi or Ethernet.
   - Burn-in protection gently shifts persistent overlays during long-running screensaver sessions.
+  - Cloud downloads use an account-scoped disk cache with a configurable size limit and oldest-first cleanup.
+  - Scheduled autostart and autostop support repeat settings, charging-only autostart, and an inexact-alarm fallback when exact alarms are unavailable.
 
 - **Video playback**
   - Videos play with Media3/ExoPlayer and auto-advance when finished.
@@ -71,11 +73,13 @@ unchanged.
 
 The JVM suite covers model/account aggregation, source authentication state,
 folder-navigation ViewModel behavior, shared repository account routing and
-cache invalidation, settings account serialization, base account-manager state,
-media classification, and slideshow sort keys. Separate host-side Python tests
-cover runner argument parsing, report generation, device parsing, and suspects
-cache updates. Provider OAuth, MediaStore permissions, DreamService lifecycle,
-and TV UI behavior still require instrumentation or device verification.
+cache invalidation, settings and schedule serialization, account-manager state,
+media classification, Gallery permission/date policies, cache limits and keys,
+and schedule alarm policies. Separate host-side Python tests cover runner
+argument parsing, report generation, device parsing, project structure, and
+suspects cache updates. Provider OAuth, MediaStore permissions, DreamService
+lifecycle, scheduled activation, and TV UI behavior still require
+instrumentation or device verification.
 
 ## Tech Stack
 

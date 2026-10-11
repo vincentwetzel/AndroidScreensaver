@@ -6,13 +6,13 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 
 ### Presentation Layer (`ui/`)
 
-- **Activities** - Single-screen UIs such as `MainActivity`, settings screens, auth screens, and folder browsers.
+- **Activities** - Single-screen UIs such as `MainActivity`, settings screens, auth screens, and folder browsers. MainActivity selects the TV-specific dark theme before inflating its Leanback layout; the matching window background avoids a redundant full-screen layout fill.
 - **Adapters** - RecyclerView adapters for source and folder lists.
 - **Views** - Observe ViewModels through `StateFlow`/`LiveData`.
 - **FolderBrowserActivity** - Shared cloud folder browser for Google Drive, Dropbox, and OneDrive. It can launch source-specific re-authentication from the toolbar or auth-error empty state, then reload the current folder for the same account.
-- **SlideshowView** - Custom `FrameLayout` that renders photos/videos, transitions, overlays, and playback behavior.
+- **SlideshowView** - Custom `FrameLayout` that renders photos/videos, transitions, overlays, and playback behavior. Its clock decoration uses a single cancellable ticker for the view lifecycle. Settings refresh once per displayed media item rather than on every video-state poll. Video playback failures clear the pending advance guard before skipping, including failures before the player reaches its ready state; failures received while paused advance after resume.
 - **NoSourcesView** - Setup guidance when no sources are configured.
-- **ScreensaverPreviewActivity** - Activity-based preview that mirrors DreamService behavior for testing.
+- **ScreensaverPreviewActivity** - Activity-based preview that mirrors DreamService behavior for testing. It remembers activity pause state while source loading is suspended and applies it when the slideshow view is created.
 
 ### ViewModel Layer (`viewmodel/`)
 
@@ -25,28 +25,31 @@ Android Screensaver uses MVVM with a Repository pattern for photo source abstrac
 
 - **PhotoRepository** - Unified contract for all photo sources.
 - **AbstractPhotoRepository** - Base class holding standardized `ConcurrentHashMap` caches, TTL constraints, and `syncPhotos` lifecycle behavior.
-- **BaseCloudPhotoRepository** - Abstract base class for cloud sources (Google Drive, Dropbox) that centralizes thread-safe caching, background count prefetching, and per-account fallback routing.
-- **GalleryPhotoRepository** - MediaStore access for local photos and videos, with cached folder/media counts and content-type-aware media listing.
-- **GoogleDrivePhotoRepository** - Google Drive media access with account-scoped routing, recursive folder traversal, background count prefetching, thumbnail metadata, and local cache paths.
-- **DropboxPhotoRepository** - Dropbox media access with recursive listing, paginated folder search, background count prefetching, thumbnails, and local cache support.
-- **OneDrivePhotoRepository** - OneDrive Graph API media access with account-scoped routing, recursive folder traversal, folder search, thumbnail metadata, and local cache downloads.
+- **BaseCloudPhotoRepository** - Abstract base class for cloud sources (Google Drive, Dropbox) that centralizes thread-safe caching, TTL-aware deduplicated background prefetching, and per-account fallback routing.
+- **GalleryPhotoRepository** - MediaStore access for local photos and videos, with cached folder/media counts, content-type-aware media listing, and capture timestamps with an added-time fallback.
+- **GoogleDrivePhotoRepository** - Google Drive media access with account-scoped routing, recursive folder traversal, background count prefetching, thumbnail metadata, local cache paths, and interruptible API calls during coroutine cancellation.
+- **DropboxPhotoRepository** - Dropbox media access with recursive listing, paginated folder search, background count prefetching, thumbnails, local cache support with validated filename suffixes, and interruptible SDK calls during coroutine cancellation.
+- **OneDrivePhotoRepository** - OneDrive Graph API media access with account-scoped routing, recursive folder traversal, folder search, thumbnail metadata, and local cache downloads. Graph page and metadata calls are cancelled with their coroutine, and folder/photo/subfolder listings fail when any Graph page is incomplete. Photo-list results enter the cache only after every page succeeds. Slideshow downloads preserve media filename extensions and refresh expired preauthenticated URLs through Graph metadata.
 - **GoogleDriveRepository** - Delegates account selection and Drive service creation to `GoogleAccountManager`, and verifies read-only Drive access before sign-in is finalized.
-- **DropboxRepository** - Delegates Dropbox auth, account metadata, and API clients to `DropboxAccountManager`.
-- **OneDriveAuthManager** - Manages OneDrive auth with MSAL on phones/tablets, device code flow on Android TV, and encrypted per-account token storage initialized lazily for keystore safety. It asynchronously maintains an in-memory account-ID snapshot so synchronous repository authentication checks do not perform keystore I/O on the caller thread.
-- **SettingsManager** - DataStore-backed preferences for slideshow config, source state, selected folders, and account configs.
+- **DropboxRepository** - Delegates Dropbox auth, account metadata, and API clients to `DropboxAccountManager`. Saved account restoration runs once on the account manager IO scope, and suspend repository calls await that restore before resolving clients.
+- **OneDriveAuthManager** - Manages OneDrive auth with MSAL on phones/tablets, device code flow on Android TV, and encrypted per-account token storage initialized lazily for keystore safety. It asynchronously maintains an in-memory account-ID snapshot so synchronous repository authentication checks do not perform keystore I/O on the caller thread. Expired device-flow tokens refresh through OAuth; mobile tokens refresh through MSAL silent acquisition.
+- **SettingsManager** - DataStore-backed preferences for slideshow config, source state, selected folders, account configs, and both autostart/autostop schedules.
 - **AccountConfigCodec** - Pure delimiter-safe encoding and decoding for the per-account settings value used by `SettingsManager`.
+- **ScheduleConfigCodec** - Pure delimiter-safe encoding and decoding for schedule collections stored by `SettingsManager`.
+- **GalleryPermissionPolicy** - Pure filter-to-media permission rules shared by gallery browsing and slideshow source checks, including Android 14 selected-media grants and cache invalidation when permission state changes.
 
 ### Service Layer (`dream/`)
 
-- **PhotoScreensaverService** - Android DreamService that hosts the slideshow.
-- **SlideshowManager** - Loads media from enabled sources, applies settings, filters content, deduplicates entries, sorts/shuffles media, and routes cacheable cloud downloads through the correct repository.
-- **PhotoMediaClassifier** - Pure media-extension/content-URI classification and configured photo sort-key rules used by `SlideshowManager`.
+- **PhotoScreensaverService** - Android DreamService that hosts the slideshow; the OS binds it as part of system-managed dream activation.
+- **ScheduleService / AlarmReceiver** - Rebuild enabled start/stop alarms from persisted schedule settings, enforce charging-only autostart, and disable non-repeating entries after successful execution.
+- **SlideshowManager** - Loads media from enabled sources using explicit account IDs for every cloud folder and photo query, applies settings, filters and deduplicates each completed result batch by a structured source/account/media ID tuple to limit peak retained metadata, sorts/shuffles media, and routes cacheable cloud downloads through the correct repository.
+- **PhotoMediaClassifier** - Pure media-extension/content-URI classification including 3GPP, MPEG program-stream, and MPEG transport-stream video suffixes, cloud download routing, video minimum-duration rules, and configured photo sort-key rules shared by `SlideshowManager` and `SlideshowView`. SVG images use Coil's SVG decoder; slideshow raster requests allow hardware bitmaps because they are only drawn, not pixel-read or mutated. Cloud videos with opaque download URLs are routed to Media3 by filename, Google Drive video bytes are downloaded through the authenticated repository cache, and Dropbox paths are downloaded before Coil or Media3 receives them.
 
 ### Dependency Injection (`di/`)
 
 - **RepositoryModule** - Hilt module providing repositories and `SlideshowManager`.
 - Photo repositories are concrete injected singletons. The repository map is assembled explicitly instead of using Hilt map multibindings.
-- OneDrive auth is split between `OneDriveAuthManager` for token handling and `OneDriveAuthActivity` for the UI launch surface.
+- OneDrive auth is split between `OneDriveAuthManager` for token handling and `OneDriveAuthActivity` for the UI launch surface. Authentication returns the same stable Microsoft Graph account ID used as the token key, plus the Graph mail or user principal name used by account status UI.
 
 ## Test Tooling (`tools/`)
 
@@ -69,7 +72,7 @@ User selects folders
 Preview or DreamService starts
 -> SlideshowManager loads fresh config
 -> SlideshowManager checks enabled sources and selected folders
--> Repositories load media with the active Content Type filter
+-> Repositories load media with the active Content Type filter and account ID
 -> SlideshowManager filters, deduplicates, sorts/shuffles
 -> SlideshowView renders media with Coil and ExoPlayer
 -> SlideshowView advances based on slideshow/video settings
@@ -99,17 +102,21 @@ Preview or DreamService starts
 | `PhotoScreensaverService` | DreamService fullscreen slideshow host |
 | `SettingsManager` | DataStore persistence for app settings |
 | `AccountConfigCodec` | Pure delimiter-safe account settings serialization |
+| `ScheduleConfigCodec` | Pure delimiter-safe schedule serialization |
+| `GalleryPermissionPolicy` | Gallery media access, selected-media handling, and permission-based cache invalidation rules |
+| `MediaCacheManager` | Cloud media cache size enforcement and oldest-first cleanup |
+| `RepositoryCacheKey` | Collision-safe encoding for account-scoped repository cache keys |
 
 ## Threading
 
-- Repository API calls use `withContext(Dispatchers.IO)`.
+- Repository API calls use `withContext(Dispatchers.IO)`. Blocking Google Drive list, search, metadata, and verification calls run with `runInterruptible`; Dropbox SDK operations run with `runInterruptible`, and OneDrive HTTP requests cancel their underlying OkHttp calls.
 - Folder lists, photo lists, and photo counts are cached in repository singletons.
 - Shared repository caches use concurrent maps where background prefetch and slideshow loading can overlap.
 - `SlideshowManager` chunk-loads selected folders in small concurrent batches to limit memory/API spikes.
 - ViewModel work runs in `viewModelScope`.
 - Main source cards read persisted per-account selected media counts so card refreshes do not block on recursive cloud API counts; repository prefetch refreshes those counts in the background.
 - Folder browser ViewModels retain the active `MediaTypeFilter` enum directly so navigation, refresh, and summary labels stay aligned with repository filtering.
-- UI settings/account reads are suspend calls and must run from coroutines. Activities use `lifecycleScope`, while `ScheduleService` performs schedule reads on an IO coroutine before setting alarms.
+- UI settings/account reads are suspend calls and must run from coroutines. Activities use `lifecycleScope`, while `ScheduleService` owns one cancellable IO job, replaces stale scheduling runs, and stops after its alarm updates finish.
 - Settings and folder-browser save paths snapshot current UI or adapter state before DataStore reads, then merge the snapshot into the freshly loaded config to avoid stale lifecycle-resume state overwriting newer user choices.
 
 ## Screensaver Implementation
@@ -175,10 +182,12 @@ All settings are persisted through DataStore Preferences.
 - `PhotoScreensaverService.onAttachedToWindow()` refreshes slideshow config.
 - `SlideshowView.initialize()` applies background color and starts rendering.
 - `SlideshowView` starts a cancelable burn-in protection job that periodically pixel-shifts visible persistent overlays while playback is active.
-- DreamService applies keep-screen-on and screen-orientation behavior.
+- DreamService applies keep-screen-on and screen-orientation behavior. A pause request made during source loading is retained until playback is explicitly resumed.
 - `SlideshowManager.loadPhotos()` checks network restrictions before cloud fetches.
 - `SlideshowView.showPhoto()` applies match-orientation behavior.
 - `SlideshowView.startAutoAdvance()` reloads config each cycle so setting changes can take effect mid-slideshow.
+- Slideshow pauses tracked display-effect and transition animators with playback, and cancels them when media changes or the view stops. Slideshow display duration begins after the current image/video reports ready, so remote download latency does not consume its on-screen time. Photo metadata overlays update at that same readiness point so labels stay paired with the visible media.
+- Cloud media cache filenames use SHA-256 of account and provider media IDs to avoid path-sanitization collisions. Cloud media downloads pass through `MediaCacheManager`, which periodically trims provider download caches to the configured cache budget by oldest file first. Temporary downloads are excluded and the item just downloaded or displayed from cache is protected from eviction. Cleanup runs at most once per minute even if every slideshow item is already cached.
 - `ScreensaverPreviewActivity` loads source state and slideshow config asynchronously before rendering, matching the suspend settings contract used by DreamService.
 - DreamService handles touch exit, receiver cleanup, timeout cleanup, battery-saver pause behavior, and optional low-battery auto-exit while not charging.
 

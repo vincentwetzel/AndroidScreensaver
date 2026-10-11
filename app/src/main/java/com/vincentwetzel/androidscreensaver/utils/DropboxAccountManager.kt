@@ -17,6 +17,7 @@ import com.dropbox.core.oauth.DbxCredential
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -26,6 +27,7 @@ import com.dropbox.core.v2.users.FullAccount
 class DropboxAccountManager @Inject constructor(
     @ApplicationContext context: Context
 ) : BaseAccountManager<DropboxAccountManager.AccountState>(context) {
+    private val accountRestoreReady = CompletableDeferred<Unit>()
     private val ACCESS_TOKEN_PREF_NAME = "dropbox_access_tokens"
     private val masterKey by lazy {
         MasterKey.Builder(context)
@@ -51,8 +53,18 @@ class DropboxAccountManager @Inject constructor(
 
     init {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            checkExistingSignIn()
+            try {
+                checkExistingSignIn()
+            } catch (e: Exception) {
+                Log.e("DropboxAccountManager", "Account restoration failed: ${e.javaClass.simpleName}")
+            } finally {
+                accountRestoreReady.complete(Unit)
+            }
         }
+    }
+
+    suspend fun awaitAccountRestore() {
+        accountRestoreReady.await()
     }
 
     /**
@@ -74,6 +86,7 @@ class DropboxAccountManager @Inject constructor(
      */
     suspend fun handleSignInResult(): String? {
         return withContext(Dispatchers.IO) {
+            awaitAccountRestore()
             val credential = Auth.getDbxCredential()
             if (credential == null) {
                 Log.e("DropboxAccountManager", "Failed to get DbxCredential from PKCE flow")

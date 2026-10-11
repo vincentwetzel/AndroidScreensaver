@@ -1,10 +1,8 @@
 package com.vincentwetzel.androidscreensaver.data.repository
 
-import android.content.Context
 import android.content.Intent
 import com.vincentwetzel.androidscreensaver.utils.DropboxAccountManager
 import com.dropbox.core.v2.DbxClientV2
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -15,13 +13,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class DropboxRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val accountManager: DropboxAccountManager
 ) {
-
-    init {
-        accountManager.checkExistingSignIn()
-    }
 
     /**
      * Get the sign-in intent to launch Dropbox authentication
@@ -56,6 +49,10 @@ class DropboxRepository @Inject constructor(
      */
     fun getDbxClientV2(accountId: String): DbxClientV2? {
         return accountManager.getDbxClientV2(accountId)
+    }
+
+    suspend fun awaitAccountRestore() {
+        accountManager.awaitAccountRestore()
     }
 
     /**

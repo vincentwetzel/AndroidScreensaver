@@ -7,6 +7,7 @@ import com.vincentwetzel.androidscreensaver.data.model.SourceType
 import com.vincentwetzel.androidscreensaver.dream.PhotoMediaClassifier
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -18,8 +19,24 @@ class PhotoMediaClassifierUnitTest {
         assertTrue(PhotoMediaClassifier.isImage(photo("raw.heic")))
         assertTrue(PhotoMediaClassifier.isVideo(photo("clip.MP4")))
         assertTrue(PhotoMediaClassifier.isVideo(photo("movie.webm")))
+        assertTrue(PhotoMediaClassifier.isVideo(photo("mobile.3gp")))
+        assertTrue(PhotoMediaClassifier.isVideo(photo("recording.m2ts")))
+        assertTrue(PhotoMediaClassifier.isVideo(photo("broadcast.ts")))
         assertFalse(PhotoMediaClassifier.isImage(photo("notes.txt")))
         assertFalse(PhotoMediaClassifier.isVideo(photo("notes.txt")))
+    }
+
+    @Test
+    fun `media filter keeps only matching media types`() {
+        val image = photo("holiday.jpg")
+        val video = photo("clip.mp4")
+
+        assertTrue(PhotoMediaClassifier.matchesFilter(image, MediaTypeFilter.IMAGES_ONLY))
+        assertFalse(PhotoMediaClassifier.matchesFilter(video, MediaTypeFilter.IMAGES_ONLY))
+        assertTrue(PhotoMediaClassifier.matchesFilter(video, MediaTypeFilter.VIDEOS_ONLY))
+        assertFalse(PhotoMediaClassifier.matchesFilter(image, MediaTypeFilter.VIDEOS_ONLY))
+        assertTrue(PhotoMediaClassifier.matchesFilter(image, MediaTypeFilter.IMAGES_AND_VIDEOS))
+        assertTrue(PhotoMediaClassifier.matchesFilter(video, MediaTypeFilter.IMAGES_AND_VIDEOS))
     }
 
     @Test
@@ -65,6 +82,78 @@ class PhotoMediaClassifierUnitTest {
         assertEquals(3, MediaTypeFilter.values().size)
     }
 
+    @Test
+    fun `deduplication keeps distinct account and media ID tuples`() {
+        val first = Photo(
+            id = "gamma",
+            sourceType = SourceType.GALLERY,
+            accountId = "alpha_beta",
+            uri = "content://first"
+        )
+        val second = Photo(
+            id = "beta_gamma",
+            sourceType = SourceType.GALLERY,
+            accountId = "alpha",
+            uri = "content://second"
+        )
+
+        assertEquals("${first.sourceType}_${first.accountId}_${first.id}", "${second.sourceType}_${second.accountId}_${second.id}")
+        assertNotEquals(PhotoMediaClassifier.mediaKey(first), PhotoMediaClassifier.mediaKey(second))
+        assertEquals(PhotoMediaClassifier.mediaKey(first), PhotoMediaClassifier.mediaKey(first.copy(uri = "content://duplicate")))
+    }
+
+    @Test
+    fun `classifies cloud videos from filenames when download URLs are opaque`() {
+        val driveVideo = Photo(
+            id = "drive-id",
+            sourceType = SourceType.GOOGLE_DRIVE,
+            uri = "https://www.googleapis.com/drive/v3/files/drive-id?alt=media&accountId=user%40example.com",
+            title = "vacation.mp4"
+        )
+        val oneDriveVideo = Photo(
+            id = "onedrive-id",
+            sourceType = SourceType.ONEDRIVE,
+            uri = "https://download.example/content?auth=temporary-token",
+            title = "movie.webm"
+        )
+
+        assertTrue(PhotoMediaClassifier.isVideo(driveVideo))
+        assertTrue(PhotoMediaClassifier.isVideo(oneDriveVideo))
+    }
+    @Test
+    fun `requires local download for uncached Dropbox paths and remote Drive URLs`() {
+        val dropboxPhoto = Photo(
+            id = "/camera/holiday.jpg",
+            sourceType = SourceType.DROPBOX,
+            uri = "/camera/holiday.jpg",
+            title = "holiday.jpg"
+        )
+        val cachedDropboxPhoto = dropboxPhoto.copy(uri = "file:///cache/holiday.jpg")
+        val drivePhoto = Photo(
+            id = "drive-id",
+            sourceType = SourceType.GOOGLE_DRIVE,
+            uri = "https://www.googleapis.com/drive/v3/files/drive-id?alt=media",
+            title = "holiday.jpg"
+        )
+        val oneDrivePhoto = Photo(
+            id = "onedrive-id",
+            sourceType = SourceType.ONEDRIVE,
+            uri = "https://download.example/content?auth=temporary-token",
+            title = "holiday.jpg"
+        )
+
+        assertTrue(PhotoMediaClassifier.requiresLocalDownload(dropboxPhoto))
+        assertFalse(PhotoMediaClassifier.requiresLocalDownload(cachedDropboxPhoto))
+        assertTrue(PhotoMediaClassifier.requiresLocalDownload(drivePhoto))
+        assertTrue(PhotoMediaClassifier.requiresLocalDownload(oneDrivePhoto))
+    }
+    @Test
+    fun `minimum duration rule waits for known duration and honors disabled threshold`() {
+        assertFalse(PhotoMediaClassifier.isBelowMinimumVideoDuration(-1L, 10))
+        assertFalse(PhotoMediaClassifier.isBelowMinimumVideoDuration(500L, 0))
+        assertTrue(PhotoMediaClassifier.isBelowMinimumVideoDuration(9_999L, 10))
+        assertFalse(PhotoMediaClassifier.isBelowMinimumVideoDuration(10_000L, 10))
+    }
     private fun photo(uri: String, title: String? = uri, dateTaken: Long? = null, fileSize: Long? = null) = Photo(
         id = uri,
         sourceType = SourceType.GALLERY,

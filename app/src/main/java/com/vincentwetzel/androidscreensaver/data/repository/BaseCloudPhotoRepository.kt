@@ -7,6 +7,7 @@ import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Abstract base repository for cloud sources (Google Drive, Dropbox).
@@ -16,6 +17,8 @@ abstract class BaseCloudPhotoRepository(
     protected val context: Context,
     protected val dreamSourceType: com.vincentwetzel.androidscreensaver.dream.SourceType
 ) : AbstractPhotoRepository() {
+
+    private val prefetchingAccountIds = ConcurrentHashMap.newKeySet<String>()
 
     /**
      * Must return a list of active authenticated account IDs for this source.
@@ -90,9 +93,10 @@ abstract class BaseCloudPhotoRepository(
     }
 
     fun prefetchRootFolders(accountId: String, mediaFilter: MediaTypeFilter? = null) {
+        if (!prefetchingAccountIds.add(accountId)) return
         prefetchScope.launch {
             try {
-                listFoldersForAccount(null, true, accountId)
+                listFoldersForAccount(null, false, accountId)
                 val account = com.vincentwetzel.androidscreensaver.utils.SettingsManager.getAccount(context, dreamSourceType, accountId)
                 val selectedIds = account?.selectedFolders?.map { it.folderId }?.toSet() ?: emptySet()
                 if (selectedIds.isNotEmpty()) {
@@ -101,7 +105,7 @@ abstract class BaseCloudPhotoRepository(
                     selectedIds.forEach { folderId ->
                         val photos = listPhotosForAccount(folderId, account?.deselectedFolders ?: emptySet(), mediaFilter, accountId)
                         val count = photos.size
-                        photoCountCache["${accountId}_${folderId}_${normalizedFilter}"] = CountCacheEntry(count)
+                        photoCountCache[RepositoryCacheKey.of(accountId, folderId, normalizedFilter)] = CountCacheEntry(count)
                         totalCount += count
                     }
                     if (account != null && totalCount != account.photoCount) {
@@ -111,6 +115,8 @@ abstract class BaseCloudPhotoRepository(
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 android.util.Log.w("BaseCloudPhotoRepo", "Prefetch failed for account: ${e.javaClass.simpleName}")
+            } finally {
+                prefetchingAccountIds.remove(accountId)
             }
         }
     }

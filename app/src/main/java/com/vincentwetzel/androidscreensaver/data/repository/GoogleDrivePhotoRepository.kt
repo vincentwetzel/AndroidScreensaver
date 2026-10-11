@@ -9,6 +9,7 @@ import com.vincentwetzel.androidscreensaver.data.model.SourceType
 import com.vincentwetzel.androidscreensaver.data.model.MediaTypeFilter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URLEncoder
@@ -57,19 +58,18 @@ class GoogleDrivePhotoRepository @Inject constructor(
                 val cacheDir = File(context.cacheDir, "drive_photos")
                 if (!cacheDir.exists()) cacheDir.mkdirs()
 
-                val ext = title?.substringAfterLast('.', "")?.takeIf { it.isNotEmpty() } ?: "jpg"
-                val safeAccountId = URLEncoder.encode(accountId, "UTF-8")
-                val safePhotoId = photoId.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
-                val cacheFile = File(cacheDir, "${safeAccountId}_${safePhotoId}.$ext")
+                val ext = MediaCacheFilePolicy.extension(title) ?: "jpg"
+                val cacheKey = MediaCacheFilePolicy.cacheKey(accountId, photoId)
+                val cacheFile = File(cacheDir, "${cacheKey}.$ext")
                 if (cacheFile.exists()) return@withContext "file://${cacheFile.absolutePath}"
 
                 val driveService = driveRepository.getDriveService(accountId)
                     ?: return@withContext null
 
-                val tempFile = File(cacheDir, "${safeAccountId}_${safePhotoId}.$ext.tmp.${UUID.randomUUID()}")
+                val tempFile = File(cacheDir, "${cacheKey}.$ext.tmp.${UUID.randomUUID()}")
                 try {
                     tempFile.outputStream().use { out ->
-                        driveService.files().get(photoId).executeMediaAndDownloadTo(out)
+                        runInterruptible { driveService.files().get(photoId).executeMediaAndDownloadTo(out) }
                     }
                     if (!tempFile.renameTo(cacheFile) && !cacheFile.exists()) {
                         Log.e("GoogleDrivePhotoRepo", "Failed to rename temp file to cache file")
@@ -96,7 +96,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
      * List folders for a specific account.
      */
     override suspend fun listFoldersForAccount(parentFolderId: String?, forceRefresh: Boolean, accountId: String): List<PhotoFolder> {
-        val cacheKey = "${accountId}_${parentFolderId ?: "ROOT"}"
+        val cacheKey = RepositoryCacheKey.of(accountId, parentFolderId)
         val cached = folderCache[cacheKey]
         if (!forceRefresh && cached != null && !cached.isStale) {
             return cached.data
@@ -122,13 +122,15 @@ class GoogleDrivePhotoRepository @Inject constructor(
 
                 var nextPageToken: String? = null
                 do {
-                    val files = driveService.files().list()
-                        .setQ(query.toString())
-                        .setPageSize(1000)
-                        .setFields("nextPageToken, files(id, name, parents)")
-                        .setPageToken(nextPageToken)
-                        .setOrderBy("name")
-                        .execute()
+                    val files = executeDriveRequest {
+                        driveService.files().list()
+                            .setQ(query.toString())
+                            .setPageSize(1000)
+                            .setFields("nextPageToken, files(id, name, parents)")
+                            .setPageToken(nextPageToken)
+                            .setOrderBy("name")
+                            .execute()
+                    }
 
                     files.files?.forEach { file ->
                         val fileId = file.id ?: return@forEach
@@ -160,8 +162,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
      */
     override suspend fun listPhotosForAccount(folderId: String, excludedFolderIds: Set<String>, mediaTypeFilter: MediaTypeFilter?, accountId: String): List<Photo> = withContext(Dispatchers.IO) {
         val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
-        val exclusionsKey = if (excludedFolderIds.isEmpty()) "none" else excludedFolderIds.sorted().joinToString(",")
-        val cacheKey = "${accountId}_${folderId}_${normalizedFilter}_${exclusionsKey}"
+        val cacheKey = RepositoryCacheKey.of(accountId, folderId, normalizedFilter, RepositoryCacheKey.set(excludedFolderIds))
         val cached = photoListCache[cacheKey]
         if (cached != null && !cached.isStale) {
             return@withContext cached.data
@@ -177,7 +178,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
     /**
      * Recursively collects photos from a folder and all its subfolders for a specific account.
      */
-    private fun collectPhotosFromFolder(
+    private suspend fun collectPhotosFromFolder(
         folderId: String,
         excludedFolderIds: Set<String>,
         photos: MutableList<Photo>,
@@ -202,13 +203,15 @@ class GoogleDrivePhotoRepository @Inject constructor(
             val subfoldersToRecurse = mutableListOf<String>()
 
             do {
-                val files = driveService.files().list()
+                val files = executeDriveRequest {
+                    driveService.files().list()
                     .setQ(query)
                     .setPageSize(1000)
                     .setFields("nextPageToken, files(id, name, mimeType, size, modifiedTime, imageMediaMetadata, videoMediaMetadata, parents, thumbnailLink)")
                     .setPageToken(nextPageToken)
                     .setOrderBy("folder, name")
                     .execute()
+                }
 
                 files.files?.forEach { file ->
                     val fileId = file.id ?: return@forEach
@@ -219,15 +222,14 @@ class GoogleDrivePhotoRepository @Inject constructor(
                     } else {
                         val isVideo = file.mimeType?.startsWith("video/") == true
                         val name = file.name ?: "Untitled"
-                        val originalExt = name.substringAfterLast('.', "")
-                        val ext = originalExt.takeIf { it.isNotEmpty() } ?: if (isVideo) "mp4" else "jpg"
-                        val finalTitle = if (originalExt.isNotEmpty()) name else "$name.$ext"
+                        val safeExtension = MediaCacheFilePolicy.extension(name)
+                        val ext = safeExtension ?: if (isVideo) "mp4" else "jpg"
+                        val finalTitle = if (safeExtension != null) name else "$name.$ext"
                         
                         val encodedAccountId = URLEncoder.encode(accountId, "UTF-8")
-                        val safeAccountId = encodedAccountId
-                        val safeFileId = fileId.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_")
+                        val cacheKey = MediaCacheFilePolicy.cacheKey(accountId, fileId)
                         val cacheDir = File(context.cacheDir, "drive_photos")
-                        val cacheFile = File(cacheDir, "${safeAccountId}_${safeFileId}.$ext")
+                        val cacheFile = File(cacheDir, "${cacheKey}.$ext")
                         val uri = if (cacheFile.exists()) "file://${cacheFile.absolutePath}" else "https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&accountId=$encodedAccountId"
                         val thumbnail = file.thumbnailLink
                         photos.add(
@@ -269,21 +271,23 @@ class GoogleDrivePhotoRepository @Inject constructor(
             ?: return@withContext null
 
         try {
-            val file = driveService.files().get(photoId)
+            val file = executeDriveRequest {
+                driveService.files().get(photoId)
                 .setFields("id, name, mimeType, size, modifiedTime, imageMediaMetadata, videoMediaMetadata, thumbnailLink")
                 .execute()
+            }
 
             val isVideo = file.mimeType?.startsWith("video/") == true
             val name = file.name ?: "Untitled"
-            val originalExt = name.substringAfterLast('.', "")
-            val ext = originalExt.takeIf { it.isNotEmpty() } ?: if (isVideo) "mp4" else "jpg"
-            val finalTitle = if (originalExt.isNotEmpty()) name else "$name.$ext"
+            val safeExtension = MediaCacheFilePolicy.extension(name)
+            val ext = safeExtension ?: if (isVideo) "mp4" else "jpg"
+            val finalTitle = if (safeExtension != null) name else "$name.$ext"
             
             val encodedAccountId = URLEncoder.encode(accountId, "UTF-8")
-            val safeAccountId = encodedAccountId
-            val safeFileId = file.id?.replace(Regex("[^a-zA-Z0-9.\\-_]"), "_") ?: "unknown"
+            val cacheKey = file.id?.let { MediaCacheFilePolicy.cacheKey(accountId, it) }
+                ?: MediaCacheFilePolicy.cacheKey(accountId, "unknown")
             val cacheDir = File(context.cacheDir, "drive_photos")
-            val cacheFile = File(cacheDir, "${safeAccountId}_${safeFileId}.$ext")
+            val cacheFile = File(cacheDir, "${cacheKey}.$ext")
             val uri = if (cacheFile.exists()) {
                 "file://${cacheFile.absolutePath}"
             } else {
@@ -335,12 +339,14 @@ class GoogleDrivePhotoRepository @Inject constructor(
 
             var nextPageToken: String? = null
             do {
-                val files = driveService.files().list()
+                val files = executeDriveRequest {
+                    driveService.files().list()
                     .setQ(searchQuery)
                     .setPageSize(100)
                     .setFields("nextPageToken, files(id, name, parents)")
                     .setPageToken(nextPageToken)
                     .execute()
+                }
 
                 files.files?.forEach { file ->
                     val fileId = file.id ?: return@forEach
@@ -371,7 +377,7 @@ class GoogleDrivePhotoRepository @Inject constructor(
      */
     override suspend fun getFilteredFolderMediaCountForAccount(folderId: String, mediaTypeFilter: MediaTypeFilter?, accountId: String): Int {
         val normalizedFilter = normalizeMediaFilter(mediaTypeFilter)
-        val cacheKey = "${accountId}_${folderId}_${normalizedFilter}"
+        val cacheKey = RepositoryCacheKey.of(accountId, folderId, normalizedFilter)
         val cached = photoCountCache[cacheKey]
         if (cached != null && !cached.isStale) {
             return cached.count
@@ -389,19 +395,21 @@ class GoogleDrivePhotoRepository @Inject constructor(
         result
     }
 
-    private fun collectSubfolderIds(parentId: String, driveService: Drive, result: MutableList<String>, visited: MutableSet<String> = mutableSetOf()) {
+    private suspend fun collectSubfolderIds(parentId: String, driveService: Drive, result: MutableList<String>, visited: MutableSet<String> = mutableSetOf()) {
         if (!visited.add(parentId)) return // Prevent infinite recursion from Drive shortcut loops
         try {
             val safeParentId = parentId.replace("'", "\\'")
             val query = "mimeType='application/vnd.google-apps.folder' and trashed=false and '$safeParentId' in parents"
             var nextPageToken: String? = null
             do {
-                val files = driveService.files().list()
+                val files = executeDriveRequest {
+                    driveService.files().list()
                     .setQ(query)
                     .setPageSize(1000)
                     .setFields("nextPageToken, files(id)")
                     .setPageToken(nextPageToken)
                     .execute()
+                }
                 files.files?.forEach { file ->
                     file.id?.let {
                         result.add(it)
@@ -416,6 +424,9 @@ class GoogleDrivePhotoRepository @Inject constructor(
             throw e
         }
     }
+
+    private suspend fun <T> executeDriveRequest(request: () -> T): T =
+        runInterruptible(block = request)
 
     override suspend fun syncPhotos(): Boolean {
         val success = super.syncPhotos()
